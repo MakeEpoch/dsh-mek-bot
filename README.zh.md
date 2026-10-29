@@ -8,7 +8,7 @@ MakeEpoch 的 DS-Bot 集成插件。DSH 侧边栏只增加一个 **Bot** 入口�
 
 ## 使用
 
-Bot 内部保留原有的**新建、已有 Bot、群聊、可选的 DSH Agent**，支持侧栏折叠和展开。点击对话顶部的名称可以打开详情，调整职责、模型、权限或记忆。底部菜单只保留用量、连接器、Bot 设置；移除 Bot 界面的退出、定时任务和 Agent 模式切换。DSH 原有的会话、插件和自动化界面仍可正常使用。
+Bot 内部保留原有的**新建、已有 Bot、群聊、可选的 DSH Agent**，支持侧栏折叠和展开。删除当前 Bot 或群聊后自动回到可用对话，关闭相应详情与过期弹层。点击对话顶部的名称可以打开详情，调整职责、模型、权限或记忆。底部菜单只保留用量、连接器、Bot 设置；移除 Bot 界面的退出、定时任务和 Agent 模式切换。DSH 原有的会话、插件和自动化界面仍可正常使用。
 
 Bot 是有独立身份、职责、模型与记忆的长期助手，可以相互委派工作、建立群聊。Bot 内的 DSH Agent 入口通过 DSH 原有的工作区导航打开普通会话，不在外层增加另一个 Agent 菜单。
 
@@ -23,7 +23,7 @@ cd ds-bot
 npm ci
 npm run build
 npm pack --ignore-scripts
-dsh plugin --profile web add -w ./dsh-mek-bot-0.1.1.tgz
+dsh plugin --profile web add -w ./dsh-mek-bot-0.1.2.tgz
 ```
 
 启用 bundle 后重启 DSH，不要同时启用原 `ds-bot` bundle。生产安装必须使用打包文件，禁止 `link:`、符号链接或直连开发源码。profile 保持 `autoInstallPeers: false`；宿主 API 由 DSH 加载器提供，不能安装第二份 Cordis、scope、tools 或 LLM 核心。

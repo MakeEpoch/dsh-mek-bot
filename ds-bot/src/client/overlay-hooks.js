@@ -29,3 +29,23 @@ export function usePaneLeft() {
   }, [])
   return paneLeft
 }
+
+// Attribute writes follow focus transfer: React would otherwise hide a focused
+// descendant during its mutation phase, before a layout effect could move it.
+export function usePanelExit(root, leaving) {
+  const opener = useRef(document.activeElement)
+  useLayoutEffect(() => {
+    const panel = root.current
+    if (!panel) return
+    if (leaving && panel.contains(document.activeElement)) {
+      const trigger = opener.current
+      const target = trigger?.isConnected && !panel.contains(trigger) ? trigger
+        : document.querySelector('.bt-pill') ?? document.querySelector('[data-composer-input]')
+      target?.focus({ preventScroll: true })
+      if (panel.contains(document.activeElement)) document.activeElement?.blur()
+    }
+    panel.toggleAttribute('inert', leaving)
+    if (leaving) panel.setAttribute('aria-hidden', 'true')
+    else panel.removeAttribute('aria-hidden')
+  }, [leaving])
+}

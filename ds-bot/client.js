@@ -7667,7 +7667,7 @@ function createTeam() {
     useShown: use(shown)
   };
   const sessionHook = (sessionId) => (selector) => useSelect(sent, (state) => selector({ pendingSubmissions: state[sessionId] ?? [] }));
-  return { actions, hooks, sessionHook, chat, start, refresh: pull, roster, ui: ui2 };
+  return { actions, hooks, sessionHook, chat, start, refresh: pull, roster, ui: ui2, shown };
 }
 
 // src/client/composer.js
@@ -7810,7 +7810,6 @@ function ComposerPlus({ sessionId, inputActions, useRoster, actions }) {
     };
   }, [open]);
   const target = roster.byId?.[sessionId]?.id ?? roster.roomsById?.[sessionId]?.id;
-  if (sessionId === void 0 || target === void 0) return null;
   const fileInput = () => button.current?.closest("[data-composer-card]")?.querySelector("input[type=file]");
   const toggle = () => {
     if (open) {
@@ -7837,6 +7836,7 @@ function ComposerPlus({ sessionId, inputActions, useRoster, actions }) {
     const rect = scopedRect(button.current);
     return { left: rect.left, bottom: viewBottom() - rect.top + 8 };
   }, [shown, open, tick]);
+  if (sessionId === void 0 || target === void 0) return null;
   return (0, import_react15.createElement)(
     import_react15.Fragment,
     null,
@@ -9804,6 +9804,22 @@ function usePaneLeft() {
     if (column) setPaneLeft(Math.round(scopedRect(column).right));
   }, []);
   return paneLeft;
+}
+function usePanelExit(root, leaving) {
+  const opener = (0, import_react21.useRef)(scopedDocument.activeElement);
+  (0, import_react21.useLayoutEffect)(() => {
+    const panel = root.current;
+    if (!panel) return;
+    if (leaving && panel.contains(scopedDocument.activeElement)) {
+      const trigger = opener.current;
+      const target = trigger?.isConnected && !panel.contains(trigger) ? trigger : scopedDocument.querySelector(".bt-pill") ?? scopedDocument.querySelector("[data-composer-input]");
+      target?.focus({ preventScroll: true });
+      if (panel.contains(scopedDocument.activeElement)) scopedDocument.activeElement?.blur();
+    }
+    panel.toggleAttribute("inert", leaving);
+    if (leaving) panel.setAttribute("aria-hidden", "true");
+    else panel.removeAttribute("aria-hidden");
+  }, [leaving]);
 }
 
 // src/client/palette.js
@@ -18107,6 +18123,7 @@ function BotPanel({ pane, leaving, roster, actions, useSessions, useSessionStatu
   const page = useBrowserPages((pages) => (active ? pages[active] : null) ?? EMPTY_PAGE);
   const hold = useBrowserHolds?.((map) => bot ? map[bot.id] ?? null : null) ?? null;
   const root = (0, import_react46.useRef)(null);
+  usePanelExit(root, leaving);
   const fly = (0, import_react46.useRef)(null);
   const [landed, setLanded] = (0, import_react46.useState)(false);
   const [settling, setSettling] = (0, import_react46.useState)(false);
@@ -18313,7 +18330,6 @@ function BotPanel({ pane, leaving, roster, actions, useSessions, useSessionStatu
       "data-view": view,
       "aria-label": view === "browser" && bot ? t("{name}'s browser", { name: bot.name }) : view === "side" ? t("Side chat") : t("Conversation details"),
       "data-leaving": leaving || void 0,
-      "aria-hidden": leaving || void 0,
       "data-settling": settling || void 0,
       "data-instant": instant || void 0,
       "data-dragging": dragging || void 0,
@@ -18673,6 +18689,38 @@ function createLocale(tag) {
   };
 }
 
+// src/client/mek/lifecycle.js
+function watchDeletedSubjects(team) {
+  let previous = team.roster.getSnapshot();
+  const owns = (roster, id) => Boolean(id && (roster.byId[id] || roster.roomsById[id]));
+  return team.roster.subscribe(() => {
+    const next = team.roster.getSnapshot();
+    const removed = (id) => owns(previous, id) && !owns(next, id);
+    const selected = team.shown.getSnapshot();
+    const move = removed(selected);
+    team.ui.set((state) => {
+      const details = removed(state.details);
+      const memory = removed(state.memory);
+      const settings = removed(state.settings?.id);
+      const menu = removed(state.menu?.id);
+      if (!details && !memory && !settings && !menu) return state;
+      return {
+        ...state,
+        ...details ? { details: null, view: "details", side: null, renaming: false, tab: null } : {},
+        ...memory ? { memory: null } : {},
+        ...settings ? { settings: { ...state.settings, id: null } } : {},
+        ...menu ? { menu: null } : {}
+      };
+    });
+    previous = next;
+    if (move) {
+      const target = next.byId[next.mainBotId] ?? next.bots[0] ?? next.rooms[0];
+      if (target) team.actions.openSession(target.id);
+      else team.shown.set(null);
+    }
+  });
+}
+
 // src/client/mek/agent-actions.js
 function attachAgentActions(team, ctx) {
   const roster = team.roster.getSnapshot;
@@ -18787,7 +18835,14 @@ function TeamView({ ctx }) {
     attachAgentActions(value, ctx);
     return value;
   }, [ctx]);
-  (0, import_react50.useEffect)(() => team.start(), [team]);
+  (0, import_react50.useEffect)(() => {
+    const stopWatching = watchDeletedSubjects(team);
+    const stop = team.start();
+    return () => {
+      stopWatching();
+      stop();
+    };
+  }, [team]);
   const { hooks, actions } = team;
   const wide = hooks.useLayout((value) => value.wide);
   const shown = hooks.useShown((value) => value);

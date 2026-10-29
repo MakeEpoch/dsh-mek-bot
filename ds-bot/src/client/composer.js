@@ -122,7 +122,6 @@ export function ComposerPlus({ sessionId, inputActions, useRoster, actions }) {
     return () => { window.removeEventListener('mousedown', onDown, true); window.removeEventListener('keydown', onKey, true) }
   }, [open])
   const target = roster.byId?.[sessionId]?.id ?? roster.roomsById?.[sessionId]?.id
-  if (sessionId === undefined || target === undefined) return null
   const fileInput = () => button.current?.closest('[data-composer-card]')?.querySelector('input[type=file]')
   const toggle = () => {
     if (open) { setOpen(null); return }
@@ -151,6 +150,8 @@ export function ComposerPlus({ sessionId, inputActions, useRoster, actions }) {
     const rect = button.current.getBoundingClientRect()
     return { left: rect.left, bottom: viewBottom() - rect.top + 8 }
   }, [shown, open, tick])
+  // A roster update can remove the target while this composer is still mounted.
+  if (sessionId === undefined || target === undefined) return null
   return h(Fragment, null,
     h('button', {
       ref: button, type: 'button', className: 'bt-plus', 'aria-label': t('Add'), title: t('Add'),

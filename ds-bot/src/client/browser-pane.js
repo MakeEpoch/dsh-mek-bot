@@ -10,6 +10,7 @@ import { BotMark } from './mark.js'
 import { STORAGE } from './storage.js'
 import { installStyles } from './styles.js'
 import { SPRING_SHAPE, springEasing } from './motion.js'
+import { usePanelExit } from './overlay-hooks.js'
 import { DetailsDrawer } from './details-drawer.js'
 import { SideChatView } from './side-chat.js'
 import { panelHasStrip, sideChatsOf, stripMenuKeys } from './side-model.js'
@@ -578,6 +579,7 @@ export function BotPanel({ pane, leaving, roster, actions, useSessions, useSessi
   const page = useBrowserPages(pages => (active ? pages[active] : null) ?? EMPTY_PAGE)
   const hold = useBrowserHolds?.(map => bot ? map[bot.id] ?? null : null) ?? null
   const root = useRef(null)
+  usePanelExit(root, leaving)
   const fly = useRef(null)
   const [landed, setLanded] = useState(false)
   const [settling, setSettling] = useState(false)
@@ -769,7 +771,7 @@ export function BotPanel({ pane, leaving, roster, actions, useSessions, useSessi
   return h('aside', {
     ref: root, className: 'bt-panel', 'data-view': view,
     'aria-label': view === 'browser' && bot ? t("{name}'s browser", { name: bot.name }) : view === 'side' ? t('Side chat') : t('Conversation details'),
-    'data-leaving': leaving || undefined, 'aria-hidden': leaving || undefined, 'data-settling': settling || undefined,
+    'data-leaving': leaving || undefined, 'data-settling': settling || undefined,
     'data-instant': instant || undefined, 'data-dragging': dragging || undefined, 'data-overlay': overlay || undefined, style: { '--bt-panel-w': `${panelWidth}px` },
     onAnimationEnd: (event) => { if (event.target === event.currentTarget) setLanded(true) },
   },

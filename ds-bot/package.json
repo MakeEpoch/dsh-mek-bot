@@ -1,7 +1,7 @@
 {
   "name": "dsh-mek-bot",
-  "version": "0.1.1",
-  "description": "Native DS-Bot components inside DSH with outer Agent and Bot navigation",
+  "version": "0.1.2",
+  "description": "Native DS-Bot components inside DSH with a collapsible Bot sidebar and team Agent entry",
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",

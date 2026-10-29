@@ -26,6 +26,7 @@ import { SIDE_CSS } from '../side-chat.js'
 import { allThemes, themeCss, layoutOf, widthOf, flatWidthOf } from '../themes.js'
 import { installLocale, t } from '../i18n.js'
 import { createLocale } from '../../../../app/ui/src/locale.js'
+import { watchDeletedSubjects } from './lifecycle.js'
 import { attachAgentActions } from './agent-actions.js'
 import { GroupChat } from './group-chat.jsx'
 import { mountScene, sceneRoot, scopeCss } from './dom.js'
@@ -34,7 +35,11 @@ const STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + G
 
 function TeamView({ ctx }) {
   const team = useMemo(() => { const value = createTeam(); value.actions.schedules = undefined; attachAgentActions(value, ctx); return value }, [ctx])
-  useEffect(() => team.start(), [team])
+  useEffect(() => {
+    const stopWatching = watchDeletedSubjects(team)
+    const stop = team.start()
+    return () => { stopWatching(); stop() }
+  }, [team])
   const { hooks, actions } = team
   const wide = hooks.useLayout(value => value.wide)
   const shown = hooks.useShown(value => value)
