@@ -122,6 +122,6 @@ their ideas; it does not contain their code.
     records with the same steps (record, resample to 16 kHz mono, PCM16 WAV)
     before it calls the plugin's speech service.
 
-MakeEpoch coexistence edition: single DSH sidebar entry, embedded upstream plugin UI and optional team-tool activation.
-Derived from Fei2411/DS-Bot commit 4a7b55069ad300eae8be42a74f31bc170b40ead7.
-Upstream copyright and Apache-2.0 license are retained.
+MakeEpoch downstream integration: one DSH sidebar entry with native React
+components reused from the upstream plugin and standalone UI. Upstream host and UI attribution is retained.
+Baseline: Fei2411/DS-Bot 4a7b55069ad300eae8be42a74f31bc170b40ead7.

@@ -98,7 +98,7 @@ function useInput(field, setText) {
   }), [field, setText])
 }
 
-function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, useRoster }) {
+export function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, useRoster }) {
   const [text, setText] = useState('')
   const [error, setError] = useState(null)
   const field = useRef(null)

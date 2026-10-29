@@ -1,7 +1,7 @@
 {
   "name": "dsh-mek-bot",
-  "version": "0.1.0",
-  "description": "DS-Bot upstream UI embedded behind one DSH sidebar entry",
+  "version": "0.1.1",
+  "description": "Native DS-Bot components inside DSH with outer Agent and Bot navigation",
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",

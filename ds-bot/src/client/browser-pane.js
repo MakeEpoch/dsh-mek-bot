@@ -83,6 +83,8 @@ const fitWidth = (width, [low, high]) => Math.round(Math.max(low, Math.min(width
 // writes the column's own inline style each frame and the rule once, on release.
 const room = { rule: null, selector: '' }
 const roomRule = () => {
+  // A containing pane may already be detached when passive disposers run.
+  if (document.body && !document.body.isConnected) return { style: document.body.style }
   const live = room.rule?.parentStyleSheet?.ownerNode?.isConnected
   if (live && room.selector) return room.rule
   const column = document.querySelector('[class*="_centerCol"]')
@@ -92,6 +94,8 @@ const roomRule = () => {
   room.rule?.parentStyleSheet?.ownerNode?.remove()
   const style = installStyles(`${selector || '[class*="_centerCol"]'}{${declarations}}`, 'chat-room')
   room.rule = style.sheet.cssRules[0]
+  // A native plugin pane can wrap its stylesheet in a CSS scope.
+  while (!room.rule?.style && room.rule?.cssRules?.length) room.rule = room.rule.cssRules[0]
   room.selector = selector
   return room.rule
 }

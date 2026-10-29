@@ -122,6 +122,6 @@ their ideas; it does not contain their code.
     records with the same steps (record, resample to 16 kHz mono, PCM16 WAV)
     before it calls the plugin's speech service.
 
-MakeEpoch downstream integration: one DSH sidebar entry and an isolated document
-that calls the existing upstream UI. Upstream host and UI attribution is retained.
+MakeEpoch downstream integration: one DSH sidebar entry with native React
+components reused from the upstream plugin and standalone UI. Upstream host and UI attribution is retained.
 Baseline: Fei2411/DS-Bot 4a7b55069ad300eae8be42a74f31bc170b40ead7.

@@ -218,7 +218,7 @@ export function BotSettingsForm({ bot, roster, actions, run }) {
         h(InlineText, { label: t('Instructions'), value: bot.instructions, multiline: true, placeholder: t('What this Bot is responsible for…'), onSave: instructions => save({ instructions }) }))),
     h(BotCapabilitiesCard, { bot, roster, actions, run, Card, SwitchRow }),
     roster.memory === false ? null : h(MemoryCard, { bot, actions }),
-    h(BotSchedules, { bot, roster, actions }),
+    actions.schedules ? h(BotSchedules, { bot, roster, actions }) : null,
     h(Card, { title: t('Main Bot') },
       onlyMain
         ? h('div', { className: 'bt-set-row bt-bs-row' },

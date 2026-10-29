@@ -267,5 +267,5 @@ export function createTeam() {
   }
   // The Session one view shows, as DSH hands it to a view: what was just sent there.
   const sessionHook = sessionId => selector => useSelect(sent, state => selector({ pendingSubmissions: state[sessionId] ?? [] }))
-  return { actions, hooks, sessionHook, chat, start }
+  return { actions, hooks, sessionHook, chat, start, refresh: pull, roster, ui }
 }

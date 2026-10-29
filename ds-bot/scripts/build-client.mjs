@@ -8,7 +8,7 @@
 // deepseek-harness: `require` resolves the shell-seeded platform modules (react,
 // react-dom, ui-primitives, ...), which therefore stay external.
 import { readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
@@ -26,6 +26,25 @@ export async function bundleClient() {
     platform: 'browser',
     target: 'es2022',
     external: PLATFORM_MODULES,
+    loader: { '.css': 'text' },
+    plugins: [{
+      name: 'native-bot-environment',
+      setup(builder) {
+        const local = join(PLUGIN, 'src/client/mek')
+        builder.onResolve({ filter: /^react-dom$/ }, args => args.importer === join(local, 'portal.js') ? { path: 'react-dom', external: true } : { path: join(local, 'portal.js') })
+        builder.onLoad({ filter: /\.js$/ }, args => {
+          const upstreamView = args.path.startsWith(join(PLUGIN, 'src/client/')) && !args.path.startsWith(local)
+            || args.path.startsWith(resolve(PLUGIN, '../app/ui/src/'))
+          if (!upstreamView) return undefined
+          const source = readFileSync(args.path, 'utf8')
+          // Keep upstream modules on disk unchanged. Only this plugin's build
+          // binds their DOM reads, popovers and coordinates to the native scene.
+          const contents = `import { scopedDocument as document, scopedWindow as window, scopedRect as mekRect, scopedPoint as mekPoint } from ${JSON.stringify(join(local, 'dom.js'))};\n`
+            + source.replace(/(\b[\w$]+(?:\.[\w$]+)*)(?:\?\.|\.)getBoundingClientRect\(\)/g, 'mekRect($1)').replace(/(\b[\w$]+(?:\.[\w$]+)*)\.clientX\b/g, 'mekPoint($1).x').replace(/(\b[\w$]+(?:\.[\w$]+)*)\.clientY\b/g, 'mekPoint($1).y')
+          return { contents, loader: 'js', resolveDir: dirname(args.path) }
+        })
+      },
+    }],
     // Every source declaration ships, used or not, as in the hand-written bundle.
     treeShaking: false,
     // Readable for debugging in the browser: no minification, and Chinese text stays text.

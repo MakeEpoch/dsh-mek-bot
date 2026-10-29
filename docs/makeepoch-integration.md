@@ -1,36 +1,35 @@
 # MakeEpoch integration boundary
 
-This downstream reuses Fei2411/DS-Bot rather than rebuilding its screens or Bot runtime. The exact baseline is recorded in [upstream.json](../.makeepoch/upstream.json).
+This downstream reuses Fei2411/DS-Bot. The exact baseline is pinned in [upstream.json](../.makeepoch/upstream.json). No DSH source code is modified.
 
-## Entry points
+## Native UI
 
-- `ds-bot/mek.js` wraps the unchanged upstream `index.js`. Team data defaults to `DSH_HOME/mek-bot`, leaving the upstream `DSH_HOME/bot` directory alone.
-- `ds-bot/src/client/mek/index.jsx` adds one `sidebar.panellist` item and one `main` panel. The panel loads the same authenticated DSH page in a same-origin iframe with `?mek-bot=1`.
-- Inside that child document the adapter calls upstream `src/client/index.js` directly with `lockBotMode: true`. Its sidebar, forms, chats, questions, settings, CSS, shortcuts and native DSH integrations are the existing plugin implementation. This optional flag fixes the child in Bot mode and omits the Agent-mode switch from both the account menu and settings; the original behavior remains available when the flag is absent. The parent document never calls that implementation.
-- The iframe flag is a rendering selector, not an authentication mechanism. DSH continues to enforce its normal authentication and API access checks. There is no second service, duplicated host runtime or copied DSH installation.
+`ds-bot/src/client/mek/index.jsx` registers one `sidebar.panellist` entry and one `main` pane, using the public slots API. There is no outer Agent shortcut, iframe wrapper, second DSH application or second plugin load.
 
-## Small host changes
+`mek/view.jsx` composes the existing `TeamSidebar`, `HeaderPill`, `Chat`, `Overlays` and settings components, using `app/ui/src/team.js`'s existing state/feed controller. Bot/group/new/settings forms stay at their upstream paths. The original global-shell takeover entry `src/client/index.js` is not invoked.
 
-`team-registration.js` adds DSH 0.2.2's documented tool activation condition when `isolateTools` is enabled. The upstream host registration sites call this helper; Bot and group sessions receive their tools, ordinary DSH sessions do not. Optional browser tools use the same seam. With the option absent, upstream registration behavior is preserved.
+The native build binds upstream view modules to local DOM/window facades and a scene-local portal helper. CSS uses `@scope (.mek-bot-scene)`; root selectors are mapped without changing class names. Geometry and pointer coordinates are relative to the pane. No browser global, prototype, DSH service or another plugin is replaced. Child effect cleanup remains safe after the containing pane has detached, and owned listeners are removed. Dynamic details-panel styles retain their scope and CSSOM style rule.
 
-`roster.js` accepts `autoGreet: false`, which persists new Bots without starting a model call. The MakeEpoch entry enables this option. The user starts a conversation explicitly.
+The Bot sidebar supports collapse/expand. Its footer only exposes Usage, Connectors and Bot settings. Capability guards omit scheduled-task controls in settings, details and the composer. Logout and surface-mode switching are absent. The optional DSH Agent stays in the Bot list, with upstream create/open/archive/rename behavior, and opens plain sessions through public DSH workspace navigation.
 
-The bundle installs only `dsh-mek-bot`. It does not change DSH's search provider, presets, theme settings, native sidebar or composer. The upstream web-search helper remains available in source, but this bundle does not activate it. The adapter disables its automatic update check; use reviewed downstream releases.
+`mek/group-chat.jsx` reuses upstream group replies and composer components. `src/host/mek-room-chat.js` pages the durable group Session through `sessionController.page`, preserving earlier rounds and speaker identities. Active rounds use upstream room progress. Requests share the existing authenticated Bot channel, not a new server.
 
-Do not enable the original `ds-bot` bundle together with this bundle: they implement the same Bot services and API routes.
+Small UI seams export existing Composer/GroupReplies/GroupMessage components and the standalone controller's refresh/state sources. The details pane tolerates detached cleanup and scoped CSS rules. Upstream defaults remain unchanged when a capability is present.
 
-## Updating upstream
+## Host and installation
 
-Keep `upstream` pointing to `https://github.com/Fei2411/DS-Bot.git` and `origin` pointing to MakeEpoch. Fetch upstream, create an update branch from downstream `main`, merge the desired upstream commit, resolve the package/build metadata and the small registration changes, then update the pinned commit. Do not squash away the upstream ancestry or copy the whole upstream client into the adapter.
+`ds-bot/mek.js` wraps upstream `index.js`. Team state defaults to `DSH_HOME/mek-bot`. `team-registration.js` uses DSH 0.2.2's tool admission condition for team sessions; ordinary DSH sessions do not receive team tools. Optional browser tools use the same seam. `autoGreet: false` avoids automatic model greetings, and downstream automatic update checking is disabled.
 
-The original UI entry, its components, and `app/ui` are kept in their original locations. UI changes are limited to the optional mode lock and the account menu respecting the switch capability. Original README files are retained as `README.upstream*.md`. Inherited desktop/release CI is manual; `.github/workflows/makeepoch.yml` checks this plugin on DSH 0.2.2-alpha.2.
+The bundle adds only this plugin. It does not change DSH search, presets, native sidebar/composer settings or other plugins. The original `ds-bot` bundle must not be enabled at the same time, because both implement the same Bot API.
 
-Run `npm ci`, `npm run harness`, `npm run build`, `npm test`, the generated-client check and lint from `ds-bot/`. After host changes, also exercise model selection, Bot delegation and group replies with `dev/mek-smoke.mjs` against a separate `.dsh-test-*` profile and the bundled mock model. Never run that script against the user's service or data.
+Use `npm pack --ignore-scripts` and a content-hashed archive for production. Keep `autoInstallPeers: false`. Host API modules are optional peers, supplied by DSH's loader; never install a second Cordis/tools/scope/LLM core to satisfy raw Node imports. Development dependencies stay in `dev/harness`.
 
-## Packaging and data
+Uninstalling leaves team state and DSH history in place. Native visual scoping is not an access-control sandbox: normal DSH authentication and model/tool permissions still apply.
 
-Use `npm pack --ignore-scripts`; install a content-hashed archive into a DSH profile with `autoInstallPeers: false`. Host `@deepseek-ai/*` modules are optional peers, supplied by DSH's official loader. Never install a second Cordis/tools/scope/LLM core into the production profile to satisfy raw Node imports. Development harness dependencies stay in `dev/harness`.
+## Merge and verify upstream
 
-Uninstalling the package leaves team data and DSH session history in place. The iframe is a visual boundary, not a security sandbox; the normal DSH permissions still apply to Bot work.
+Keep `upstream` pointing to `https://github.com/Fei2411/DS-Bot.git` and `origin` to MakeEpoch. Fetch upstream, create an update branch from downstream main, merge the desired commit and resolve metadata, the small API/export seams and native build bindings. Update the pinned commit. Preserve upstream ancestry and source locations; do not replace them with a copied client implementation.
 
-Apache-2.0 and upstream attribution are preserved. Screenshot examples contain only local mock-model test conversations.
+Run `npm ci`, `npm run harness`, build, unit tests, generated-client check and lint from `ds-bot/`. For host changes, run model selection, delegation and group replies through `dev/mek-smoke.mjs` against a separate `.dsh-test-*` profile and bundled mock model. Verify native UI: create Bot, Agent entry, collapse/expand, details open/close, group history and replies, settings, and repeated transitions to DSH panels. Check for no Bot wrapper iframe, no parent-body style/data leakage and no component exceptions. Stop the test services afterward.
+
+Original README files remain as `README.upstream*.md`. Inherited desktop/release CI is manual. `.github/workflows/makeepoch.yml` checks this plugin against DSH 0.2.2-alpha.2. Screenshots contain only local mock-model conversations. Apache-2.0 and attribution are preserved.

@@ -47,4 +47,6 @@ const room = roster.rooms.find(room => room.name === 'Mek smoke group') ?? await
 await api('send', { sessionId: room.id, text: '讨论' })
 await settle()
 assert.ok(state().rooms[room.id].log.some(line => line.who !== 'User' && line.kind === undefined), 'Group members reply')
+const history = await api('room-chat', { roomId: room.id })
+assert.ok(history.items.some(item => item.kind === 'group' && item.content.some(block => block.text?.includes('replies'))), 'Native group pane reads durable replies')
 console.log('PASS: bootstrap, model selection, Bot delegation and group replies (mock model only)')

@@ -29,7 +29,7 @@ test('real DSH admission keeps team tools out of ordinary sessions', async t => 
   }
 })
 
-test('the parent DSH gets exactly one Bot launcher and an isolated main panel', () => {
+test('the parent DSH gets one native Bot launcher and no outer Agent shortcut', () => {
   const view = { location: { href: 'https://example.test/dsh/?session=old', search: '?session=old' } }
   view.parent = view
   // The VM's window, including its identity, is read only at apply time.
@@ -48,6 +48,7 @@ test('the parent DSH gets exactly one Bot launcher and an isolated main panel', 
   assert.deepEqual(registrations.map(({ seat }) => seat.name), ['main', 'sidebar.panellist'])
   assert.equal(registrations[1].seat.label(), 'Bot')
   const frame = registrations[0].component()
-  assert.equal(frame.type, 'iframe')
-  assert.equal(frame.props.src, 'https://example.test/dsh/?mek-bot=1')
+  assert.equal(typeof frame.type, 'function')
+  assert.notEqual(frame.type, 'iframe')
+  assert.equal(registrations.some(({ seat }) => seat.id === 'mek-agent'), false)
 })
