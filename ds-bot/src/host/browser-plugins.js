@@ -1,3 +1,4 @@
+import { registerTeamTool } from './team-registration.js'
 // The whole team uses one browser plugin. Each Bot still gets its own profile
 // directory, including the group Sessions where that Bot speaks.
 import { isAbsolute, join } from 'node:path'
@@ -133,6 +134,7 @@ export function install(rt) {
   const mounted = {}
   mountBrowserPlugin(rt.ctx, {
     api: mounted,
+    registerTool: definition => registerTeamTool(rt, definition),
     toolDefs: plugin.tools ?? plugin.toolDefs,
     defineTool,
     profileRoot: join(rt.home, 'browser-profiles'),

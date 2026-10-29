@@ -1,3 +1,4 @@
+import { registerTeamTool } from './team-registration.js'
 // Secrets: keys the user types into a card for a Bot. A value lives only in
 // secrets.json (mode 600) and in this process; Bots use it as $DSH_SECRET_<NAME> in
 // their shell, tool results lose it before they are saved, and every model request
@@ -416,7 +417,7 @@ export function install(rt) {
 
   const callerOf = exec => rt.selfOf(exec.agent?.session?.header?.id ?? exec.agent?.id)
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'request_secret',
     description: 'Ask the user for a key, token, or password through a secure card in your own chat. The user types it into the card; you never see the value. It reaches your shell as an environment variable. When the key is already saved for you, this only tells you its variable. Showing a card ends your turn; a note arrives when the user saves or cancels.',
     parameters: {
@@ -465,7 +466,7 @@ export function install(rt) {
     },
   }))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'list_secrets',
     description: 'List the keys the user saved for the team: name, purpose, which Bots may use them, and whether you may. Values are never shown.',
     parameters: {},

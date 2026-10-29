@@ -168,6 +168,11 @@ export function install(rt) {
         capabilities: [],
       }
       if (main) state.mainBotIds.push(id)
+      if (rt.config?.autoGreet === false) {
+        await rt.save()
+        if (modelRef !== undefined) await rt.applyModel(state.bots[id])
+        return state.bots[id]
+      }
       const creator = rt.botOf(createdBy)
       const original = rt.botOf(copyOf)
       const language = rt.uiLanguage?.()

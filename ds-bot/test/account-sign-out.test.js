@@ -169,3 +169,16 @@ test('the account menu opens the connectors and the automation panel', () => {
   side.item(menu, 'Automation tasks').props.onClick()
   assert.deepEqual(calls, ['connectors', 'schedules'])
 })
+
+test('a host without a surface switch exposes no Agent mode menu or separator', () => {
+  const app = launcher({ withEntry: false })
+  const tree = app.open()
+  assert.equal(app.items(tree).some(node => textOf(node).includes('classic Agent')), false)
+  assert.equal(walk(tree, node => node.props?.role === 'separator').length, 0)
+})
+
+test('a host that supports switching keeps the original Agent mode entry', () => {
+  const app = launcher({ withEntry: false, actions: { setSurface() {} } })
+  const tree = app.open()
+  assert.ok(app.item(tree, 'Switch to classic Agent mode'))
+})

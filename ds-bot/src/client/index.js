@@ -46,7 +46,7 @@ import { listedOpener } from './open-listed.js'
 
 export const inject = ['sessions', 'uiWorkspace', 'uiConversation', 'slots', 'theme', 'layout']
 
-export function apply(ctx) {
+export function apply(ctx, { lockBotMode = false } = {}) {
   ctx.effect(() => installLocale(ctx.get('locale')), 'ds-bot: interface copy')
   const roster = createSource(EMPTY_ROSTER)
   migrateStorage()
@@ -61,7 +61,7 @@ export function apply(ctx) {
   // Bot mode paints the whole team surface; Agent mode withdraws every slot and
   // style so the shell's own interface returns. `plain` stays false until a Bot-mode
   // view hosts a plain session, which drops only the conversation replacements.
-  const surface = createSource({ mode: readMode(), plain: false })
+  const surface = createSource({ mode: lockBotMode ? 'bot' : readMode(), plain: false })
   // DSH Agent Session ids from the last pull, so a reload already knows the main
   // view is a plain Session before the team answers.
   let agentSessionCache = new Set()
@@ -518,6 +518,7 @@ export function apply(ctx) {
     },
     clearUnread: id => writeUnread(id, false),
   }
+  if (lockBotMode) delete actions.setSurface
   // Without the Desktop bridge these stay undefined, and no browser control renders.
   if (browsers) {
     Object.assign(actions, {

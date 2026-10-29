@@ -1,3 +1,4 @@
+import { registerTeamTool } from './team-registration.js'
 // Group chats: the room log, members' group Sessions, rounds and @mentions, round
 // reports, and the group tools (group_relay, read_own_chat, read_group_chat).
 //
@@ -571,7 +572,7 @@ export function install(rt) {
     }
   }
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'group_relay',
     description: 'Group chat relay only. Deliver the latest user message to the Bots in this group chat, one at a time, and collect their replies.',
     parameters: {},
@@ -679,7 +680,7 @@ export function install(rt) {
   }))
 
   // Private context enters a group only through this tool, and the group sees each use.
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'read_own_chat',
     description: 'Read or search your own chat with the user, across all its parts, including earlier parts that left your working context. Each line starts with its anchor, such as [part 2 #1234 · 10-08 14:22]; long messages are cut. Pass the anchor as around to read that message in full, with what was said just before and after it. In a group chat the group sees that you looked, so share only what the group needs.',
     parameters: {
@@ -734,7 +735,7 @@ export function install(rt) {
     },
   }))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'read_group_chat',
     description: 'Read the latest messages of a group chat, including what you said there. You speak in groups from separate conversations, so your own chat does not show them. Main Bots may read any group; others the groups they are in.',
     parameters: {

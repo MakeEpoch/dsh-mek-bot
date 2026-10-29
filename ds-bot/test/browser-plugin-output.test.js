@@ -1,3 +1,4 @@
+import * as NativeExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
@@ -12,6 +13,7 @@ test('browser handoff and resume return valid DSH outputs and clear the Bot hold
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeExecutor)
   t.after(async () => ctx.fiber.dispose())
 
   let hold = null
@@ -48,7 +50,7 @@ test('browser handoff and resume return valid DSH outputs and clear the Bot hold
   plugin.inject = ['tools']
   await ctx.plugin(plugin)
 
-  const execute = (name, args) => ctx.tools.execute({
+  const execute = (name, args) => executeOne(ctx, {
     signal: new AbortController().signal,
     callId: ToolCallId(name),
     name,
@@ -90,6 +92,7 @@ test('a screenshot degrades to text when no attachments service is mounted', asy
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeExecutor)
   t.after(async () => ctx.fiber.dispose())
 
   const plugin = inner => {
@@ -108,7 +111,7 @@ test('a screenshot degrades to text when no attachments service is mounted', asy
   plugin.inject = ['tools']
   await ctx.plugin(plugin)
 
-  const screenshot = await ctx.tools.execute({
+  const screenshot = await executeOne(ctx, {
     signal: new AbortController().signal,
     callId: ToolCallId('browser_screenshot'),
     name: 'browser_screenshot',
@@ -125,6 +128,7 @@ test('a stored browser screenshot is repaired before the next step and survives 
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeExecutor)
   t.after(async () => ctx.fiber.dispose())
   const session = Session.create('old-browser-chat')
   const call = session.append('tool/call', { turn: 1, step: 1, callId: 'shot', name: 'browser_screenshot', arguments: '{}' })
@@ -162,6 +166,7 @@ test('browser tools refuse every operation while a user hold is active', async t
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeExecutor)
   t.after(async () => ctx.fiber.dispose())
   const hold = { by: 'user', reason: 'stopped', note: 'The user is controlling this browser.' }
   const plugin = inner => {
@@ -183,7 +188,7 @@ test('browser tools refuse every operation while a user hold is active', async t
   }
   plugin.inject = ['tools']
   await ctx.plugin(plugin)
-  const execute = (name, args) => ctx.tools.execute({
+  const execute = (name, args) => executeOne(ctx, {
     signal: new AbortController().signal,
     callId: ToolCallId(name),
     name,
@@ -205,6 +210,7 @@ test('browser endpoint connection uses the execution Bot identity, not tool argu
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeExecutor)
   t.after(async () => ctx.fiber.dispose())
   let connected
   const plugin = inner => {
@@ -226,7 +232,7 @@ test('browser endpoint connection uses the execution Bot identity, not tool argu
   }
   plugin.inject = ['tools']
   await ctx.plugin(plugin)
-  const result = await ctx.tools.execute({
+  const result = await executeOne(ctx, {
     signal: new AbortController().signal,
     callId: ToolCallId('browser_open'),
     name: 'browser_open',
@@ -240,6 +246,7 @@ test('a channel user hold closes the cached Playwright session and give-back rec
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeExecutor)
   t.after(async () => ctx.fiber.dispose())
   let hold = null
   let notifyHold
@@ -262,7 +269,7 @@ test('a channel user hold closes the cached Playwright session and give-back rec
   }
   plugin.inject = ['tools']
   await ctx.plugin(plugin)
-  const execute = () => ctx.tools.execute({
+  const execute = () => executeOne(ctx, {
     signal: new AbortController().signal,
     callId: ToolCallId('browser_snapshot'),
     name: 'browser_snapshot',
@@ -279,3 +286,8 @@ test('a channel user hold closes the cached Playwright session and give-back rec
   assert.equal((await execute()).isError, false)
   assert.equal(opens, 2)
 })
+
+async function executeOne(ctx, { signal, agent, callId, name, arguments: args }) {
+  const batch = await ctx.tools.execute({ signal, agent, calls: [{ type: 'tool_call', callId, name, arguments: JSON.stringify(args) }] })
+  return batch.results[0].result
+}

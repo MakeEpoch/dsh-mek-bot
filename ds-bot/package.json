@@ -1,7 +1,7 @@
 {
-  "name": "ds-bot",
-  "version": "0.2.3",
-  "description": "DS Bot: a team of long-lived Bots for DeepSeek Harness, with Main Bots, Bot-to-Bot messages and group chats",
+  "name": "dsh-mek-bot",
+  "version": "0.1.0",
+  "description": "DS-Bot upstream UI embedded behind one DSH sidebar entry",
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",
@@ -11,23 +11,24 @@
     "multi-agent",
     "agents"
   ],
-  "homepage": "https://github.com/Fei2411/DS-Bot#readme",
+  "homepage": "https://github.com/MakeEpoch/dsh-mek-bot#readme",
   "bugs": {
-    "url": "https://github.com/Fei2411/DS-Bot/issues"
+    "url": "https://github.com/MakeEpoch/dsh-mek-bot/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Fei2411/DS-Bot.git",
+    "url": "git+https://github.com/MakeEpoch/dsh-mek-bot.git",
     "directory": "ds-bot"
   },
   "license": "Apache-2.0",
   "type": "module",
-  "main": "index.js",
+  "main": "mek.js",
   "exports": {
-    ".": "./index.js",
+    ".": "./mek.js",
     "./client": "./client.js",
     "./web-search": "./web-search.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./upstream": "./index.js"
   },
   "files": [
     "index.js",
@@ -37,7 +38,10 @@
     "web-search.js",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "mek.js",
+    "NOTICE",
+    "README.zh.md"
   ],
   "scripts": {
     "build": "node scripts/build-client.mjs",
@@ -62,5 +66,19 @@
   },
   "devDependencies": {
     "esbuild": "0.28.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-web": {
+      "optional": true
+    }
   }
 }

@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/Fei2411/DS-Bot",
+  "ref": "main",
+  "commit": "4a7b55069ad300eae8be42a74f31bc170b40ead7",
+  "adapterVersion": "0.1.0",
+  "verifiedDsh": "0.2.2-alpha.2",
+  "sourceDirectory": "ds-bot",
+  "uiEntry": "ds-bot/src/client/index.js",
+  "downstreamEntry": "ds-bot/src/client/mek/index.jsx"
+}

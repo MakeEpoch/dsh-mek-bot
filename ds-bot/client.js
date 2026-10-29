@@ -1,6 +1,6 @@
 // Generated from src/client by `npm run build` (scripts/build-client.mjs). Do not edit by hand.
 window.__ModuleLoader__.load({
-  id: 'ds-bot',
+  id: 'dsh-mek-bot',
   factory: (require) => {
 const module = { exports: {} }
 var __create = Object.create;
@@ -31,10 +31,10 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// src/client/index.js
+// src/client/mek/index.jsx
 var index_exports = {};
 __export(index_exports, {
-  apply: () => apply,
+  apply: () => apply2,
   inject: () => inject
 });
 module.exports = __toCommonJS(index_exports);
@@ -2179,7 +2179,7 @@ var SPRING_LEAD = springEasing(784, 48.2);
 var SPRING_TRAIL = springEasing(289, 29.2);
 var QUICK_EDGES = { lead: springEasing(900, 51), trail: springEasing(400, 34) };
 var spring = (curve, ...properties) => properties.map((property) => `${property} ${curve.duration}ms ${curve.easing}`).join(",");
-function liveSprings(apply2) {
+function liveSprings(apply3) {
   const values = /* @__PURE__ */ new Map();
   let frame = 0;
   let last = 0;
@@ -2200,7 +2200,7 @@ function liveSprings(apply2) {
         value.v = 0;
       } else moving = true;
     }
-    apply2(read());
+    apply3(read());
     frame = moving ? requestAnimationFrame(step) : 0;
   };
   return {
@@ -2215,7 +2215,7 @@ function liveSprings(apply2) {
       if (jump) {
         cancelAnimationFrame(frame);
         frame = 0;
-        apply2(read());
+        apply3(read());
         return;
       }
       if (!frame) {
@@ -9181,9 +9181,9 @@ function AccountLauncher({ seat = true, settingsOpen, openSettings, openOnboardi
       [t("Automation tasks"), ClockIcon, () => actions.selectPanel("schedules")],
       [t("Bot settings"), GearIcon, () => actions.openSettings("general")]
     ],
-    [
+    ...actions.setSurface ? [[
       [t("Switch to classic Agent mode"), SwitchIcon, () => actions.setSurface("agent")]
-    ]
+    ]] : []
   ];
   if (signedIn) groups.push([[accountT("signOut"), SignOutIcon, askSignOut, void 0, true]]);
   return (0, import_react15.createElement)(
@@ -15492,11 +15492,11 @@ function ProvidersPage({ actions, run: run2, Section }) {
   const [view, setView] = (0, import_react39.useState)(null);
   const [open, setOpen] = (0, import_react39.useState)(null);
   const [adding, setAdding] = (0, import_react39.useState)(false);
-  const apply2 = (promise) => run2(translated(promise).then((next) => {
+  const apply3 = (promise) => run2(translated(promise).then((next) => {
     if (next?.providers) setView(next);
   }));
   (0, import_react39.useEffect)(() => {
-    void apply2(actions.providers());
+    void apply3(actions.providers());
   }, []);
   if (view === null) return null;
   if (!view.available) return (0, import_react39.createElement)("p", { className: "bt-set-hint" }, t("This DSH cannot set up model providers."));
@@ -15507,12 +15507,12 @@ function ProvidersPage({ actions, run: run2, Section }) {
       view.providers.map((provider) => (0, import_react39.createElement)(ProviderRow, {
         key: provider.id,
         provider,
-        apply: apply2,
+        apply: apply3,
         actions,
         open: open === provider.id,
         onToggle: () => setOpen(open === provider.id ? null : provider.id)
       })),
-      adding ? (0, import_react39.createElement)(AddProvider, { key: "add", view, apply: apply2, actions, onDone: () => setAdding(false) }) : null
+      adding ? (0, import_react39.createElement)(AddProvider, { key: "add", view, apply: apply3, actions, onDone: () => setAdding(false) }) : null
     ),
     adding ? null : (0, import_react39.createElement)("div", { key: "add", className: "bt-actions" }, (0, import_react39.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: () => setAdding(true) }, t("Add a provider")))
   ];
@@ -15522,7 +15522,7 @@ function keyState(key) {
   if (!key.configured) return ["missing", t("Needs an API key")];
   return key.writable ? ["set", t("Key set")] : ["outside", t("Key set outside DS Bot")];
 }
-function ProviderRow({ provider, apply: apply2, actions, open, onToggle }) {
+function ProviderRow({ provider, apply: apply3, actions, open, onToggle }) {
   const [confirm, setConfirm] = (0, import_react39.useState)(false);
   (0, import_react39.useEffect)(() => {
     if (!open) setConfirm(false);
@@ -15547,7 +15547,7 @@ function ProviderRow({ provider, apply: apply2, actions, open, onToggle }) {
     open ? (0, import_react39.createElement)(
       "div",
       { className: "bt-secret-edit" },
-      provider.key?.writable ? (0, import_react39.createElement)(KeyEditor, { provider, apply: apply2, actions }) : null,
+      provider.key?.writable ? (0, import_react39.createElement)(KeyEditor, { provider, apply: apply3, actions }) : null,
       provider.key && !provider.key.writable ? (0, import_react39.createElement)("div", { className: "bt-set-hint" }, t("This key comes from outside DS Bot, such as an environment variable, and cannot be changed here.")) : null,
       provider.models.length > 0 ? (0, import_react39.createElement)(
         "div",
@@ -15566,19 +15566,19 @@ function ProviderRow({ provider, apply: apply2, actions, open, onToggle }) {
         confirm ? [
           (0, import_react39.createElement)("span", { key: "q", className: "bt-set-hint" }, t("Remove {name}? Bots on its models need another model.", { name: provider.name })),
           (0, import_react39.createElement)("button", { key: "no", type: "button", className: "bt-soft bt-soft-sm", onClick: () => setConfirm(false) }, t("Keep")),
-          (0, import_react39.createElement)("button", { key: "yes", type: "button", className: "bt-soft bt-soft-sm bt-secret-danger", onClick: () => apply2(actions.removeProvider(provider.id)) }, t("Remove"))
+          (0, import_react39.createElement)("button", { key: "yes", type: "button", className: "bt-soft bt-soft-sm bt-secret-danger", onClick: () => apply3(actions.removeProvider(provider.id)) }, t("Remove"))
         ] : (0, import_react39.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm bt-secret-danger", onClick: () => setConfirm(true) }, (0, import_react39.createElement)(TrashIcon), t("Remove provider"))
       ) : null
     ) : null
   );
 }
-function KeyEditor({ provider, apply: apply2, actions }) {
+function KeyEditor({ provider, apply: apply3, actions }) {
   const [value, setValue] = (0, import_react39.useState)("");
   const [saved, setSaved] = (0, import_react39.useState)(false);
   const ready = value.trim() !== "";
   const save = () => {
     if (!ready) return;
-    void apply2(actions.setProviderKey(provider.id, value)).then((ok) => {
+    void apply3(actions.setProviderKey(provider.id, value)).then((ok) => {
       if (ok) {
         setValue("");
         setSaved(true);
@@ -15599,12 +15599,12 @@ function KeyEditor({ provider, apply: apply2, actions }) {
       { className: "bt-secret-inline" },
       (0, import_react39.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react39.createElement)(KeyIcon), (0, import_react39.createElement)(MaskedInput, { value, onChange: edit, onEnter: save, label })),
       (0, import_react39.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !ready, onClick: save }, t("Save")),
-      provider.key.configured ? (0, import_react39.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm bt-secret-danger", onClick: () => apply2(actions.setProviderKey(provider.id, null)) }, t("Remove key")) : null
+      provider.key.configured ? (0, import_react39.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm bt-secret-danger", onClick: () => apply3(actions.setProviderKey(provider.id, null)) }, t("Remove key")) : null
     ),
     saved ? (0, import_react39.createElement)("div", { className: "bt-set-hint bt-secret-ok", role: "status" }, (0, import_react39.createElement)(CheckIcon), t("Saved.")) : null
   );
 }
-function AddProvider({ view, apply: apply2, actions, onDone }) {
+function AddProvider({ view, apply: apply3, actions, onDone }) {
   const [mode, setMode] = (0, import_react39.useState)(view.addable.length > 0 ? "known" : "custom");
   return (0, import_react39.createElement)(
     "div",
@@ -15621,17 +15621,17 @@ function AddProvider({ view, apply: apply2, actions, onDone }) {
       }, label))
     ),
     // Both forms stay mounted, so switching keeps what is typed in the other.
-    (0, import_react39.createElement)("div", { hidden: mode !== "known" }, (0, import_react39.createElement)(KnownForm, { view, apply: apply2, actions, onDone })),
-    (0, import_react39.createElement)("div", { hidden: mode !== "custom" }, (0, import_react39.createElement)(CustomForm, { view, apply: apply2, actions, onDone }))
+    (0, import_react39.createElement)("div", { hidden: mode !== "known" }, (0, import_react39.createElement)(KnownForm, { view, apply: apply3, actions, onDone })),
+    (0, import_react39.createElement)("div", { hidden: mode !== "custom" }, (0, import_react39.createElement)(CustomForm, { view, apply: apply3, actions, onDone }))
   );
 }
-function KnownForm({ view, apply: apply2, actions, onDone }) {
+function KnownForm({ view, apply: apply3, actions, onDone }) {
   const [provider, setProvider] = (0, import_react39.useState)("");
   const [key, setKey] = (0, import_react39.useState)("");
   const options = [...view.addable].sort((a, b) => a.name.localeCompare(b.name));
   const add = () => {
     if (provider === "") return;
-    void apply2(actions.addProvider({ provider, key })).then((ok) => {
+    void apply3(actions.addProvider({ provider, key })).then((ok) => {
       if (ok) onDone();
     });
   };
@@ -15648,7 +15648,7 @@ function KnownForm({ view, apply: apply2, actions, onDone }) {
     (0, import_react39.createElement)(FormActions, { onCancel: onDone, onAdd: add, ready: provider !== "" })
   );
 }
-function CustomForm({ view, apply: apply2, actions, onDone }) {
+function CustomForm({ view, apply: apply3, actions, onDone }) {
   const [draft, setDraft] = (0, import_react39.useState)({ provider: "", name: "", baseURL: "", api: view.protocols[0], key: "", typed: "" });
   const [found, setFound] = (0, import_react39.useState)(null);
   const [picked, setPicked] = (0, import_react39.useState)([]);
@@ -15659,7 +15659,7 @@ function CustomForm({ view, apply: apply2, actions, onDone }) {
   const ready = draft.provider.trim() !== "" && draft.baseURL.trim() !== "" && models.length > 0;
   const fetchModels = () => {
     setAsking(true);
-    void apply2(Promise.resolve(actions.providerModels({ baseURL: draft.baseURL, api: draft.api, key: draft.key })).then((list) => {
+    void apply3(Promise.resolve(actions.providerModels({ baseURL: draft.baseURL, api: draft.api, key: draft.key })).then((list) => {
       setFound(list);
       setPicked([]);
     })).finally(() => setAsking(false));
@@ -15667,7 +15667,7 @@ function CustomForm({ view, apply: apply2, actions, onDone }) {
   const toggle = (id) => setPicked((list) => list.includes(id) ? list.filter((item) => item !== id) : [...list, id]);
   const add = () => {
     if (!ready) return;
-    void apply2(actions.addProvider({ custom: true, provider: draft.provider.trim(), name: draft.name, baseURL: draft.baseURL, api: draft.api, key: draft.key, models })).then((ok) => {
+    void apply3(actions.addProvider({ custom: true, provider: draft.provider.trim(), name: draft.name, baseURL: draft.baseURL, api: draft.api, key: draft.key, models })).then((ok) => {
       if (ok) onDone();
     });
   };
@@ -19182,7 +19182,7 @@ function listedOpener({ list, open, refresh, current }) {
 
 // src/client/index.js
 var inject = ["sessions", "uiWorkspace", "uiConversation", "slots", "theme", "layout"];
-function apply(ctx) {
+function apply(ctx, { lockBotMode = false } = {}) {
   ctx.effect(() => installLocale(ctx.get("locale")), "ds-bot: interface copy");
   const roster = createSource(EMPTY_ROSTER);
   migrateStorage();
@@ -19191,7 +19191,7 @@ function apply(ctx) {
   const seenStore = sharedMap(STORAGE.seen);
   let seenAt = seenStore.read();
   const ui2 = createSource({ details: null, view: "details", renaming: false, tab: null, side: null, newChat: null, exchange: null, menu: null, voice: null, palette: null, quote: null, settings: null, memory: null, toast: null, signIn: null, renameAgent: null, unread: unreadStore.read(), reactions: reactionStore.read(), visits: {} });
-  const surface = createSource({ mode: readMode(), plain: false });
+  const surface = createSource({ mode: lockBotMode ? "bot" : readMode(), plain: false });
   let agentSessionCache = /* @__PURE__ */ new Set();
   try {
     agentSessionCache = new Set(JSON.parse(localStorage.getItem(STORAGE.agentSessions) ?? "[]"));
@@ -19668,6 +19668,7 @@ function apply(ctx) {
     },
     clearUnread: (id) => writeUnread(id, false)
   };
+  if (lockBotMode) delete actions.setSurface;
   if (browsers) {
     Object.assign(actions, {
       // The globe button: the Bot's active tab in the browser view, or a new tab.
@@ -20083,6 +20084,23 @@ function apply(ctx) {
       groups.dispose();
     };
   }, "ds-bot: surface");
+}
+
+// src/client/mek/index.jsx
+var import_react47 = __toESM(require("react"), 1);
+var PANEL = "mek-bot";
+function apply2(ctx) {
+  if (window.parent !== window && new URLSearchParams(window.location.search).get("mek-bot") === "1") {
+    apply(ctx, { lockBotMode: true });
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.search = "?mek-bot=1";
+  url.hash = "";
+  const Bot = () => /* @__PURE__ */ import_react47.default.createElement("iframe", { title: "DS Bot", src: url.href, style: { border: 0, width: "100%", height: "100%", flex: "1 1 auto", minWidth: 0, minHeight: 0 } });
+  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react47.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react47.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react47.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
+  ctx.slots.inject("main", () => ctx.slots.register({ name: "main", key: PANEL }, Bot));
+  ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));
 }
 return Object.defineProperty({ ...module.exports }, Symbol.toStringTag, { value: 'Module' })
   },

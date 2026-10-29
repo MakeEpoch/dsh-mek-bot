@@ -570,9 +570,9 @@ export function AccountLauncher({ seat = true, settingsOpen, openSettings, openO
       [t('Automation tasks'), ClockIcon, () => actions.selectPanel('schedules')],
       [t('Bot settings'), GearIcon, () => actions.openSettings('general')],
     ],
-    [
+    ...(actions.setSurface ? [[
       [t('Switch to classic Agent mode'), SwitchIcon, () => actions.setSurface('agent')],
-    ],
+    ]] : []),
   ]
   if (signedIn) groups.push([[accountT('signOut'), SignOutIcon, askSignOut, undefined, true]])
   return h(Fragment, null,

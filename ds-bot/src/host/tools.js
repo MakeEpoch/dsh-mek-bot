@@ -1,3 +1,4 @@
+import { registerTeamTool } from './team-registration.js'
 // Team tools: the roster, bot-to-bot messages, group chat settings and posts, and the
 // question and view cards. Group rounds and reading chats are in groups.js.
 import { randomUUID } from 'node:crypto'
@@ -54,7 +55,7 @@ export function install(rt) {
   // Main Bots see every group; other Bots see the groups they are in.
   const visibleRooms = self => Object.values(state.rooms).filter(room => rt.isMain(self) || room.members.includes(self))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'list_bots',
     description: 'List every Bot on the user\'s team with its role, what it does and what it is doing right now, and the group chats you can see.',
     parameters: {},
@@ -138,7 +139,7 @@ export function install(rt) {
   const calledInPosts = new Map()
   const turnOf = exec => rt.live.get(exec.agent?.id)?.turn
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'message_bot',
     description: 'Send a message to another Bot on the team. If that Bot is working, it reads your message at its next step and can change course, then answers once that work is done; if it is idle, it starts on it right away. Its reply arrives later as a new message to you; with reply_to "user" it answers the user in its own chat instead. In a group chat it reaches only members of that group, as writing "@Name" there does. With request_id you name the request yourself: a repeat of that name with the same message is not sent again, but gives the receipt of the first call back.',
     parameters: {
@@ -266,7 +267,7 @@ export function install(rt) {
     },
   }))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'stop_bot',
     description: 'Main Bot only. Stop another Bot\'s running turn immediately — when it must not finish a dangerous action and a message_bot warning is not enough. Its queued messages are dropped with the turn. It is then told why in a new turn, whose reply comes back to you.',
     parameters: {
@@ -293,7 +294,7 @@ export function install(rt) {
     },
   }))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'create_bot',
     description: 'Main Bot only. Create a new Bot on the user\'s team. It appears in the sidebar and greets the user.',
     parameters: {
@@ -328,7 +329,7 @@ export function install(rt) {
     },
   }))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'update_bot',
     description: 'Change a Bot\'s name, role, color, profile picture, model, thinking level, working folder, or instructions. Every Bot may change itself; only a Main Bot may change another Bot.',
     parameters: {
@@ -403,7 +404,7 @@ export function install(rt) {
     return result
   })
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'list_bot_models',
     description: 'List the models a Bot can run on, as provider/model refs for create_bot and update_bot. A model in use also lists the thinking levels it serves.',
     parameters: {},
@@ -445,7 +446,7 @@ export function install(rt) {
     return { error: `No group chat called "${unquote(ref)}" that you can see. Groups: ${groupNames(self)}.` }
   }
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'create_group',
     description: 'Main Bot only. Create a group chat with the user and some Bots. You join it as its admin unless you name another member.',
     parameters: {
@@ -474,7 +475,7 @@ export function install(rt) {
     },
   }))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'update_group',
     description: 'Change a group chat: rename it, set its notice, add or remove members, change its admin or reply mode. Main Bots may change any group; a group\'s admin may change its own group.',
     parameters: {
@@ -535,7 +536,7 @@ export function install(rt) {
     },
   }))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'delete_group',
     description: 'Main Bot only. Delete a group chat; its history is archived. Only when the user asks.',
     parameters: { group: GROUP_REF },
@@ -552,7 +553,7 @@ export function install(rt) {
     },
   }))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'post_to_group',
     description: 'Post a message into a group chat as yourself. A Main Bot may post into any group, any other Bot into a group it is in. A Main Bot\'s or the group admin\'s post starts a round: members reply in the group, where the user reads them. Another member\'s post calls only the members it names with "@Name"; without one it is only written into the group.',
     parameters: {
@@ -606,7 +607,7 @@ export function install(rt) {
     },
   }))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'ask_user',
     description: 'Show the user a short multiple-choice question card in the chat (the user can also type their own answer). Calling it ends your turn; the chosen answer arrives later as the user\'s next message.',
     parameters: {
@@ -663,7 +664,7 @@ export function install(rt) {
     },
   }))
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'show_view',
     description: 'Draw a view in your own chat as part of your reply: a chart, key numbers, a table, a small calculator the user can try values in, or a choice, confirmation or short form. Text you write before and after the call shows around it. Use a view when it answers better than text: a chart to compare values or show a trend, inputs with formulas to let the user try numbers (worked out in the page, no new turn), options to let the user pick. Plain rows and columns read fine as a Markdown table, and one number needs no view. Give the answer first, then the view. Never invent data; mark sample numbers and assumptions as such. Do not repeat the same data as text, chart and table. Add only the controls the user needs. A view with options, confirm, form or submit ends your turn, and the answer arrives as the user\'s next message. Never collect a key, token or password. Keep the view under 8 KB.',
     parameters: {
@@ -772,7 +773,7 @@ export function install(rt) {
     setTimeout(() => void blockGoal(id), 0)
   })
 
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'list_capabilities',
     description: 'List shared MCP servers, skills, and packs, plus the capabilities attached to you.',
     parameters: {},
@@ -796,7 +797,7 @@ export function install(rt) {
       return ['Shared capabilities:', ...lines].join('\n')
     },
   }))
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'save_capability',
     description: 'Create or update a shared MCP server, skill, or pack. Changes apply from your next message.',
     parameters: {
@@ -826,7 +827,7 @@ export function install(rt) {
       } catch (error) { return error.message }
     },
   }))
-  ctx.tools.register(defineTool({
+  registerTeamTool(rt, defineTool({
     name: 'delete_capability',
     description: 'Remove a shared capability and detach it from every Bot and pack.',
     parameters: { name: { type: 'string', required: true } },
@@ -842,7 +843,7 @@ export function install(rt) {
     },
   }))
   for (const [name, endpoint, verb] of [['attach_capability', 'attach', 'Attached'], ['detach_capability', 'detach', 'Detached']]) {
-    ctx.tools.register(defineTool({
+    registerTeamTool(rt, defineTool({
       name,
       description: `${verb} a shared capability to yourself, or to another Bot if you are a Main Bot.`,
       parameters: {

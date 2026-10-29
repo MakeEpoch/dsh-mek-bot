@@ -20,7 +20,7 @@ export async function bundleClient() {
   const result = await build({
     // Region comments name sources relative to the plugin, wherever the script runs from.
     absWorkingDir: PLUGIN,
-    entryPoints: ['src/client/index.js'],
+    entryPoints: ['src/client/mek/index.jsx'],
     bundle: true,
     format: 'cjs',
     platform: 'browser',
@@ -37,7 +37,7 @@ export async function bundleClient() {
   return [
     '// Generated from src/client by `npm run build` (scripts/build-client.mjs). Do not edit by hand.',
     'window.__ModuleLoader__.load({',
-    '  id: \'ds-bot\',',
+    '  id: \'dsh-mek-bot\',',
     '  factory: (require) => {',
     'const module = { exports: {} }',
     result.outputFiles[0].text.trimEnd(),
