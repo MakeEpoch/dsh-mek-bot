@@ -220,6 +220,7 @@ export function install(rt) {
     const bot = rt.botOf(record.botId)
     if (bot === undefined) return
     const text = resumeText(record)
+    if (await rt.mekResumeInterrupted?.(sessionId, record, text)) return
     if (record.roomId !== undefined) {
       const room = rt.roomOf(record.roomId)
       if (room === undefined || !room.members.includes(bot.id)) return
@@ -303,6 +304,7 @@ export function install(rt) {
         where: room === undefined ? 'own chat' : `group "${room.name}"`,
         sessionId,
       })
+      rt.mekFailWork?.(workId, 'unknown')
       answerSender(rt, sessionId, asker, text)
       return
     }
@@ -330,12 +332,14 @@ export function install(rt) {
     }
     if (reason.kind === 'error') {
       const failure = turnFailure(reason.error)
+      rt.mekFailWork?.(workId, 'failed')
       answerSender(rt, sessionId, asker, `${name} could not answer your message: its model call failed (${failureLine(failure)}). Tell the user if it matters; do not retry right away.`)
       return
     }
     if (reason.kind === 'aborted') {
       // The turn was stopped before it could answer: the sender is told, as it is told
       // when DS Bot watches the turn end.
+      rt.mekFailWork?.(workId, 'blocked')
       answerSender(rt, sessionId, asker, `${name} was stopped before it could answer your message.`)
       return
     }

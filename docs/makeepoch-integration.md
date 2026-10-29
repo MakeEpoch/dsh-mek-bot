@@ -32,6 +32,14 @@ Uninstalling leaves team state and DSH history in place. Native visual scoping i
 
 Question resumes use a fresh delivery id with the same handoff id; revisions use a new handoff linked to the original task. Replies are retained before the handoff closes. Uncertain delivery is reconciled before replay; unreadable history remains unknown. Independent direct user turns do not inherit pending delegated work. The stable ownership prompt guides decisions; runtime checks enforce routing, ownership and completion prerequisites. Existing pre-adapter handoffs are not silently reassigned. See the [downstream task design](plans/2026-10-30-mek-task-ownership.md).
 
+## Team operations extensions
+
+The downstream entry installs `mek-policy.js`, `mek-knowledge.js`, `mek-workflows.js` and `mek-team.js` after coordination. Their versioned state lives in the existing atomic team store; unknown future formats are refused without replacement. Task events carry metadata only; authorized summaries are separately recorded and delivered through durable notices without changing task ownership. User sharing controls are channel-only, not model tools.
+
+Execution restrictions use public tool guards, tool dispatch and LLM stream hooks. They add restrictions without bypassing DSH approvals. Cooperative resource claims cover known mutators and explicit bindings, not arbitrary background subprocesses. Token limits gate subsequent calls; they cannot stop all in-flight provider output at an exact monetary amount. Project facts require an explicit scope and source. Workflow activation requires an accepted validation task tied to an immutable version digest. Scheduling remains a DSH responsibility.
+
+Native views remain under `src/client/mek/`; the existing controller exposes optional `mekTeam` state. Artifact previews use public workspace-file APIs and the producing session. The optional browser adapter exposes observation/control of existing sessions through the authenticated Bot channel and serializes human actions with Bot actions. No browser is launched by observation, and screenshot masking does not grant access to credentials. See [team operations design](plans/2026-10-30-mek-team-operations.md).
+
 ## Merge and verify upstream
 
 Keep `upstream` pointing to `https://github.com/Fei2411/DS-Bot.git` and `origin` to MakeEpoch. Fetch upstream, create an update branch from downstream main, merge the desired commit and resolve metadata, the small API/export seams and native build bindings. Update the pinned commit. Preserve upstream ancestry and source locations; do not replace them with a copied client implementation.

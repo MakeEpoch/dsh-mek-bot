@@ -203,7 +203,9 @@ export function install(rt) {
       if (room !== undefined) {
         const refusal = groupRefusal(room, sender, target)
         if (refusal !== undefined) refuse(refusal)
-        const send = () => callInGroup(exec, room, sender, target, text.trim())
+        const send = () => rt.mekCurrentWorks?.(exec.agent?.id)?.length
+          ? rt.mekDelegateGroup(exec.agent.id, room, sender, target, text.trim())
+          : callInGroup(exec, room, sender, target, text.trim())
         return request === undefined ? await send() : answer(await rt.admitRequest(request, send))
       }
       const posted = calledInPosts.get(exec.agent?.id)
@@ -215,18 +217,20 @@ export function install(rt) {
       // bare error the Bot cannot act on.
       const works = worksOf(exec)
       if (rt.upstreamOf(works).has(target.id)) {
+        if (rt.mekQuestion) return 'Not sent: this Bot is waiting for your result. Use ask_user to ask the original task owner a question, or report_bot_task and finish the work.'
         return `Not sent: ${target.name} is waiting for the result of the work you are doing, and your answer reaches it by itself once everything you handed on is back. Finish the work and end your turn; to ask ${target.name} something, end your turn with the question.`
       }
       const send = async () => {
         const toUser = args.reply_to === 'user'
         const work = toUser ? undefined : works[0]
+        const rootId = rt.mekRootForDelegation?.(sender.id, work, exec.agent?.id)
         const chat = rt.chatOf(target.id)
         const agent = await rt.resolveAgent(chat)
         const status = rt.statusOf(target.id)
         // A request it has not read yet, sent for the same work, takes this one in, so
         // messages to a Bot that cannot read them do not pile up.
         const earlier = unreadRequest(agent, sender.id, toUser)
-        const joinable = earlier !== undefined && (toUser || rt.sameWork(earlier.message.source.exchangeId, work))
+        const joinable = earlier !== undefined && (toUser || (rt.sameWork(earlier.message.source.exchangeId, work) && (rootId === undefined || rt.mekSameTask(earlier.message.source.exchangeId, rootId))))
         const before = joinable ? bodyOf(earlier.message) : undefined
         let long = await rt.attachLong(before ? `${before.text}\n\n${text}` : text, `Message from ${sender.name}.txt`)
         // Nothing went out, so a named request must not take this as a delivered
@@ -238,7 +242,7 @@ export function install(rt) {
         const steer = (args.when !== 'queue' && !toUser) || (joins && earlier.steered)
         const exchangeId = joins ? earlier.message.source.exchangeId : randomUUID()
         if (joins) rt.forgetDelivery?.(exchangeId)
-        else if (!toUser) rt.openWork(exchangeId, { from: sender.id, to: target.id, parent: work })
+        else if (!toUser) rt.openWork(exchangeId, { from: sender.id, to: target.id, parent: work, ...(rootId ? { rootId } : {}) })
         try {
           await rt.deliver({ fromId: sender.id, toId: target.id, text: long.text, files: [...long.files, ...(joins ? before.files : [])], length: long.length, role: 'request', steer, exchangeId, ...(joins ? { merged: true } : {}), ...(toUser ? { audience: 'user' } : {}) })
         } catch (error) {
@@ -588,9 +592,11 @@ export function install(rt) {
       // work handed on for that request (handoffs.js).
       const work = reportBack ? worksOf(exec).find(id => rt.ownsWork(self, id)) : undefined
       const sub = work === undefined && !rt.config.coordinateTasks ? undefined : randomUUID()
-      if (sub !== undefined) rt.openWork(sub, { from: self, room: room.id, parent: work })
+      const fromRoom = rt.mekPostGroup ? rt.groupOwners.get(exec.agent?.id)?.roomId : undefined
+      if (sub !== undefined) rt.openWork(sub, { from: self, room: room.id, parent: work, ...(fromRoom ? { fromRoom } : {}) })
       try {
-        await rt.postToRoom(room, sender, long.text, { ...(reportBack ? { reportBack: true } : {}), ...(member ? { member: true } : {}), ...(sub ? { sub } : {}), ...(long.length ? { length: long.length } : {}) }, long.files)
+        if (rt.mekPostGroup && sub) await rt.mekPostGroup(room, sender, text, sub, long.files)
+        else await rt.postToRoom(room, sender, long.text, { ...(reportBack ? { reportBack: true } : {}), ...(member ? { member: true } : {}), ...(sub ? { sub } : {}), ...(long.length ? { length: long.length } : {}) }, long.files)
       } catch (failure) {
         if (sub !== undefined) rt.dropWork(sub)
         return `Could not post in "${room.name}": ${failure.message}`
@@ -605,6 +611,7 @@ export function install(rt) {
       }
       const asker = sub === undefined ? undefined : rt.botOf(state.works[work]?.from)?.name
       const waits = asker ? ` End your turn when you have handed on everything: the replies bring you back to this work, and your answer goes to ${asker} once all of it is back.` : ''
+      if (rt.mekPostGroup && sub) return `Delegated in "${room.name}" under task ${sub}. Member questions and final results return here; keep the user in the original conversation. Work stays open while any member is waiting or running.`
       return `Posted in "${room.name}". Members reply there, where the user reads them${reportBack ? '; their replies also come back to you as a new message when the round ends' : ', and nothing comes back to you'}.${waits}`
     },
   }))
@@ -635,8 +642,8 @@ export function install(rt) {
     async execute(args, exec) {
       await rt.load()
       const id = exec.agent?.id
-      if (rt.groupOwners.has(id)) return 'Question cards only work in your own chat. In a group, ask in your message instead.'
-      if (!rt.chatOwners.has(id)) return `Only Bots on the team can use ask_user. Use ${BLOCKING_QUESTION_TOOL} if it is available in this session, or ask the user in your reply.`
+      if (rt.groupOwners.has(id) && !rt.mekCurrentWorks?.(id)?.length) return 'Question cards only work in your own chat. In a group, ask in your message instead.'
+      if (!rt.chatOwners.has(id) && !rt.mekCurrentWorks?.(id)?.length) return `Only Bots on the team can use ask_user. Use ${BLOCKING_QUESTION_TOOL} if it is available in this session, or ask the user in your reply.`
       const options = (Array.isArray(args.options) ? args.options : [])
         .map(option => (typeof option === 'string' ? { label: option } : option ?? {}))
         .map(option => ({
@@ -685,8 +692,8 @@ export function install(rt) {
     async execute(args, exec) {
       await rt.load()
       const id = exec.agent?.id
-      if (rt.groupOwners.has(id)) return 'View cards only work in your own chat. In a group, ask in your message instead.'
-      if (!rt.chatOwners.has(id)) return `Only Bots on the team can use show_view. Use ${BLOCKING_QUESTION_TOOL} if it is available in this session, or ask the user in your reply.`
+      if (rt.groupOwners.has(id) && !rt.mekCurrentWorks?.(id)?.length) return 'View cards only work in your own chat. In a group, ask in your message instead.'
+      if (!rt.chatOwners.has(id) && !rt.mekCurrentWorks?.(id)?.length) return `Only Bots on the team can use show_view. Use ${BLOCKING_QUESTION_TOOL} if it is available in this session, or ask the user in your reply.`
       const checked = checkShownView(args.title, args.view)
       if (checked.error !== undefined) return checked.error
       const title = checked.title

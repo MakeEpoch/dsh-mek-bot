@@ -32,6 +32,7 @@ export function install(rt) {
     // the header stays neutral about who changed the profile.
     if (role === 'update') return '[Your profile was updated — follow the latest version]'
     if (role === 'secret') return '[Secret card]'
+    if (role === 'notice') return '[Team activity notice]'
     if (audience === 'user') return `[Message from ${fromName} · the user sees your reply here]`
     return `[Message from ${fromName}]`
   }
@@ -99,6 +100,7 @@ export function install(rt) {
       ],
       source,
     })
+    if (rt.mekDeliveryAllowed?.({ role, exchangeId, toId }) === false) return exchangeId
     if (steer) agent.steer(message)
     else agent.followup(message)
     await ctx.sessions.flush(agent.session)

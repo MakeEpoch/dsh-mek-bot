@@ -20,6 +20,20 @@ Returned work awaits review. The owner can request a revision on the same task, 
 
 The adapter persists task ownership, questions and outgoing results in `mek-bot/state.json`. Queued decisions survive restarts. Uncertain deliveries are reconciled against inboxes and durable history before retrying; an unreadable history stays explicitly uncertain. New ownership applies to new delegations; old upstream handoffs are not silently reclassified. Coordination is installed only by `mek.js`; the retained upstream entry keeps its original behavior.
 
+## Team operations
+
+The **Team** surface brings task history, important activity, policies, project facts and reusable workflows together.
+
+- **Supervisor awareness:** choose a supervisor and per-Bot summary sharing. Explicit task summaries are shared by default; routine progress is recorded without a supervisor call, while blockers, failures and essential decisions receive deduplicated notices. Direct department work retains its owner. Private transcripts are not harvested. Notifications and sharing are separate controls; already-delivered history cannot be revoked.
+- **Reliable delivery:** state transitions and outgoing messages persist together. Delegated groups track each member through questions, approvals, delayed results and revisions. Failed, cancelled or uncertain work cannot pass as success. Declared criteria require individual evidence before acceptance. Task artifacts open from their producing session.
+- **Execution policy:** select general, coding or custom responsibilities and disabled tools per Bot; set task parallelism, revision, deadline and token limits. Limits apply before the next model request or tool dispatch; in-flight output may exceed a token limit. Missing provider usage stays unknown; external service prices are not estimated.
+- **Resource coordination:** recognized workspace writers, browser tools and explicitly bound account tools claim exclusive resources. Stale leases remain exclusive until released. This is cooperative coordination, not a sandbox for arbitrary shell commands, background processes or external clients. Use separate workspaces/accounts when isolation is required.
+- **Project facts:** users define sharing scopes; members deliberately submit sourced, versioned facts. Conflicts remain visible until resolved, old versions remain available, and expiry is explicit. Private memory and credentials are not auto-imported.
+- **Reusable workflows:** save inputs, instructions and acceptance checks; complete and accept a validation run before activating that version. Edits create new drafts. Runs reuse the task coordinator; scheduled execution uses existing DSH automation without a second Bot scheduling menu.
+- **Browser observation and takeover:** inspect an already-open Bot browser, explicitly take control and return it. Bot input pauses during human control. Observation never launches a browser. An available browser capability is required; password fields are masked in screenshots and input text is not added to task records.
+
+Automated acceptance uses a local scripted model. It verifies system behavior, not real-model judgment or business correctness; evidence and unresolved issues remain available for review.
+
 ## Install
 
 Verified with DSH **0.2.2-alpha.2**, Node.js 24 and current Chromium. The browser must support CSS `@scope`.
@@ -29,10 +43,22 @@ cd ds-bot
 npm ci
 npm run build
 npm pack --ignore-scripts
-dsh plugin --profile web add -w ./dsh-mek-bot-0.1.3.tgz
+dsh plugin --profile web add -w ./dsh-mek-bot-0.2.0.tgz
 ```
 
 Enable the bundle and restart DSH. Do not enable the original `ds-bot` bundle alongside it. Use a package archive for production, never a source link. Keep `autoInstallPeers: false` in the profile; the DSH loader supplies the optional host API peers. Do not install duplicate Cordis, scope, tools or LLM cores.
+
+Browser support includes the optional Playwright dependency and requires a local Chromium/Chrome executable. For example on Linux, adjust the executable path to your installation:
+
+```yaml
+- id: mek-bot
+  config:
+    browserPlugin: refs
+    browserHeadless: true
+    browserExecutablePath: /usr/bin/google-chrome
+```
+
+A service restart closes in-process browsers. Per-Bot login profiles remain; interrupted browser handoffs become blocked results for their original owner and require an explicit retry instead of automatic browser action replay.
 
 ## Data and boundaries
 

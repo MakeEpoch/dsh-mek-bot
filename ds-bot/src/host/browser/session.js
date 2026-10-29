@@ -525,6 +525,49 @@ export function createSession({ context, browser, page, botId, userDataDir, cook
       return image
     },
     url: () => activePage()?.url() ?? '',
+    // Human controls are exposed only through the authenticated adapter, never as
+    // model tools. Input and screenshots stay transient; no transcript is written.
+    human: {
+      async state() {
+        const target = activePage()
+        if (!target) return { open: false }
+        const viewport = target.viewportSize() ?? { width: 1280, height: 900 }
+        const image = await target.screenshot({ type: 'jpeg', quality: 45, timeout: 5000, mask: [target.locator('input[type="password"],input[autocomplete="one-time-code"],input[autocomplete^="cc-"]')] })
+        return { open: true, url: target.url(), title: await target.title(), width: viewport.width, height: viewport.height,
+          tabs: await Promise.all(openPages().map(async (page, index) => ({ index, active: page === target, title: await page.title(), url: page.url() }))),
+          ...(image.length <= 750000 ? { image: image.toString('base64') } : { imageUnavailable: true }) }
+      },
+      async act(args) {
+        if (getHold?.()?.by !== 'user') throw new Error('Take over the browser before interacting.')
+        const target = activePage()
+        if (!target) throw new Error('No browser page is open.')
+        const action = args.action
+        if (action === 'click') {
+          const viewport = target.viewportSize() ?? { width: 1280, height: 900 }
+          if (!Number.isFinite(args.x) || !Number.isFinite(args.y) || args.x < 0 || args.y < 0 || args.x >= viewport.width || args.y >= viewport.height) throw new Error('Click inside the current screenshot.')
+          await target.mouse.click(args.x, args.y)
+        } else if (action === 'type') {
+          if (typeof args.text !== 'string' || args.text.length > 4096) throw new Error('Input must be at most 4096 characters.')
+          await target.keyboard.insertText(args.text)
+        } else if (action === 'key') {
+          if (!['Enter', 'Tab', 'Shift+Tab', 'Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ControlOrMeta+A'].includes(args.key)) throw new Error('Unsupported key.')
+          await target.keyboard.press(args.key)
+        } else if (action === 'scroll') {
+          if (!Number.isFinite(args.delta) || Math.abs(args.delta) > 1200) throw new Error('Scroll must be within one page.')
+          await target.mouse.wheel(0, args.delta)
+        } else if (action === 'navigate') {
+          let url
+          try { url = new URL(args.url) } catch { throw new Error('Enter a complete http or https address.') }
+          if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || /^(169\.254\.|\[fd00:ec2::254\]|metadata\.google\.internal)/i.test(url.hostname)) throw new Error('This address cannot be opened.')
+          await target.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 15000 })
+        } else if (action === 'tab') {
+          const pages = openPages()
+          if (!Number.isInteger(args.index) || !pages[args.index]) throw new Error('The browser tab is no longer open.')
+          current = pages[args.index]
+        } else throw new Error('Unsupported browser action.')
+      },
+      release() { hold = null },
+    },
     async open(url) {
       ready()
       await clearPendingDelete()

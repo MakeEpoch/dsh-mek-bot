@@ -96,6 +96,7 @@ export function install(rt) {
   let loaded = null
   let writing = Promise.resolve()
   let redact = text => text
+  rt.redactTeamSummary = text => redact(String(text))
   let refreshEnv = () => {}
 
   const changed = () => {

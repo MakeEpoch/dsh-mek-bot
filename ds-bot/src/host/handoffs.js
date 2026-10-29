@@ -21,7 +21,7 @@ export function install(rt) {
   const works = () => (state.works ??= {})
   // What came back, whole; state.json keeps the start of each.
   const whole = new Map()
-  const save = () => void rt.save().catch(() => {})
+  const save = () => { if (!rt.mekDeferWorkSave) void rt.save().catch(() => {}) }
   const nameOf = id => rt.botOf(id)?.name
 
   // The whole result of a work, in a file of its own: state.json is written whole on

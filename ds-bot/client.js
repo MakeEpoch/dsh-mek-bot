@@ -3945,10 +3945,10 @@ var INLINE = ["fill", "stroke", "stroke-width", "stroke-dasharray", "opacity", "
 function saveImage(svg, name) {
   const clone = svg.cloneNode(true);
   const live = [svg, ...svg.querySelectorAll("*")];
-  const copy2 = [clone, ...clone.querySelectorAll("*")];
+  const copy3 = [clone, ...clone.querySelectorAll("*")];
   live.forEach((node, index) => {
     const style = getComputedStyle(node);
-    copy2[index].setAttribute("style", INLINE.map((prop) => `${prop}:${style.getPropertyValue(prop)}`).join(";"));
+    copy3[index].setAttribute("style", INLINE.map((prop) => `${prop}:${style.getPropertyValue(prop)}`).join(";"));
   });
   const width = Number(svg.getAttribute("width"));
   const height = Number(svg.getAttribute("height"));
@@ -4043,7 +4043,7 @@ function WidgetChart({ node, lookup, registerChart, refreshCharts }) {
   const point = active === null ? null : drawn.points[active];
   const share = (at) => unit === "%" ? withUnit(drawn.values[at], unit) : `${withUnit(drawn.values[at], unit)} · ${drawn.total > 0 ? Math.round(drawn.values[at] / drawn.total * 100) : 0}%`;
   const tipRows = active === null || isDonut ? [] : series.filter((_, index) => shown[index]).map((item) => ({ color: item.color, name: item.name, value: withUnit(item.values[active], unit) }));
-  const copy2 = () => {
+  const copy3 = () => {
     void navigator.clipboard?.writeText(chartCsv(data)).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
@@ -4055,7 +4055,7 @@ function WidgetChart({ node, lookup, registerChart, refreshCharts }) {
   };
   const menuLabel = typeof node.caption === "string" && node.caption !== "" ? node.caption : null;
   const action = (0, import_react7.useRef)(null);
-  action.current = { label: menuLabel, copy: copy2, save: () => {
+  action.current = { label: menuLabel, copy: copy3, save: () => {
     if (svg.current) saveImage(svg.current, "chart.png");
   }, toggleTable };
   (0, import_react7.useEffect)(() => registerChart?.(menuKey, {
@@ -5730,7 +5730,7 @@ function BtwCardView({ card, compact: compact2 = false, sessionId, actions, onDe
   if (!card) return null;
   const question = typeof card.question === "string" ? card.question : "";
   const answer = typeof card.answer === "string" ? card.answer : "";
-  const when3 = stampOf(card);
+  const when4 = stampOf(card);
   const answering = card.status === "answering";
   const remove = async () => {
     if (deleting) return;
@@ -5767,7 +5767,7 @@ function BtwCardView({ card, compact: compact2 = false, sessionId, actions, onDe
         (0, import_react12.createElement)("span", { className: "bt-btw-chevron", "aria-hidden": true }),
         (0, import_react12.createElement)("span", { className: "bt-btw-q" }, question)
       ),
-      when3 !== void 0 ? (0, import_react12.createElement)("time", { className: "bt-btw-time", dateTime: new Date(when3).toISOString() }, messageClock(when3)) : null,
+      when4 !== void 0 ? (0, import_react12.createElement)("time", { className: "bt-btw-time", dateTime: new Date(when4).toISOString() }, messageClock(when4)) : null,
       answering ? (0, import_react12.createElement)("span", { className: "bt-shimmer" }, t("Answering…")) : null,
       card.status === "cancelled" ? (0, import_react12.createElement)("span", { className: "bt-btw-status" }, t("Cancelled")) : null,
       (0, import_react12.createElement)("button", {
@@ -6057,7 +6057,7 @@ function MessageTools({ text, name, sessionId, react, actions, open: tapped }) {
     const below = rect.bottom + 220 < viewBottom();
     return panel.kind === "react" ? { left: Math.min(Math.max(rect.left + rect.width / 2, STRIP_HALF), scopedWindow.innerWidth - STRIP_HALF), top: rect.top - 6, "--bt-origin": "bottom center" } : { left: Math.min(rect.left, scopedWindow.innerWidth - 208), ...below ? { top: rect.bottom + 4 } : { bottom: viewBottom() - rect.top + 4, "--bt-origin": "bottom left" } };
   }, [panel, tick]);
-  const copy2 = () => {
+  const copy3 = () => {
     void navigator.clipboard?.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1e3);
@@ -6090,7 +6090,7 @@ function MessageTools({ text, name, sessionId, react, actions, open: tapped }) {
     panel?.kind === "more" ? createPortal((0, import_react13.createElement)(
       "div",
       { ref: pop, className: "bt-menu", role: "menu", "aria-label": t("Message actions"), style: place },
-      item(t("Copy"), CopyIcon, copy2),
+      item(t("Copy"), CopyIcon, copy3),
       item(t("Download"), DownloadIcon, download2)
     ), scopedDocument.body) : null
   );
@@ -7478,7 +7478,7 @@ function createTeam() {
   const browserTabs = createSource({});
   const layout = createSource({ wide: true });
   const sessions = createSource({ ids: [], byId: {} });
-  const status2 = createSource(/* @__PURE__ */ new Map());
+  const status = createSource(/* @__PURE__ */ new Map());
   const sent = createSource({});
   const shown = createSource(null);
   const chat = createBus();
@@ -7486,7 +7486,7 @@ function createTeam() {
     const row = list.byId[id] ?? { id };
     return { ids: list.ids.includes(id) ? list.ids : [...list.ids, id], byId: { ...list.byId, [id]: edit(row) } };
   });
-  const setStatus = (id, patch) => status2.set((map) => {
+  const setStatus = (id, patch) => status.set((map) => {
     const entry = map.get(id) ?? {};
     if (Object.entries(patch).every(([key, value]) => (entry[key] ?? false) === value)) return map;
     return new Map(map).set(id, { ...entry, ...patch });
@@ -7661,13 +7661,13 @@ function createTeam() {
     useBrowserPages: use(browserPages),
     useBrowserTabs: use(browserTabs),
     useSessions: use(sessions),
-    useSessionStatus: use(status2),
+    useSessionStatus: use(status),
     useSessionRetainInfo: (id, selector) => useSelect(sessions, (list) => selector(list.byId[id])),
     useLayout: use(layout),
     useShown: use(shown)
   };
   const sessionHook = (sessionId) => (selector) => useSelect(sent, (state) => selector({ pendingSubmissions: state[sessionId] ?? [] }));
-  return { actions, hooks, sessionHook, chat, start, refresh: pull, roster, ui: ui2, shown };
+  return { actions, hooks, sessionHook, chat, start, refresh: pull, roster, ui: ui2, shown, work };
 }
 
 // src/client/composer.js
@@ -10311,15 +10311,15 @@ function TaskForm({ roster, actions, start, onDone, onCancel }) {
     if (busy) return;
     setBusy(true);
     setError("");
-    let when3;
+    let when4;
     try {
-      when3 = timing();
+      when4 = timing();
     } catch {
       setError(t("Pick a date and time"));
       setBusy(false);
       return;
     }
-    void actions.scheduleCreate({ target, title, prompt, when: when3 }).then(onDone, (failure) => {
+    void actions.scheduleCreate({ target, title, prompt, when: when4 }).then(onDone, (failure) => {
       setError(hostText(failure?.message ?? String(failure)));
       setBusy(false);
     });
@@ -10521,7 +10521,7 @@ var parseMap = (text, label2) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(t("{label} must be a JSON object.", { label: label2 }));
   return value;
 };
-var statusText = (status2) => !status2 ? void 0 : status2.state === "ready" ? t("Ready") : status2.state === "needs-approval" ? t("Needs approval") : status2.state === "error" ? t("Could not connect: {error}", { error: status2.error ?? "" }) : t("Connecting…");
+var statusText = (status) => !status ? void 0 : status.state === "ready" ? t("Ready") : status.state === "needs-approval" ? t("Needs approval") : status.state === "error" ? t("Could not connect: {error}", { error: status.error ?? "" }) : t("Connecting…");
 function Field({ label: label2, value, onChange, multiline = false, disabled = false, placeholder }) {
   return (0, import_react25.createElement)(
     "label",
@@ -11212,8 +11212,8 @@ function MemoryDialog({ owner, actions, leaving = false }) {
     inputRef.current?.focus();
   };
   const count = view?.entries.length ?? 0;
-  const when3 = view?.summary ? ago(view.summary.at, now) : null;
-  const status2 = view === null ? "" : page === "entries" ? count === 1 ? t("1 entry") : t("{count} entries", { count }) : view.summarizing && view.summary ? t("Updating…") : view.summary && view.fresh ? when3 ? t("Updated {time}", { time: when3 }) : t("Updated just now") : "";
+  const when4 = view?.summary ? ago(view.summary.at, now) : null;
+  const status = view === null ? "" : page === "entries" ? count === 1 ? t("1 entry") : t("{count} entries", { count }) : view.summarizing && view.summary ? t("Updating…") : view.summary && view.fresh ? when4 ? t("Updated {time}", { time: when4 }) : t("Updated just now") : "";
   const busy = answer?.pending === true;
   return (0, import_react27.createElement)(
     "div",
@@ -11227,7 +11227,7 @@ function MemoryDialog({ owner, actions, leaving = false }) {
         { className: "bt-mem-head" },
         page === "entries" ? (0, import_react27.createElement)("button", { type: "button", className: "bt-icon-btn", "aria-label": t("Back to the summary"), onClick: backToSummary }, (0, import_react27.createElement)(ChevronLeftIcon)) : null,
         (0, import_react27.createElement)("h2", null, page === "entries" ? t("All entries") : t("Memory summary")),
-        (0, import_react27.createElement)("span", { className: "bt-mem-status" }, page === "summary" ? [owner.name, status2].filter(Boolean).join(" · ") : status2),
+        (0, import_react27.createElement)("span", { className: "bt-mem-status" }, page === "summary" ? [owner.name, status].filter(Boolean).join(" · ") : status),
         (0, import_react27.createElement)("span", { className: "bt-mem-head-gap" }),
         (0, import_react27.createElement)("button", { ref: dotsRef, type: "button", className: "bt-icon-btn", "aria-label": t("Memory options"), "aria-haspopup": "menu", "aria-expanded": menu, onClick: () => setMenu((value) => !value) }, (0, import_react27.createElement)(DotsIcon)),
         (0, import_react27.createElement)("button", { type: "button", className: "bt-icon-btn", "aria-label": t("Close memory"), onClick: close }, (0, import_react27.createElement)(CloseIcon)),
@@ -11517,7 +11517,7 @@ function BotSettingsForm({ bot, roster, actions, run: run2 }) {
   const onlyMain = isMainBot && (roster.mainBotIds ?? []).length === 1;
   const isTile = roster.mainBotId === bot.id;
   const save = (patch) => run2(actions.updateBot(bot.id, patch));
-  const duplicate = () => run2(actions.duplicateBot(bot.id).then((copy2) => actions.openSession(copy2.id)));
+  const duplicate = () => run2(actions.duplicateBot(bot.id).then((copy3) => actions.openSession(copy3.id)));
   const remove = () => {
     if (confirming) void run2(actions.deleteBot(bot.id));
     else setConfirming(true);
@@ -15252,8 +15252,8 @@ function ContextMenu({ menu, roster, actions, leaving = false }) {
       room2 ? [t("Group settings"), GearIcon, () => actions.openSettings("groups", room2.id)] : null,
       room2 ? [t("Rename group"), PencilIcon, () => actions.renameBot(room2.id)] : null,
       bot ? [t("Duplicate"), DuplicateIcon, async () => {
-        const copy2 = await actions.duplicateBot(bot.id);
-        actions.openSession(copy2.id);
+        const copy3 = await actions.duplicateBot(bot.id);
+        actions.openSession(copy3.id);
       }] : null,
       bot && !isMainBot ? [t("Make Main Bot"), StarLineIcon, () => actions.setMain(bot.id, true)] : null,
       bot && isMainBot && mainCount > 1 ? [t("Remove Main Bot role"), StarLineIcon, () => actions.setMain(bot.id, false)] : null
@@ -18595,13 +18595,13 @@ function Attachments({ attachments, renderMessageImages }) {
 }
 function CopyButton({ text }) {
   const [copied, setCopied] = (0, import_react48.useState)(false);
-  const copy2 = () => {
+  const copy3 = () => {
     void navigator.clipboard?.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1e3);
     });
   };
-  return (0, import_react48.createElement)("button", { type: "button", className: "bt-tool", "aria-label": copied ? t("Copied") : t("Copy"), title: copied ? t("Copied") : t("Copy"), onClick: copy2 }, copied ? (0, import_react48.createElement)(CheckIcon) : (0, import_react48.createElement)(CopyIcon));
+  return (0, import_react48.createElement)("button", { type: "button", className: "bt-tool", "aria-label": copied ? t("Copied") : t("Copy"), title: copied ? t("Copied") : t("Copy"), onClick: copy3 }, copied ? (0, import_react48.createElement)(CheckIcon) : (0, import_react48.createElement)(CopyIcon));
 }
 var clock3 = (time) => typeof time === "number" ? new Date(time).toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" }) : void 0;
 function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageImages, openFile, openSkill }) {
@@ -18761,8 +18761,98 @@ function attachAgentActions(team, ctx) {
   });
 }
 
-// src/client/mek/tasks.jsx
+// src/client/mek/artifact-data.js
+function artifactOf(value, sessionId) {
+  const raw = typeof value === "string" ? { path: value } : value ?? {};
+  const path = String(raw.path ?? raw.url ?? "").trim();
+  if (!path || path.length > 8192 || path.includes("\0") || /[\r\n]/.test(path)) return null;
+  const web = /^https?:\/\//i.test(path);
+  if (web) {
+    try {
+      const parsed = new URL(path);
+      if (parsed.username || parsed.password) return null;
+    } catch {
+      return null;
+    }
+  } else if (/^[a-z][a-z\d+.-]*:/i.test(path) && !/^[a-z]:[\\/]/i.test(path)) return null;
+  return { path, web, sessionId, name: raw.name ?? path.split(/[\\/]/).filter(Boolean).pop() ?? path };
+}
+function fileService(ctx) {
+  return ctx?.get?.("remote.workspaceFiles") ?? ctx?.remote?.workspaceFiles;
+}
+async function readArtifact(ctx, artifact, offset, signal) {
+  const service2 = fileService(ctx);
+  if (!artifact.sessionId || typeof service2?.read !== "function") throw new Error("This host cannot preview this file here.");
+  const result = await service2.read(artifact.sessionId, artifact.path, { offset, limit: 100 }, signal);
+  if (!result.ok) throw new Error(result.error?.message ?? "The file could not be read.");
+  return result.value;
+}
+async function downloadArtifact(ctx, artifact, signal) {
+  const service2 = fileService(ctx);
+  if (!artifact.sessionId || typeof service2?.readBytes !== "function") throw new Error("This host cannot download this file here.");
+  const result = await service2.readBytes(artifact.sessionId, artifact.path, {}, signal);
+  if (!result.ok) throw new Error(result.error?.message ?? "The file could not be downloaded.");
+  if (!result.value.eof || result.value.offset !== 0) throw new Error("The host returned only part of this file; no download was created.");
+  return result.value;
+}
+
+// src/client/mek/copy.js
+var copy2 = (en, zh) => language().startsWith("zh") ? zh : en;
+var when3 = (time) => time ? new Date(time).toLocaleString(language(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+
+// src/client/mek/artifacts.jsx
 var import_react49 = __toESM(require("react"), 1);
+function ArtifactCard({ value, sessionId, ctx }) {
+  const artifact = artifactOf(value, sessionId);
+  const [preview, setPreview] = (0, import_react49.useState)(null);
+  const [error, setError] = (0, import_react49.useState)("");
+  const [busy, setBusy] = (0, import_react49.useState)(false);
+  const pending = (0, import_react49.useRef)(null);
+  (0, import_react49.useEffect)(() => () => pending.current?.abort(), []);
+  if (!artifact) return null;
+  const run2 = async (download2) => {
+    pending.current?.abort();
+    const controller = new AbortController();
+    pending.current = controller;
+    setBusy(true);
+    setError("");
+    try {
+      if (download2) {
+        const file = await downloadArtifact(ctx, artifact, controller.signal);
+        if (controller.signal.aborted) return;
+        const url = URL.createObjectURL(new Blob([file.data], { type: "application/octet-stream" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = artifact.name;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1e3);
+      } else {
+        const next = preview ? preview.offset + preview.lines : 1;
+        const page = await readArtifact(ctx, artifact, next, controller.signal);
+        if (controller.signal.aborted) return;
+        if (preview && page.version !== preview.version) {
+          setPreview(null);
+          throw new Error(copy2("The file changed. Open the preview again to read its current version.", "文件已更新，请重新打开预览以读取当前版本。"));
+        }
+        setPreview((old) => ({ ...page, text: old ? `${old.text}
+${page.text}` : page.text }));
+      }
+    } catch (failure) {
+      if (!controller.signal.aborted) setError(failure.message);
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  };
+  const available = Boolean(artifact.sessionId && fileService(ctx));
+  return /* @__PURE__ */ import_react49.default.createElement("article", { className: "mek-artifact" }, /* @__PURE__ */ import_react49.default.createElement("div", { className: "mek-artifact-line" }, /* @__PURE__ */ import_react49.default.createElement("strong", null, artifact.name), /* @__PURE__ */ import_react49.default.createElement("span", { title: artifact.path }, artifact.path), artifact.web ? /* @__PURE__ */ import_react49.default.createElement("a", { href: artifact.path, target: "_blank", rel: "noreferrer noopener" }, copy2("Open link", "打开链接")) : /* @__PURE__ */ import_react49.default.createElement(import_react49.default.Fragment, null, /* @__PURE__ */ import_react49.default.createElement("button", { type: "button", disabled: busy || !available, onClick: () => preview ? setPreview(null) : void run2(false) }, preview ? copy2("Close preview", "关闭预览") : copy2("Preview", "预览")), /* @__PURE__ */ import_react49.default.createElement("button", { type: "button", disabled: busy || !available, onClick: () => void run2(true) }, copy2("Download", "下载")))), !artifact.web && !available && /* @__PURE__ */ import_react49.default.createElement("p", null, copy2("File preview requires its originating conversation and the host file service.", "文件预览需要原始对话和主机文件服务。")), error && /* @__PURE__ */ import_react49.default.createElement("p", { role: "alert" }, error), preview && /* @__PURE__ */ import_react49.default.createElement("div", { className: "mek-artifact-preview" }, /* @__PURE__ */ import_react49.default.createElement("pre", null, preview.text), !preview.eof && preview.offset + preview.lines <= 2e3 && /* @__PURE__ */ import_react49.default.createElement("button", { type: "button", disabled: busy, onClick: () => void run2(false) }, copy2("Read more", "继续读取")), !preview.eof && preview.offset + preview.lines > 2e3 && /* @__PURE__ */ import_react49.default.createElement("p", null, copy2("Preview limit reached. Download the complete file.", "已达到预览上限，可下载完整文件。"))));
+}
+function Artifacts({ values = [], sessionId, ctx }) {
+  return /* @__PURE__ */ import_react49.default.createElement("div", { className: "mek-artifacts" }, values.map((value, index) => /* @__PURE__ */ import_react49.default.createElement(ArtifactCard, { key: typeof value === "string" ? value : value.id ?? index, value, sessionId, ctx })));
+}
+var ARTIFACT_CSS = `.mek-artifact{border:1px solid var(--bt-line);border-radius:12px;padding:8px 12px;margin:8px 0;background:var(--bt-card)}.mek-artifact-line{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mek-artifact-line>span{flex:1;min-width:100px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--bt-ink-2)}.mek-artifact button,.mek-artifact a{min-height:28px;padding:4px 8px;border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-main);color:var(--bt-ink);cursor:pointer}.mek-artifact-preview pre{font:12px/18px ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}.mek-artifact p{font-size:12px;color:var(--bt-ink-2)}.mek-artifact [role=alert]{color:var(--bt-danger)}`;
+
+// src/client/mek/tasks.jsx
+var import_react50 = __toESM(require("react"), 1);
 var label = (en, zh) => language().startsWith("zh") ? zh : en;
 var states = {
   running: ["Working", "处理中"],
@@ -18775,17 +18865,69 @@ var states = {
   cancelled: ["Cancelled", "已取消"],
   failed: ["Needs attention", "需要处理"],
   blocked: ["Blocked", "遇到阻塞"],
-  superseded: ["Revised", "已安排修正"]
+  superseded: ["Revised", "已安排修正"],
+  waiting_browser: ["Waiting for browser control", "等待浏览器交接"]
 };
-var status = (value) => label(...states[value] ?? [value, value]);
-function TaskProgress({ team, sessionId }) {
+var taskStatus = (value) => label(...states[value] ?? [value, value]);
+function TaskProgress({ team, sessionId, ctx, all = false }) {
   const roster = team.hooks.useRoster((value) => value);
   const work = team.hooks.useWork((value) => value);
-  const [busy, setBusy] = (0, import_react49.useState)(null);
+  const [busy, setBusy] = (0, import_react50.useState)(null);
+  const [filter, setFilter] = (0, import_react50.useState)("open");
+  const [search, setSearch] = (0, import_react50.useState)("");
+  const [limit, setLimit] = (0, import_react50.useState)(8);
+  const [history, setHistory] = (0, import_react50.useState)([]);
+  const [cursor, setCursor] = (0, import_react50.useState)(null);
+  const [loading, setLoading] = (0, import_react50.useState)(false);
+  const [failure, setFailure] = (0, import_react50.useState)("");
+  const query = (0, import_react50.useRef)(0);
+  (0, import_react50.useEffect)(() => {
+    if (!all) return;
+    const generation = ++query.current;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      setFailure("");
+      try {
+        const value = await call("mek-task-list", { search, ...["completed", "cancelled"].includes(filter) ? { status: filter } : {}, limit: 50 }, controller.signal);
+        if (!controller.signal.aborted) {
+          setHistory(value.tasks);
+          setCursor(value.nextCursor);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) setFailure(error.message);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, 200);
+    return () => {
+      if (query.current === generation) query.current++;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [all, search, filter]);
+  const loadEarlier = async () => {
+    const generation = query.current;
+    setLoading(true);
+    setFailure("");
+    try {
+      const value = await call("mek-task-list", { before: cursor, search, ...["completed", "cancelled"].includes(filter) ? { status: filter } : {}, limit: 50 });
+      if (query.current === generation) {
+        setHistory((previous) => [...previous, ...value.tasks]);
+        setCursor(value.nextCursor);
+      }
+    } catch (error) {
+      if (query.current === generation) setFailure(error.message);
+    } finally {
+      if (query.current === generation) setLoading(false);
+    }
+  };
   const owner = roster.byId[sessionId]?.id;
-  const tasks = (roster.tasks ?? []).filter((task) => task.owner === owner);
-  const secrets = Object.entries(roster.secretRequests ?? {}).flatMap(([botId, requests]) => requests.filter((request) => request.taskOwner === owner && request.status === "pending").map((request) => ({ botId, request })));
-  const approvals = (work.approvals ?? []).filter((approval) => approval.taskOwner === owner);
+  const known = all ? [...new Map([...history, ...roster.tasks ?? []].map((task) => [task.id, task])).values()] : roster.tasks ?? [];
+  const owned = known.filter((task) => all || task.owner === owner);
+  const tasks = owned.filter((task) => !all || (filter === "all" || (filter === "open" ? !["completed", "cancelled"].includes(task.status) : task.status === filter)) && `${task.summary ?? ""} ${roster.byId[task.owner]?.name ?? ""}`.toLowerCase().includes(search.toLowerCase()));
+  const secrets = !owner || all ? [] : Object.entries(roster.secretRequests ?? {}).flatMap(([botId, requests]) => requests.filter((request) => request.taskOwner === owner && request.status === "pending").map((request) => ({ botId, request })));
+  const approvals = !owner || all ? [] : (work.approvals ?? []).filter((approval) => approval.taskOwner === owner);
   const cancel = async (taskId) => {
     setBusy(taskId);
     try {
@@ -18797,24 +18939,264 @@ function TaskProgress({ team, sessionId }) {
       setBusy(null);
     }
   };
-  if (!tasks.length && !approvals.length) return null;
-  return /* @__PURE__ */ import_react49.default.createElement("section", { className: "mek-tasks", "aria-label": label("Team tasks", "团队任务") }, secrets.map(({ botId, request }) => /* @__PURE__ */ import_react49.default.createElement(SecretCard, { key: request.id, sessionId: request.sessionId, bot: roster.byId[botId], request, roster, actions: team.actions })), approvals.map((approval) => /* @__PURE__ */ import_react49.default.createElement(ApprovalCard, { key: approval.id, approval, bot: roster.byId[approval.botId] ?? { name: "Bot" }, actions: team.actions })), tasks.slice(0, 8).map((task) => /* @__PURE__ */ import_react49.default.createElement("details", { key: task.id, className: "mek-task", "data-task-state": task.status }, /* @__PURE__ */ import_react49.default.createElement("summary", null, /* @__PURE__ */ import_react49.default.createElement("span", null, label("Team task", "团队任务")), /* @__PURE__ */ import_react49.default.createElement("span", null, status(task.status)), /* @__PURE__ */ import_react49.default.createElement("span", { className: "mek-task-preview" }, task.summary)), /* @__PURE__ */ import_react49.default.createElement("div", { className: "mek-task-body" }, task.work.filter((item) => item.status !== "superseded").map((item) => /* @__PURE__ */ import_react49.default.createElement("div", { key: item.id, className: "mek-task-step" }, /* @__PURE__ */ import_react49.default.createElement("strong", null, item.name), /* @__PURE__ */ import_react49.default.createElement("span", null, status(item.status)), item.report && /* @__PURE__ */ import_react49.default.createElement("p", null, item.report.summary, /* @__PURE__ */ import_react49.default.createElement("br", null), item.report.evidence), !item.report && item.result && /* @__PURE__ */ import_react49.default.createElement("p", null, item.result))), task.decisions.filter((item) => item.status === "open").map((item) => /* @__PURE__ */ import_react49.default.createElement("p", { key: item.id }, label("Question being handled by the owner: ", "负责人正在处理的问题："), item.question)), task.deliveries?.some((item) => item.status === "uncertain") && /* @__PURE__ */ import_react49.default.createElement("p", { role: "status" }, label("A delivery is being reconciled. The task has not been repeated.", "消息送达情况待核对，未重复执行任务。")), !["completed", "cancelled"].includes(task.status) && /* @__PURE__ */ import_react49.default.createElement("button", { type: "button", disabled: busy === task.id, onClick: () => cancel(task.id) }, label("Cancel task", "取消任务"))))));
+  if (!all && !owned.length && !approvals.length && !secrets.length) return null;
+  return /* @__PURE__ */ import_react50.default.createElement("section", { className: `mek-tasks${all ? " mek-task-ledger" : ""}`, "aria-label": label("Team tasks", "团队任务") }, all && /* @__PURE__ */ import_react50.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react50.default.createElement("input", { "aria-label": label("Search tasks", "搜索任务"), placeholder: label("Search tasks", "搜索任务"), value: search, onChange: (event) => setSearch(event.target.value) }), /* @__PURE__ */ import_react50.default.createElement("select", { "aria-label": label("Task status", "任务状态"), value: filter, onChange: (event) => setFilter(event.target.value) }, [["open", "Open tasks", "未完成"], ["completed", "Accepted", "已验收"], ["cancelled", "Cancelled", "已取消"], ["all", "All tasks", "全部任务"]].map(([key, en, zh]) => /* @__PURE__ */ import_react50.default.createElement("option", { key, value: key }, label(en, zh))))), all && !tasks.length && /* @__PURE__ */ import_react50.default.createElement("p", null, label("No matching tasks.", "没有符合条件的任务。")), secrets.map(({ botId, request }) => /* @__PURE__ */ import_react50.default.createElement(SecretCard, { key: request.id, sessionId: request.sessionId, bot: roster.byId[botId], request, roster, actions: team.actions })), approvals.map((approval) => /* @__PURE__ */ import_react50.default.createElement(ApprovalCard, { key: approval.id, approval, bot: roster.byId[approval.botId] ?? { name: "Bot" }, actions: team.actions })), tasks.slice(0, all ? tasks.length : limit).map((task) => /* @__PURE__ */ import_react50.default.createElement("details", { key: task.id, className: "mek-task", "data-task-state": task.status }, /* @__PURE__ */ import_react50.default.createElement("summary", null, /* @__PURE__ */ import_react50.default.createElement("span", null, label("Team task", "团队任务")), /* @__PURE__ */ import_react50.default.createElement("span", null, taskStatus(task.status)), /* @__PURE__ */ import_react50.default.createElement("span", { className: "mek-task-preview" }, task.summary)), /* @__PURE__ */ import_react50.default.createElement("div", { className: "mek-task-body" }, (task.work ?? []).filter((item) => item.status !== "superseded").map((item) => /* @__PURE__ */ import_react50.default.createElement("div", { key: item.id, className: "mek-task-step" }, /* @__PURE__ */ import_react50.default.createElement("strong", null, item.name), /* @__PURE__ */ import_react50.default.createElement("span", null, taskStatus(item.status)), item.report && /* @__PURE__ */ import_react50.default.createElement("p", null, item.report.summary, /* @__PURE__ */ import_react50.default.createElement("br", null), item.report.evidence), !item.report && item.result && /* @__PURE__ */ import_react50.default.createElement("p", null, item.result), item.report?.artifacts?.length > 0 && /* @__PURE__ */ import_react50.default.createElement(Artifacts, { values: item.report.artifacts, sessionId: item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to, ctx }))), (task.decisions ?? []).filter((item) => item.status === "open").map((item) => /* @__PURE__ */ import_react50.default.createElement("p", { key: item.id }, label("Question being handled by the owner: ", "负责人正在处理的问题："), item.question)), task.deliveries?.some((item) => item.status === "uncertain") && /* @__PURE__ */ import_react50.default.createElement("p", { role: "status" }, label("A delivery is being reconciled. The task has not been repeated.", "消息送达情况待核对，未重复执行任务。")), !["completed", "cancelled"].includes(task.status) && /* @__PURE__ */ import_react50.default.createElement("button", { type: "button", disabled: busy === task.id, onClick: () => cancel(task.id) }, label("Cancel task", "取消任务"))))), !all && tasks.length > limit && /* @__PURE__ */ import_react50.default.createElement("button", { onClick: () => setLimit((value) => value + 8) }, label("Show more tasks", "显示更多任务")), all && cursor && /* @__PURE__ */ import_react50.default.createElement("button", { disabled: loading, onClick: () => void loadEarlier() }, label("Load earlier tasks", "加载更早任务")), all && loading && /* @__PURE__ */ import_react50.default.createElement("p", { role: "status" }, label("Loading tasks…", "正在加载任务…")), failure && /* @__PURE__ */ import_react50.default.createElement("p", { role: "alert" }, failure));
 }
-var TASK_CSS = `.mek-tasks{flex:none;max-height:28vh;overflow:auto;padding:48px 16px 0;font-size:12px}.mek-task{border:1px solid var(--bt-border,#ddd);border-radius:10px;margin:5px auto;max-width:900px}.mek-task summary{display:flex;gap:10px;align-items:center;padding:8px 12px;cursor:pointer}.mek-task summary>span:first-child{flex:none;white-space:nowrap}.mek-task summary>span:nth-child(2){opacity:.7;white-space:nowrap}.mek-task-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.6;min-width:0}.mek-task-body{padding:0 12px 10px}.mek-task-step{display:flex;flex-wrap:wrap;gap:10px;padding:6px 0}.mek-task-step p{flex-basis:100%;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:130px;overflow:auto}.mek-task-body button{padding:5px 10px;border:1px solid var(--bt-border,#ddd);border-radius:8px;background:transparent;cursor:pointer;color:inherit}`;
+var TASK_CSS = `.mek-tasks{flex:none;max-height:28vh;overflow:auto;padding:48px 16px 0;font-size:12px}.mek-task{border:1px solid var(--bt-line);border-radius:12px;margin:5px auto;max-width:900px}.mek-task summary{display:flex;gap:10px;align-items:center;padding:8px 12px;cursor:pointer}.mek-task summary>span:first-child{flex:none;white-space:nowrap}.mek-task summary>span:nth-child(2){opacity:.7;white-space:nowrap}.mek-task-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.6;min-width:0}.mek-task-body{padding:0 12px 10px}.mek-task-step{display:flex;flex-wrap:wrap;gap:10px;padding:6px 0}.mek-task-step p{flex-basis:100%;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:130px;overflow:auto}.mek-task-body button{padding:5px 10px;border:1px solid var(--bt-line);border-radius:8px;background:transparent;cursor:pointer;color:inherit}`;
+var LEDGER_CSS = `.mek-tasks.mek-task-ledger{max-height:none;padding:0;overflow:visible}.mek-task-ledger .mek-task{max-width:none}.mek-task-step .mek-artifacts{width:100%}`;
+
+// src/client/mek/browser.jsx
+var import_react51 = __toESM(require("react"), 1);
+function BrowserWorkspace({ roster, initialBotId }) {
+  const capability = roster.mekTeam?.browser;
+  const [botId, setBotId] = (0, import_react51.useState)(initialBotId ?? roster.bots[0]?.id ?? "");
+  const [page, setPage] = (0, import_react51.useState)(null);
+  const [busy, setBusy] = (0, import_react51.useState)(false);
+  const [error, setError] = (0, import_react51.useState)("");
+  const [input, setInput] = (0, import_react51.useState)("");
+  const [address, setAddress] = (0, import_react51.useState)("");
+  const pending = (0, import_react51.useRef)(null);
+  const active = (0, import_react51.useRef)(false);
+  const held = page?.hold?.by === "user";
+  const request = async (action, fields = {}) => {
+    if (!botId || active.current) return;
+    active.current = true;
+    setBusy(true);
+    setError("");
+    const controller = new AbortController();
+    pending.current = controller;
+    try {
+      const next = await call(action ? "mek-browser-control" : "mek-browser-state", { botId, ...action ? { action } : {}, ...fields }, controller.signal);
+      if (!controller.signal.aborted) {
+        setPage(next);
+        setAddress(next.url ?? "");
+      }
+    } catch (failure) {
+      if (!controller.signal.aborted) setError(failure.message);
+    } finally {
+      if (!controller.signal.aborted) {
+        active.current = false;
+        setBusy(false);
+      }
+    }
+  };
+  (0, import_react51.useEffect)(() => {
+    setPage(null);
+    setInput("");
+    setError("");
+    active.current = false;
+    if (capability?.available && botId) void request();
+    return () => {
+      pending.current?.abort();
+      active.current = false;
+    };
+  }, [botId, capability?.available]);
+  (0, import_react51.useEffect)(() => {
+    if (!roster.bots.some((bot) => bot.id === botId)) setBotId(roster.bots[0]?.id ?? "");
+  }, [roster.bots, botId]);
+  const sendInput = () => {
+    const text = input;
+    setInput("");
+    void request("type", { text });
+  };
+  return /* @__PURE__ */ import_react51.default.createElement("section", { className: "mek-browser-workspace" }, /* @__PURE__ */ import_react51.default.createElement("h2", null, copy2("Bot browser", "Bot 浏览器")), !capability?.available ? /* @__PURE__ */ import_react51.default.createElement("p", null, copy2("Browser control is not enabled on this host. Enable a supported Bot browser plugin before opening pages. Existing DSH browser tools are unchanged.", "此主机尚未启用 Bot 浏览器控制。启用支持的 Bot 浏览器插件后即可查看和接管页面。现有 DSH 浏览器工具保持原样。")) : /* @__PURE__ */ import_react51.default.createElement(import_react51.default.Fragment, null, /* @__PURE__ */ import_react51.default.createElement("p", null, copy2("View an already open browser. Take over before interacting; the Bot waits until you return control.", "查看已打开的浏览器。接管后可操作，交还前 Bot 会等待。")), /* @__PURE__ */ import_react51.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react51.default.createElement("label", null, copy2("Bot", "Bot"), /* @__PURE__ */ import_react51.default.createElement("select", { value: botId, onChange: (event) => setBotId(event.target.value) }, roster.bots.map((bot) => /* @__PURE__ */ import_react51.default.createElement("option", { key: bot.id, value: bot.id }, bot.name)))), /* @__PURE__ */ import_react51.default.createElement("button", { disabled: busy || !botId, onClick: () => void request() }, copy2("Refresh view", "刷新画面")), page?.open && /* @__PURE__ */ import_react51.default.createElement("button", { disabled: busy, onClick: () => void request(held ? "release" : "take") }, held ? copy2("Return control", "交还控制") : copy2("Take over", "接管"))), page && !page.open && /* @__PURE__ */ import_react51.default.createElement("p", null, copy2("No browser is open for this Bot. Ask it to open the page in its conversation first.", "这个 Bot 尚未打开浏览器。请先在对话中让它打开所需页面。")), page?.open && /* @__PURE__ */ import_react51.default.createElement(import_react51.default.Fragment, null, /* @__PURE__ */ import_react51.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react51.default.createElement("input", { "aria-label": copy2("Page address", "页面地址"), value: address, onChange: (event) => setAddress(event.target.value), disabled: !held || busy }), /* @__PURE__ */ import_react51.default.createElement("button", { disabled: !held || busy, onClick: () => void request("navigate", { url: address }) }, copy2("Open", "打开"))), /* @__PURE__ */ import_react51.default.createElement("div", { className: "mek-browser-tabs", role: "group", "aria-label": copy2("Browser tabs", "浏览器标签页") }, page.tabs?.map((tab) => /* @__PURE__ */ import_react51.default.createElement("button", { key: tab.index, disabled: !held || busy, "aria-pressed": tab.active, onClick: () => void request("tab", { index: tab.index }) }, tab.title || tab.url || copy2("Page", "页面")))), /* @__PURE__ */ import_react51.default.createElement("p", { role: "status" }, held ? copy2("You are in control. Click the picture to focus a field or button.", "当前由你控制。点击画面定位输入框或按钮。") : page.hold?.note || copy2("Viewing only. The Bot remains in control.", "仅查看画面，Bot 仍可操作。")), page.image ? /* @__PURE__ */ import_react51.default.createElement("button", { className: "mek-browser-image", disabled: !held || busy, "aria-label": copy2("Click in the browser screenshot", "点击浏览器画面"), onClick: (event) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    void request("click", { x: (event.clientX - box.left) * page.width / box.width, y: (event.clientY - box.top) * page.height / box.height });
+  } }, /* @__PURE__ */ import_react51.default.createElement("img", { alt: copy2("Current Bot browser page", "Bot 当前浏览器页面"), src: `data:image/jpeg;base64,${page.image}` })) : /* @__PURE__ */ import_react51.default.createElement("p", null, copy2("No picture is available. Refresh the view.", "暂时无法显示画面，请刷新。")), held && /* @__PURE__ */ import_react51.default.createElement(import_react51.default.Fragment, null, /* @__PURE__ */ import_react51.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react51.default.createElement("input", { type: "password", autoComplete: "off", maxLength: 4096, "aria-label": copy2("Text for the focused browser field", "向浏览器当前输入框输入文本"), placeholder: copy2("Type into the focused field", "向已定位的输入框输入"), value: input, onChange: (event) => setInput(event.target.value) }), /* @__PURE__ */ import_react51.default.createElement("button", { disabled: busy || !input, onClick: sendInput }, copy2("Type text", "输入文本"))), /* @__PURE__ */ import_react51.default.createElement("div", { className: "mek-form-row" }, ["Tab", "Enter", "Backspace", "Escape"].map((key) => /* @__PURE__ */ import_react51.default.createElement("button", { key, disabled: busy, onClick: () => void request("key", { key }) }, key)), /* @__PURE__ */ import_react51.default.createElement("button", { disabled: busy, onClick: () => void request("scroll", { delta: -600 }) }, copy2("Scroll up", "向上滚动")), /* @__PURE__ */ import_react51.default.createElement("button", { disabled: busy, onClick: () => void request("scroll", { delta: 600 }) }, copy2("Scroll down", "向下滚动"))), /* @__PURE__ */ import_react51.default.createElement("p", null, copy2("Typed text is sent directly to the browser and is not saved in Bot chat. Password fields are masked in screenshots.", "输入直接发送到浏览器，不保存到 Bot 对话。截图会遮住密码输入框。")))), error && /* @__PURE__ */ import_react51.default.createElement("p", { role: "alert" }, error)));
+}
+var BROWSER_WORKSPACE_CSS = `.mek-browser-image{display:block!important;width:100%;padding:0!important;border:1px solid var(--bt-line)!important;border-radius:12px!important;overflow:hidden;line-height:0}.mek-browser-image img{display:block;width:100%;height:auto}.mek-browser-image:disabled{opacity:1!important;cursor:default}.mek-browser-tabs{display:flex;gap:4px;overflow:auto;margin:12px 0}.mek-browser-tabs button{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mek-browser-tabs [aria-pressed=true]{background:var(--bt-active)}`;
+
+// src/client/mek/overview.jsx
+var import_react52 = __toESM(require("react"), 1);
+var array = (text) => text.split("\n").map((value) => value.trim()).filter(Boolean);
+function BotSelect({ roster, value, onChange, label: label2 = copy2("Bot", "Bot"), blank: blank3 = false }) {
+  return /* @__PURE__ */ import_react52.default.createElement("label", null, label2, /* @__PURE__ */ import_react52.default.createElement("select", { value: value ?? "", onChange: (event) => onChange(event.target.value || null) }, blank3 && /* @__PURE__ */ import_react52.default.createElement("option", { value: "" }, copy2("None", "无")), roster.bots.map((bot) => /* @__PURE__ */ import_react52.default.createElement("option", { key: bot.id, value: bot.id }, bot.name))));
+}
+function Check({ children, checked, onChange, disabled }) {
+  return /* @__PURE__ */ import_react52.default.createElement("label", { className: "mek-check" }, /* @__PURE__ */ import_react52.default.createElement("input", { type: "checkbox", checked: Boolean(checked), disabled, onChange: (event) => onChange(event.target.checked) }), children);
+}
+function TeamActivity({ roster, mutate }) {
+  const view = roster.mekTeam ?? {};
+  const config = view.config ?? {};
+  const [onlyAttention, setOnlyAttention] = (0, import_react52.useState)(false);
+  const [bot, setBot] = (0, import_react52.useState)("");
+  const [older, setOlder] = (0, import_react52.useState)([]);
+  const [loading, setLoading] = (0, import_react52.useState)(false);
+  const [failure, setFailure] = (0, import_react52.useState)("");
+  const events = [...new Map([...view.events ?? [], ...older].map((event) => [event.id, event])).values()].filter((event) => (!onlyAttention || event.attention && !event.readAt) && (!bot || event.botId === bot));
+  const more = async () => {
+    setLoading(true);
+    setFailure("");
+    try {
+      const all = [...view.events ?? [], ...older];
+      const next = await call("mek-activity-list", { before: Math.min(...all.map((event) => event.at)), limit: 100 });
+      setOlder((value) => [...value, ...next]);
+    } catch (error) {
+      setFailure(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement("h2", null, copy2("Team activity", "团队近况")), /* @__PURE__ */ import_react52.default.createElement("p", null, copy2("Routine updates are recorded quietly. Important blockers and decisions reach the chief; direct conversations keep their original owner.", "普通进展安静记录，重要阻塞和决策会送达主助理。直接对话仍由原 Bot 负责。")), /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react52.default.createElement(BotSelect, { roster, label: copy2("Chief for team updates", "接收团队近况的主助理"), value: config.supervisorBotId, blank: true, onChange: (supervisorBotId) => mutate("mek-team-config", { supervisorBotId }) }), /* @__PURE__ */ import_react52.default.createElement(Check, { checked: config.sharing === "summary", onChange: (sharing) => mutate("mek-team-config", { sharing: sharing ? "summary" : "off" }) }, copy2("Share authorized task summaries", "共享已授权的任务摘要")), /* @__PURE__ */ import_react52.default.createElement(Check, { checked: config.notifications, onChange: (notifications) => mutate("mek-team-config", { notifications }) }, copy2("Notify the chief of important events", "重要事项通知主助理"))), /* @__PURE__ */ import_react52.default.createElement("details", null, /* @__PURE__ */ import_react52.default.createElement("summary", null, copy2("Department sharing", "部门共享范围")), /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-form-row" }, roster.bots.map((item) => /* @__PURE__ */ import_react52.default.createElement(Check, { key: item.id, checked: config.botSharing?.[item.id] !== false, onChange: (allowed2) => mutate("mek-team-config", { botSharing: { ...config.botSharing, [item.id]: allowed2 } }) }, item.name)))), /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react52.default.createElement("select", { "aria-label": copy2("Filter department", "筛选部门"), value: bot, onChange: (event) => setBot(event.target.value) }, /* @__PURE__ */ import_react52.default.createElement("option", { value: "" }, copy2("All departments", "全部部门")), roster.bots.map((item) => /* @__PURE__ */ import_react52.default.createElement("option", { key: item.id, value: item.id }, item.name))), /* @__PURE__ */ import_react52.default.createElement(Check, { checked: onlyAttention, onChange: setOnlyAttention }, copy2("Unread important events", "未读重要事项")), /* @__PURE__ */ import_react52.default.createElement("button", { onClick: () => mutate("mek-activity-read", { ids: events.filter((item) => !item.readAt).map((item) => item.id) }), disabled: !events.some((item) => !item.readAt) }, copy2("Mark visible as read", "当前列表标为已读"))), /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-event-list" }, events.map((event) => /* @__PURE__ */ import_react52.default.createElement("article", { key: event.id, className: "mek-event", "data-attention": event.attention && !event.readAt || void 0 }, /* @__PURE__ */ import_react52.default.createElement("div", null, /* @__PURE__ */ import_react52.default.createElement("strong", null, event.botName), /* @__PURE__ */ import_react52.default.createElement("span", null, taskStatus(event.status)), /* @__PURE__ */ import_react52.default.createElement("time", null, when3(event.at)), event.handledAt && /* @__PURE__ */ import_react52.default.createElement("span", null, copy2("Handled by chief", "主助理已处理"))), /* @__PURE__ */ import_react52.default.createElement("p", null, event.summary), !event.readAt && /* @__PURE__ */ import_react52.default.createElement("button", { onClick: () => mutate("mek-activity-read", { ids: [event.id] }) }, copy2("Mark read", "标为已读"))))), !events.length && /* @__PURE__ */ import_react52.default.createElement("p", null, copy2("No activity matches this view.", "当前没有符合条件的近况。")), (view.events?.length ?? 0) >= 100 && /* @__PURE__ */ import_react52.default.createElement("button", { disabled: loading, onClick: () => void more() }, copy2("Load earlier activity", "加载更早近况")), failure && /* @__PURE__ */ import_react52.default.createElement("p", { role: "alert" }, failure));
+}
+function Policies({ roster, mutate }) {
+  const policies = roster.mekTeam?.policies ?? {};
+  const [botId, setBotId] = (0, import_react52.useState)(roster.bots[0]?.id ?? "");
+  const current = policies.bots?.find((bot) => bot.id === botId);
+  const [mode, setMode] = (0, import_react52.useState)("general");
+  const [instructions, setInstructions] = (0, import_react52.useState)("");
+  const [denied, setDenied] = (0, import_react52.useState)("");
+  (0, import_react52.useEffect)(() => {
+    setMode(current?.mode ?? "general");
+    setInstructions(current?.instructions ?? "");
+    setDenied((current?.denyTools ?? []).join("\n"));
+  }, [botId, current?.mode, current?.instructions, JSON.stringify(current?.denyTools)]);
+  return /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement("h2", null, copy2("Assistant behavior", "助手行为")), /* @__PURE__ */ import_react52.default.createElement("p", null, copy2("Choose the role policy independently of the host coding tools. Host permissions still apply.", "为助手选择工作方式，独立于主机的编程工具。主机权限仍然生效。")), /* @__PURE__ */ import_react52.default.createElement("form", { onSubmit: (event) => {
+    event.preventDefault();
+    mutate("mek-policy-set", { botId, mode, instructions, denyTools: array(denied) });
+  } }, /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react52.default.createElement(BotSelect, { roster, value: botId, onChange: setBotId }), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Mode", "工作方式"), /* @__PURE__ */ import_react52.default.createElement("select", { value: mode, onChange: (event) => setMode(event.target.value) }, /* @__PURE__ */ import_react52.default.createElement("option", { value: "general" }, copy2("General assistant", "通用助理")), /* @__PURE__ */ import_react52.default.createElement("option", { value: "coding" }, copy2("Coding specialist", "编程专家")), /* @__PURE__ */ import_react52.default.createElement("option", { value: "custom" }, copy2("Custom", "自定义"))))), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Additional instructions", "补充要求"), /* @__PURE__ */ import_react52.default.createElement("textarea", { value: instructions, onChange: (event) => setInstructions(event.target.value), maxLength: 12e3, rows: 5 })), /* @__PURE__ */ import_react52.default.createElement("details", null, /* @__PURE__ */ import_react52.default.createElement("summary", null, copy2("Restricted tools", "禁用工具")), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Exact tool names, one per line", "每行一个完整工具名"), /* @__PURE__ */ import_react52.default.createElement("textarea", { value: denied, onChange: (event) => setDenied(event.target.value), rows: 3 }))), /* @__PURE__ */ import_react52.default.createElement("button", { disabled: !botId, type: "submit" }, copy2("Save behavior", "保存行为"))), /* @__PURE__ */ import_react52.default.createElement("h3", null, copy2("Task limits and resource use", "任务限额与资源占用")), (policies.tasks ?? []).map((task) => /* @__PURE__ */ import_react52.default.createElement(TaskLimits, { key: task.taskId, task: { ...task, title: roster.tasks?.find((item) => item.id === task.taskId)?.summary }, mutate })), !policies.tasks?.length && /* @__PURE__ */ import_react52.default.createElement("p", null, copy2("Limits appear here when a task is registered.", "登记任务后可在这里设置限额。")), (policies.resources ?? []).map((resource) => /* @__PURE__ */ import_react52.default.createElement(ResourceLease, { key: resource.id, resource, roster, mutate })));
+}
+function ResourceLease({ resource, roster, mutate }) {
+  const [confirmed, setConfirmed] = (0, import_react52.useState)(false);
+  return /* @__PURE__ */ import_react52.default.createElement("details", { className: "mek-event" }, /* @__PURE__ */ import_react52.default.createElement("summary", null, resource.kind, " · ", resource.key, " · ", roster.byId[resource.botId]?.name ?? resource.botId, " · ", resource.status), /* @__PURE__ */ import_react52.default.createElement("p", null, copy2("Release a stale lease only after the previous operation has ended. The host refuses release while a known operation is still running.", "确认上次操作已经结束后再释放过期占用。仍有操作运行时，主机会拒绝释放。")), /* @__PURE__ */ import_react52.default.createElement(Check, { checked: confirmed, onChange: setConfirmed }, copy2("I checked that the previous operation has ended", "我已确认上次操作已经结束")), /* @__PURE__ */ import_react52.default.createElement("button", { disabled: !confirmed, onClick: () => mutate("mek-resource-release", { id: resource.id }) }, copy2("Release resource", "释放资源")));
+}
+function TaskLimits({ task, mutate }) {
+  const [parallel, setParallel] = (0, import_react52.useState)(task.limits?.maxParallel ?? 4);
+  const [revisions, setRevisions] = (0, import_react52.useState)(task.limits?.maxRevisions ?? 3);
+  const [tokens, setTokens] = (0, import_react52.useState)(task.limits?.maxTokens ?? "");
+  const localTime = (value) => value ? new Date(value - new Date(value).getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : "";
+  const [deadline, setDeadline] = (0, import_react52.useState)(localTime(task.limits?.deadlineAt));
+  return /* @__PURE__ */ import_react52.default.createElement("details", { className: "mek-event" }, /* @__PURE__ */ import_react52.default.createElement("summary", null, task.title || task.taskId, " · ", copy2("Tokens used", "已用 Token"), ": ", task.usage?.total ?? 0), /* @__PURE__ */ import_react52.default.createElement("form", { onSubmit: (event) => {
+    event.preventDefault();
+    mutate("mek-policy-task", { taskId: task.taskId, limits: { maxParallel: Number(parallel), maxRevisions: Number(revisions), maxTokens: tokens === "" ? null : Number(tokens), deadlineAt: deadline ? new Date(deadline).getTime() : null } });
+  } }, /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Parallel workers", "并行数"), /* @__PURE__ */ import_react52.default.createElement("input", { type: "number", min: "1", max: "32", value: parallel, onChange: (event) => setParallel(event.target.value) })), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Revision limit", "返工次数"), /* @__PURE__ */ import_react52.default.createElement("input", { type: "number", min: "0", max: "20", value: revisions, onChange: (event) => setRevisions(event.target.value) })), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Token budget (blank: unlimited)", "Token 上限（留空不限）"), /* @__PURE__ */ import_react52.default.createElement("input", { type: "number", min: "1", value: tokens, onChange: (event) => setTokens(event.target.value) })), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Deadline (local time)", "截止时间（本地时间）"), /* @__PURE__ */ import_react52.default.createElement("input", { type: "datetime-local", value: deadline, onChange: (event) => setDeadline(event.target.value) })), /* @__PURE__ */ import_react52.default.createElement("button", { type: "submit" }, copy2("Save limits", "保存限额"))), task.blockedReason && /* @__PURE__ */ import_react52.default.createElement("p", { role: "status" }, task.blockedReason)));
+}
+function Knowledge({ roster, mutate }) {
+  const projects = roster.mekTeam?.knowledge ?? [];
+  const [name, setName] = (0, import_react52.useState)("");
+  const [owner, setOwner] = (0, import_react52.useState)(roster.mainBotId ?? roster.bots[0]?.id ?? "");
+  const [projectId, setProjectId] = (0, import_react52.useState)("");
+  const [key, setKey] = (0, import_react52.useState)("");
+  const [value, setValue] = (0, import_react52.useState)("");
+  const [source, setSource] = (0, import_react52.useState)("");
+  const [sourceVersion, setSourceVersion] = (0, import_react52.useState)("");
+  const project = projects.find((item) => item.id === projectId);
+  (0, import_react52.useEffect)(() => {
+    if (!projects.some((item) => item.id === projectId)) setProjectId(projects[0]?.id ?? "");
+  }, [projects, projectId]);
+  return /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement("h2", null, copy2("Shared project knowledge", "共享项目知识")), /* @__PURE__ */ import_react52.default.createElement("p", null, copy2("Save agreed facts with their source. Conflicting values remain visible until explicitly resolved.", "保存有来源的项目共识。冲突会保留，直到明确选定有效版本。")), /* @__PURE__ */ import_react52.default.createElement("details", null, /* @__PURE__ */ import_react52.default.createElement("summary", null, copy2("Create a project", "新建项目")), /* @__PURE__ */ import_react52.default.createElement("form", { onSubmit: (event) => {
+    event.preventDefault();
+    mutate("mek-knowledge-project", { name, owner, members: [owner] });
+  } }, /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Project name", "项目名"), /* @__PURE__ */ import_react52.default.createElement("input", { value: name, onChange: (event) => setName(event.target.value), required: true, maxLength: 120 })), /* @__PURE__ */ import_react52.default.createElement(BotSelect, { roster, value: owner, onChange: setOwner, label: copy2("Owner", "负责人") }), /* @__PURE__ */ import_react52.default.createElement("button", { type: "submit", disabled: !owner }, copy2("Create", "创建"))))), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Project", "项目"), /* @__PURE__ */ import_react52.default.createElement("select", { value: projectId, onChange: (event) => setProjectId(event.target.value) }, projects.map((item) => /* @__PURE__ */ import_react52.default.createElement("option", { key: item.id, value: item.id }, item.name)))), project && /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement("details", null, /* @__PURE__ */ import_react52.default.createElement("summary", null, copy2("Project access", "项目访问范围")), /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-form-row" }, roster.bots.map((bot) => /* @__PURE__ */ import_react52.default.createElement(Check, { key: bot.id, checked: project.members.includes(bot.id), disabled: bot.id === project.owner, onChange: (checked) => mutate("mek-knowledge-project", { id: project.id, name: project.name, owner: project.owner, members: checked ? [...project.members, bot.id] : project.members.filter((id) => id !== bot.id) }) }, bot.name)))), /* @__PURE__ */ import_react52.default.createElement("form", { onSubmit: (event) => {
+    event.preventDefault();
+    mutate("mek-knowledge-propose", { projectId, key, value, source, sourceVersion, expectedVersion: Math.max(0, ...project.facts.filter((fact) => fact.key === key).map((fact) => fact.version)) });
+  } }, /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Fact name", "事实名称"), /* @__PURE__ */ import_react52.default.createElement("input", { value: key, onChange: (event) => setKey(event.target.value), required: true })), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Source or evidence", "来源或证据"), /* @__PURE__ */ import_react52.default.createElement("input", { value: source, onChange: (event) => setSource(event.target.value), required: true }))), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Source version (optional)", "来源版本（可选）"), /* @__PURE__ */ import_react52.default.createElement("input", { value: sourceVersion, onChange: (event) => setSourceVersion(event.target.value), maxLength: 200 })), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Fact", "事实内容"), /* @__PURE__ */ import_react52.default.createElement("textarea", { value, onChange: (event) => setValue(event.target.value), rows: 3, required: true })), /* @__PURE__ */ import_react52.default.createElement("button", { type: "submit" }, copy2("Propose fact", "提交事实"))), project.facts.map((fact) => /* @__PURE__ */ import_react52.default.createElement("article", { key: fact.id, className: "mek-event" }, /* @__PURE__ */ import_react52.default.createElement("div", null, /* @__PURE__ */ import_react52.default.createElement("strong", null, fact.key), /* @__PURE__ */ import_react52.default.createElement("span", null, fact.status, " · v", fact.version, fact.stale ? ` · ${copy2("Stale", "已过期")}` : "")), /* @__PURE__ */ import_react52.default.createElement("p", null, fact.value), /* @__PURE__ */ import_react52.default.createElement("small", null, copy2("Source", "来源"), ": ", fact.source, fact.sourceVersion ? ` · ${fact.sourceVersion}` : ""), fact.status === "conflict" && /* @__PURE__ */ import_react52.default.createElement(ResolveFact, { fact, projectId, mutate })))), !projects.length && /* @__PURE__ */ import_react52.default.createElement("p", null, copy2("No shared projects yet.", "尚无共享项目。")));
+}
+function ResolveFact({ fact, projectId, mutate }) {
+  const [reason, setReason] = (0, import_react52.useState)("");
+  return /* @__PURE__ */ import_react52.default.createElement("form", { onSubmit: (event) => {
+    event.preventDefault();
+    mutate("mek-knowledge-resolve", { projectId, key: fact.key, factId: fact.id, reason });
+  } }, /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react52.default.createElement("input", { "aria-label": copy2("Reason to use this fact", "选用此事实的原因"), placeholder: copy2("Why this version is correct", "为什么选用此版本"), value: reason, onChange: (event) => setReason(event.target.value), required: true }), /* @__PURE__ */ import_react52.default.createElement("button", { type: "submit" }, copy2("Use this version", "选用此版本"))));
+}
+function Workflows({ roster, mutate }) {
+  const flows = roster.mekTeam?.workflows ?? [];
+  const [name, setName] = (0, import_react52.useState)("");
+  const [instruction, setInstruction] = (0, import_react52.useState)("");
+  const [inputs, setInputs] = (0, import_react52.useState)("");
+  const [checks, setChecks] = (0, import_react52.useState)("");
+  const [owner, setOwner] = (0, import_react52.useState)(roster.mainBotId ?? roster.bots[0]?.id ?? "");
+  return /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement("h2", null, copy2("Reusable workflows", "可复用流程")), /* @__PURE__ */ import_react52.default.createElement("p", null, copy2("Save instructions and acceptance checks. Validate a version with a real task before activating it. Runs start only when you ask.", "保存执行要求和验收标准。通过真实任务验证后才能启用版本，运行需要明确发起。")), /* @__PURE__ */ import_react52.default.createElement("details", null, /* @__PURE__ */ import_react52.default.createElement("summary", null, copy2("Create a workflow", "新建流程")), /* @__PURE__ */ import_react52.default.createElement("form", { onSubmit: (event) => {
+    event.preventDefault();
+    mutate("mek-workflow-save", { name, owner, instruction, inputs: array(inputs).map((name2) => ({ name: name2, required: true })), acceptance: array(checks) });
+  } }, /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Name", "名称"), /* @__PURE__ */ import_react52.default.createElement("input", { value: name, onChange: (event) => setName(event.target.value), required: true })), /* @__PURE__ */ import_react52.default.createElement(BotSelect, { roster, value: owner, onChange: setOwner, label: copy2("Owner", "负责人") })), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Instructions; use {{input_name}} for an input", "执行要求；参数写作 {{input_name}}"), /* @__PURE__ */ import_react52.default.createElement("textarea", { value: instruction, onChange: (event) => setInstruction(event.target.value), rows: 4, required: true })), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Input names, one per line", "参数名，每行一个"), /* @__PURE__ */ import_react52.default.createElement("textarea", { value: inputs, onChange: (event) => setInputs(event.target.value), rows: 2 })), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Acceptance checks, one per line", "验收标准，每行一项"), /* @__PURE__ */ import_react52.default.createElement("textarea", { value: checks, onChange: (event) => setChecks(event.target.value), rows: 3, required: true })), /* @__PURE__ */ import_react52.default.createElement("button", { type: "submit" }, copy2("Save draft", "保存草稿")))), flows.map((flow) => /* @__PURE__ */ import_react52.default.createElement(Workflow, { key: flow.id, flow, roster, mutate })), !flows.length && /* @__PURE__ */ import_react52.default.createElement("p", null, copy2("No workflows saved yet.", "尚无已保存的流程。")));
+}
+function Workflow({ flow, roster, mutate }) {
+  const [version, setVersion] = (0, import_react52.useState)(flow.activeVersion ?? flow.versions.at(-1)?.version);
+  const selected = flow.versions.find((item) => item.version === Number(version));
+  const runRequest = (0, import_react52.useRef)(null);
+  const [revision, setRevision] = (0, import_react52.useState)(selected?.instruction ?? "");
+  (0, import_react52.useEffect)(() => {
+    setRevision(selected?.instruction ?? "");
+  }, [version, selected?.instruction]);
+  const [worker, setWorker] = (0, import_react52.useState)(roster.bots.find((bot) => bot.id !== flow.owner)?.id ?? flow.owner);
+  const [values, setValues] = (0, import_react52.useState)({});
+  const [taskId, setTaskId] = (0, import_react52.useState)("");
+  const [evidence, setEvidence] = (0, import_react52.useState)("");
+  return /* @__PURE__ */ import_react52.default.createElement("details", { className: "mek-event" }, /* @__PURE__ */ import_react52.default.createElement("summary", null, flow.name, " · ", flow.activeVersion ? `v${flow.activeVersion}` : copy2("Draft", "草稿")), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Version", "版本"), /* @__PURE__ */ import_react52.default.createElement("select", { value: version, onChange: (event) => {
+    setVersion(event.target.value);
+    setValues({});
+  } }, flow.versions.map((item) => /* @__PURE__ */ import_react52.default.createElement("option", { key: item.version, value: item.version }, "v", item.version, " · ", item.status)))), /* @__PURE__ */ import_react52.default.createElement("p", null, selected?.instruction), /* @__PURE__ */ import_react52.default.createElement("ul", null, selected?.acceptance.map((check) => /* @__PURE__ */ import_react52.default.createElement("li", { key: check }, check))), /* @__PURE__ */ import_react52.default.createElement("form", { onSubmit: async (event) => {
+    event.preventDefault();
+    const args = { id: flow.id, version: Number(version), owner: flow.owner, worker, inputs: values, validation: selected?.status !== "active" };
+    const key = JSON.stringify(args);
+    if (runRequest.current?.key !== key) runRequest.current = { key, id: crypto.randomUUID?.() ?? Array.from(crypto.getRandomValues(new Uint8Array(16)), (value) => value.toString(16).padStart(2, "0")).join("") };
+    const result = await mutate("mek-workflow-run", { ...args, requestId: runRequest.current.id });
+    if (result !== void 0) runRequest.current = null;
+  } }, /* @__PURE__ */ import_react52.default.createElement(BotSelect, { roster, value: worker, onChange: setWorker, label: copy2("Worker", "执行 Bot") }), selected?.inputs.map((input) => /* @__PURE__ */ import_react52.default.createElement("label", { key: input.name }, input.name, /* @__PURE__ */ import_react52.default.createElement("input", { value: values[input.name] ?? "", required: input.required, onChange: (event) => setValues((previous) => ({ ...previous, [input.name]: event.target.value })) }))), /* @__PURE__ */ import_react52.default.createElement("button", { type: "submit" }, selected?.status === "active" ? copy2("Run workflow", "运行流程") : copy2("Run validation task", "运行验证任务"))), selected?.status === "draft" && /* @__PURE__ */ import_react52.default.createElement("form", { onSubmit: (event) => {
+    event.preventDefault();
+    mutate("mek-workflow-validate", { id: flow.id, version: Number(version), taskId, evidence });
+  } }, /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Completed validation task ID", "已完成的验证任务 ID"), /* @__PURE__ */ import_react52.default.createElement("input", { value: taskId, onChange: (event) => setTaskId(event.target.value), required: true })), /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Validation evidence", "验证证据"), /* @__PURE__ */ import_react52.default.createElement("textarea", { value: evidence, onChange: (event) => setEvidence(event.target.value), required: true, rows: 2 })), /* @__PURE__ */ import_react52.default.createElement("button", { type: "submit" }, copy2("Record validation", "登记验证"))), selected && /* @__PURE__ */ import_react52.default.createElement("details", null, /* @__PURE__ */ import_react52.default.createElement("summary", null, copy2("Draft a new version", "起草新版本")), /* @__PURE__ */ import_react52.default.createElement("form", { onSubmit: (event) => {
+    event.preventDefault();
+    mutate("mek-workflow-save", { id: flow.id, name: flow.name, owner: flow.owner, instruction: revision, inputs: selected.inputs, acceptance: selected.acceptance });
+  } }, /* @__PURE__ */ import_react52.default.createElement("label", null, copy2("Updated instructions", "更新执行要求"), /* @__PURE__ */ import_react52.default.createElement("textarea", { required: true, rows: 4, value: revision, onChange: (event) => setRevision(event.target.value) })), /* @__PURE__ */ import_react52.default.createElement("p", null, copy2("Keeps the selected version’s inputs and acceptance checks. The new version must be validated again.", "沿用所选版本的参数和验收标准，新版本需重新验证。")), /* @__PURE__ */ import_react52.default.createElement("button", { type: "submit" }, copy2("Save new draft", "保存新草稿")))), selected?.status === "validated" && /* @__PURE__ */ import_react52.default.createElement("button", { onClick: () => mutate("mek-workflow-activate", { id: flow.id, version: Number(version) }) }, copy2("Activate this version", "启用此版本")));
+}
+function TeamOverview({ team, ctx, initialTab = "activity", onClose }) {
+  const roster = team.hooks.useRoster((value) => value);
+  const [tab, setTab] = (0, import_react52.useState)(initialTab);
+  const [error, setError] = (0, import_react52.useState)("");
+  const [busy, setBusy] = (0, import_react52.useState)(false);
+  const [success, setSuccess] = (0, import_react52.useState)("");
+  const changing = (0, import_react52.useRef)(false);
+  const mutate = async (endpoint, body) => {
+    if (changing.current) return;
+    changing.current = true;
+    setBusy(true);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await call(endpoint, body);
+      await team.refresh();
+      setSuccess(result?.taskId ? `${copy2("Task started: ", "任务已发起：")}${result.taskId}` : copy2("Saved.", "已保存。"));
+      return result;
+    } catch (failure) {
+      setError(failure.message);
+      return void 0;
+    } finally {
+      changing.current = false;
+      setBusy(false);
+    }
+  };
+  const tabs = [["activity", "Activity", "近况"], ["tasks", "Tasks", "任务"], ["knowledge", "Knowledge", "知识"], ["workflows", "Workflows", "流程"], ["policies", "Behavior", "行为"], ["browser", "Browser", "浏览器"]];
+  const notify = async () => {
+    if (typeof Notification !== "function") {
+      setError(copy2("Notifications are not supported in this browser.", "此浏览器不支持系统通知。"));
+      return;
+    }
+    const outcome = await Notification.requestPermission();
+    setSuccess(outcome === "granted" ? copy2("Browser notifications enabled.", "已启用浏览器通知。") : copy2("Notifications remain off. Important events are still available here.", "浏览器通知未开启，重要事项仍会保留在这里。"));
+  };
+  return /* @__PURE__ */ import_react52.default.createElement("section", { className: "mek-overview", "aria-label": copy2("Team overview", "团队概况") }, /* @__PURE__ */ import_react52.default.createElement("header", null, /* @__PURE__ */ import_react52.default.createElement("h1", null, copy2("Team overview", "团队概况")), /* @__PURE__ */ import_react52.default.createElement("button", { onClick: onClose }, copy2("Back to conversation", "返回对话"))), /* @__PURE__ */ import_react52.default.createElement("nav", { "aria-label": copy2("Team sections", "团队页面") }, tabs.map(([id, en, zh]) => /* @__PURE__ */ import_react52.default.createElement("button", { key: id, "aria-current": tab === id ? "page" : void 0, onClick: () => {
+    setTab(id);
+    setError("");
+    setSuccess("");
+  } }, copy2(en, zh)))), /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-overview-content", "aria-busy": busy }, error && /* @__PURE__ */ import_react52.default.createElement("p", { role: "alert" }, error), success && /* @__PURE__ */ import_react52.default.createElement("p", { role: "status" }, success), tab === "activity" && /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement(TeamActivity, { roster, mutate }), /* @__PURE__ */ import_react52.default.createElement("button", { onClick: () => void notify() }, copy2("Enable browser notifications", "启用浏览器通知"))), tab === "tasks" && /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement("h2", null, copy2("Task ledger", "任务台账")), /* @__PURE__ */ import_react52.default.createElement(TaskProgress, { team, ctx, all: true })), tab === "knowledge" && /* @__PURE__ */ import_react52.default.createElement(Knowledge, { roster, mutate }), tab === "workflows" && /* @__PURE__ */ import_react52.default.createElement(Workflows, { roster, mutate }), tab === "policies" && /* @__PURE__ */ import_react52.default.createElement(Policies, { roster, mutate }), tab === "browser" && /* @__PURE__ */ import_react52.default.createElement(BrowserWorkspace, { roster })));
+}
+var OVERVIEW_CSS = `.mek-overview{display:flex;flex-direction:column;height:100%;min-height:0;max-width:1100px;width:100%;margin:auto;color:var(--bt-ink);font:13px/18px var(--bt-font, system-ui)}.mek-overview header{display:flex;justify-content:space-between;align-items:center;padding:16px 24px}.mek-overview h1{font-size:17px;line-height:24px;margin:0;font-weight:500}.mek-overview h2{font-size:15px;line-height:20px;margin:0 0 12px;font-weight:600}.mek-overview h3{font-size:13px;font-weight:600;margin:24px 0 12px}.mek-overview nav{display:flex;gap:4px;border-bottom:1px solid var(--bt-line);padding:0 24px 8px;overflow:auto}.mek-overview button,.mek-overview select,.mek-overview input,.mek-overview textarea{font:inherit;color:var(--bt-ink);border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-card);min-height:32px;box-sizing:border-box}.mek-overview button{padding:6px 12px;cursor:pointer}.mek-overview button:hover{background:var(--bt-hover)}.mek-overview button:disabled{cursor:default;opacity:.5}.mek-overview nav [aria-current]{background:var(--bt-active);border-color:var(--bt-line-2)}.mek-overview input,.mek-overview textarea,.mek-overview select{padding:6px 8px;width:100%}.mek-overview input[type=checkbox]{width:16px;min-height:16px;margin:0;accent-color:var(--bt-accent)}.mek-overview-content{overflow:auto;flex:1;padding:20px 24px 32px;min-height:0}.mek-overview label{display:flex;flex-direction:column;gap:6px;margin:8px 0}.mek-overview textarea{resize:vertical}.mek-overview p{margin:8px 0 16px;white-space:pre-wrap;overflow-wrap:anywhere}.mek-overview form{margin:12px 0 20px}.mek-overview details{margin:12px 0}.mek-overview summary{cursor:pointer;padding:8px 0;min-height:28px}.mek-form-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:12px 0}.mek-form-row>label{flex:1;min-width:140px;margin:0}.mek-form-row>input{flex:1;min-width:160px}.mek-form-row>select{width:auto}.mek-check{flex-direction:row!important;align-items:center;gap:8px!important;min-height:32px}.mek-event{padding:12px 16px;border:1px solid var(--bt-line);border-radius:12px;margin:8px 0;background:var(--bt-card)}.mek-event[data-attention]{border-inline-start:3px solid var(--bt-accent)}.mek-event>div{display:flex;gap:12px;flex-wrap:wrap}.mek-event span,.mek-event time,.mek-event small{color:var(--bt-ink-2);font-size:12px}.mek-event time{margin-left:auto}.mek-overview [role=alert]{color:var(--bt-danger, var(--bt-accent))}.mek-overview :is(button,input,select,textarea):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-overview-entry{display:block;width:calc(100% - 16px);margin:8px;border:1px solid var(--bt-line);border-radius:10px;background:var(--bt-card);color:var(--bt-ink);min-height:36px;font:13px var(--bt-font, system-ui);cursor:pointer}.mek-overview-entry[aria-pressed=true]{background:var(--bt-active)}.dsb-frame[data-rail] .mek-overview-entry{font-size:18px;min-width:28px;width:32px;margin:8px auto}.mek-overview-entry:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}@media(max-width:700px){.mek-overview header,.mek-overview-content{padding:12px}.mek-overview nav{padding-left:12px;padding-right:12px}.mek-overview header button{max-width:140px}}`;
 
 // src/client/mek/group-chat.jsx
-var import_react50 = __toESM(require("react"), 1);
+var import_react53 = __toESM(require("react"), 1);
 function GroupChat({ sessionId, team }) {
   const { hooks, actions } = team;
   const roster = hooks.useRoster((value) => value);
   const room2 = roster.roomsById[sessionId];
-  const [view, setView] = (0, import_react50.useState)({ items: [], cursor: null, progress: [], loading: true });
-  const [error, setError] = (0, import_react50.useState)(null);
-  const scroll = (0, import_react50.useRef)(null);
-  const follow = (0, import_react50.useRef)(true);
-  const request = (0, import_react50.useRef)(null);
-  const refresh = (0, import_react50.useRef)(null);
-  (0, import_react50.useEffect)(() => {
+  const [view, setView] = (0, import_react53.useState)({ items: [], cursor: null, progress: [], loading: true });
+  const [error, setError] = (0, import_react53.useState)(null);
+  const scroll = (0, import_react53.useRef)(null);
+  const follow = (0, import_react53.useRef)(true);
+  const request = (0, import_react53.useRef)(null);
+  const refresh = (0, import_react53.useRef)(null);
+  (0, import_react53.useEffect)(() => {
     let stopped = false;
     const abort = new AbortController();
     const load = async (cursor) => {
@@ -18853,30 +19235,30 @@ function GroupChat({ sessionId, team }) {
       refresh.current = null;
     };
   }, [sessionId, team]);
-  (0, import_react50.useLayoutEffect)(() => {
+  (0, import_react53.useLayoutEffect)(() => {
     if (view.beforeHeight !== null && view.beforeHeight !== void 0) scroll.current.scrollTop += scroll.current.scrollHeight - view.beforeHeight;
     else if (follow.current) scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [view]);
-  return /* @__PURE__ */ import_react50.default.createElement("div", { className: "dsb-chat" }, /* @__PURE__ */ import_react50.default.createElement("div", { ref: scroll, className: "dsb-scroll", "data-conversation-scroll": "", onScroll: () => {
+  return /* @__PURE__ */ import_react53.default.createElement("div", { className: "dsb-chat" }, /* @__PURE__ */ import_react53.default.createElement("div", { ref: scroll, className: "dsb-scroll", "data-conversation-scroll": "", onScroll: () => {
     const node = scroll.current;
     follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
-  } }, /* @__PURE__ */ import_react50.default.createElement("div", { className: "dsb-column" }, /* @__PURE__ */ import_react50.default.createElement("div", { className: "dsb-flow", role: "feed", "aria-label": room2?.name, "aria-busy": view.loading }, view.cursor !== null && /* @__PURE__ */ import_react50.default.createElement("button", { className: "bt-soft", onClick: () => refresh.current?.(view.cursor) }, t("Load earlier")), view.items.map((item) => item.kind === "group" ? /* @__PURE__ */ import_react50.default.createElement(GroupReplies, { key: item.seq, sessionId, callId: item.callId, done: true, content: item.content, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork }) : item.kind === "post" ? /* @__PURE__ */ import_react50.default.createElement(GroupMessage, { key: item.seq, bot: roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: "gray" }, text: stripHeader(contentText(item.content)), room: room2, roster, actions, time: item.time }) : /* @__PURE__ */ import_react50.default.createElement(ChatRows, { key: `${item.seq}:${item.kind}`, items: [item], sessionId, roster, actions, useUi: hooks.useUi, clock: true })), view.progress.filter((id) => !view.items.some((item) => item.callId === id)).map((id) => /* @__PURE__ */ import_react50.default.createElement(GroupReplies, { key: id, sessionId, callId: id, done: false, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork })), error && /* @__PURE__ */ import_react50.default.createElement("button", { className: "bt-soft", role: "alert", onClick: () => refresh.current?.() }, error, " · ", t("Try again"))))), /* @__PURE__ */ import_react50.default.createElement("div", { className: "dsb-composer-root" }, /* @__PURE__ */ import_react50.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text) => {
+  } }, /* @__PURE__ */ import_react53.default.createElement("div", { className: "dsb-column" }, /* @__PURE__ */ import_react53.default.createElement("div", { className: "dsb-flow", role: "feed", "aria-label": room2?.name, "aria-busy": view.loading }, view.cursor !== null && /* @__PURE__ */ import_react53.default.createElement("button", { className: "bt-soft", onClick: () => refresh.current?.(view.cursor) }, t("Load earlier")), view.items.map((item) => item.kind === "group" ? /* @__PURE__ */ import_react53.default.createElement(GroupReplies, { key: item.seq, sessionId, callId: item.callId, done: true, content: item.content, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork }) : item.kind === "post" ? /* @__PURE__ */ import_react53.default.createElement(GroupMessage, { key: item.seq, bot: roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: "gray" }, text: stripHeader(contentText(item.content)), room: room2, roster, actions, time: item.time }) : /* @__PURE__ */ import_react53.default.createElement(ChatRows, { key: `${item.seq}:${item.kind}`, items: [item], sessionId, roster, actions, useUi: hooks.useUi, clock: true })), view.progress.filter((id) => !view.items.some((item) => item.callId === id)).map((id) => /* @__PURE__ */ import_react53.default.createElement(GroupReplies, { key: id, sessionId, callId: id, done: false, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork })), error && /* @__PURE__ */ import_react53.default.createElement("button", { className: "bt-soft", role: "alert", onClick: () => refresh.current?.() }, error, " · ", t("Try again"))))), /* @__PURE__ */ import_react53.default.createElement("div", { className: "dsb-composer-root" }, /* @__PURE__ */ import_react53.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text) => {
     await actions.send(sessionId, text);
     await refresh.current?.();
   }, actions, useUi: hooks.useUi, useRoster: hooks.useRoster })));
 }
 
 // src/client/mek/view.jsx
-var import_react51 = __toESM(require("react"), 1);
+var import_react54 = __toESM(require("react"), 1);
 var STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS + HANDOFF_CSS + SIDE_CSS + app_default;
-function TeamView({ ctx }) {
-  const team = (0, import_react51.useMemo)(() => {
+function TeamView({ ctx, requests }) {
+  const team = (0, import_react54.useMemo)(() => {
     const value = createTeam();
     value.actions.schedules = void 0;
     attachAgentActions(value, ctx);
     return value;
   }, [ctx]);
-  (0, import_react51.useEffect)(() => {
+  (0, import_react54.useEffect)(() => {
     const stopWatching = watchDeletedSubjects(team);
     const stop = team.start();
     return () => {
@@ -18889,7 +19271,7 @@ function TeamView({ ctx }) {
   const shown = hooks.useShown((value) => value);
   const roster = hooks.useRoster((value) => value);
   const prefs = roster.prefs;
-  (0, import_react51.useEffect)(() => {
+  (0, import_react54.useEffect)(() => {
     const root = sceneRoot();
     if (!root) return;
     root.dataset.btMotion = prefs?.motion ?? "normal";
@@ -18897,9 +19279,22 @@ function TeamView({ ctx }) {
     root.style.setProperty("--bt-msg-w", String(widthOf(prefs) / 100));
     root.style.setProperty("--bt-flat-w", String(flatWidthOf(prefs) / 100));
   }, [prefs]);
-  const [menu, setMenu] = (0, import_react51.useState)(false);
-  const footer = (0, import_react51.useRef)(null);
-  (0, import_react51.useEffect)(() => {
+  const [menu, setMenu] = (0, import_react54.useState)(false);
+  const [overview, setOverview] = (0, import_react54.useState)(false);
+  (0, import_react54.useEffect)(() => {
+    if (!requests) return;
+    const show2 = () => {
+      const id = requests.getSnapshot();
+      if (!id) return;
+      setOverview(false);
+      actions.openSession(id);
+      requests.set(null);
+    };
+    show2();
+    return requests.subscribe(show2);
+  }, [team, requests]);
+  const footer = (0, import_react54.useRef)(null);
+  (0, import_react54.useEffect)(() => {
     if (!menu) return;
     const close = (event) => {
       if (event.type === "keydown" ? event.key === "Escape" : !footer.current?.contains(event.target)) setMenu(false);
@@ -18911,20 +19306,23 @@ function TeamView({ ctx }) {
       document.removeEventListener("keydown", close);
     };
   }, [menu]);
-  const views = { ...hooks, actions, useSessions: (selector) => {
-    const host = (0, import_react51.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
+  const views = { ...hooks, actions: { ...actions, openSession: (...args) => {
+    setOverview(false);
+    return actions.openSession(...args);
+  } }, useSessions: (selector) => {
+    const host = (0, import_react54.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
     return hooks.useSessions((own) => selector({ ...own, byId: Object.fromEntries([.../* @__PURE__ */ new Set([...Object.keys(host.byId), ...Object.keys(own.byId)])].map((id) => [id, { ...host.byId[id], retainedBy: {}, ...own.byId[id] }])) }));
   } };
   const themed = themeCss(allThemes()[prefs?.theme] ?? allThemes().deepseek, prefs?.accent);
-  return /* @__PURE__ */ import_react51.default.createElement(import_react51.default.Fragment, null, /* @__PURE__ */ import_react51.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react51.default.createElement("div", { className: "dsb-frame", "data-rail": wide ? void 0 : "" }, /* @__PURE__ */ import_react51.default.createElement("aside", { className: "dsb-side" }, /* @__PURE__ */ import_react51.default.createElement("div", { className: "dsb-side-list" }, !wide && /* @__PURE__ */ import_react51.default.createElement("button", { className: "dsb-expand", title: t("Expand sidebar"), "aria-label": t("Expand sidebar"), onClick: () => actions.toggleSidebar() }, /* @__PURE__ */ import_react51.default.createElement(BrandMark, { size: 22 })), /* @__PURE__ */ import_react51.default.createElement(TeamSidebar, { ...views, wide })), /* @__PURE__ */ import_react51.default.createElement("div", { ref: footer, className: "dsb-side-foot" }, /* @__PURE__ */ import_react51.default.createElement("button", { className: "dsb-settings", title: t("Bot settings"), "aria-label": t("Bot settings"), "aria-expanded": menu, onClick: () => setMenu((value) => !value) }, /* @__PURE__ */ import_react51.default.createElement(YouAvatar, null)), menu && /* @__PURE__ */ import_react51.default.createElement("div", { className: "bt-menu mek-bot-menu", role: "menu" }, [[t("Usage"), "usage"], [t("Connectors"), "connectors"], [t("Bot settings"), "general"]].map(([label2, page]) => /* @__PURE__ */ import_react51.default.createElement("button", { role: "menuitem", key: page, onClick: () => {
+  return /* @__PURE__ */ import_react54.default.createElement(import_react54.default.Fragment, null, /* @__PURE__ */ import_react54.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react54.default.createElement("div", { className: "dsb-frame", "data-rail": wide ? void 0 : "" }, /* @__PURE__ */ import_react54.default.createElement("aside", { className: "dsb-side" }, /* @__PURE__ */ import_react54.default.createElement("div", { className: "dsb-side-list" }, !wide && /* @__PURE__ */ import_react54.default.createElement("button", { className: "dsb-expand", title: t("Expand sidebar"), "aria-label": t("Expand sidebar"), onClick: () => actions.toggleSidebar() }, /* @__PURE__ */ import_react54.default.createElement(BrandMark, { size: 22 })), /* @__PURE__ */ import_react54.default.createElement(TeamSidebar, { ...views, wide }), /* @__PURE__ */ import_react54.default.createElement("button", { className: "mek-overview-entry", title: copy2("Team overview", "团队概况"), "aria-label": copy2("Team overview", "团队概况"), "aria-pressed": overview, onClick: () => setOverview(true) }, wide ? copy2("Team overview", "团队概况") : "◫")), /* @__PURE__ */ import_react54.default.createElement("div", { ref: footer, className: "dsb-side-foot" }, /* @__PURE__ */ import_react54.default.createElement("button", { className: "dsb-settings", title: t("Bot settings"), "aria-label": t("Bot settings"), "aria-expanded": menu, onClick: () => setMenu((value) => !value) }, /* @__PURE__ */ import_react54.default.createElement(YouAvatar, null)), menu && /* @__PURE__ */ import_react54.default.createElement("div", { className: "bt-menu mek-bot-menu", role: "menu" }, [[t("Usage"), "usage"], [t("Connectors"), "connectors"], [t("Bot settings"), "general"]].map(([label2, page]) => /* @__PURE__ */ import_react54.default.createElement("button", { role: "menuitem", key: page, onClick: () => {
     setMenu(false);
     actions.openSettings(page);
-  } }, label2))))), /* @__PURE__ */ import_react51.default.createElement("main", { className: "dsb-main dsb_centerCol" }, shown && /* @__PURE__ */ import_react51.default.createElement(import_react51.default.Fragment, { key: shown }, /* @__PURE__ */ import_react51.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react51.default.createElement(HeaderPill, { ...views, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react51.default.createElement(TaskProgress, { team, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react51.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react51.default.createElement(Chat, { sessionId: shown, team }))), /* @__PURE__ */ import_react51.default.createElement(Overlays, { ...views }), /* @__PURE__ */ import_react51.default.createElement(ErrorToast, { ...views })));
+  } }, label2))))), /* @__PURE__ */ import_react54.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": overview ? void 0 : shown }, overview ? /* @__PURE__ */ import_react54.default.createElement(TeamOverview, { team, ctx, onClose: () => setOverview(false) }) : shown && /* @__PURE__ */ import_react54.default.createElement(import_react54.default.Fragment, { key: shown }, /* @__PURE__ */ import_react54.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react54.default.createElement(HeaderPill, { ...views, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react54.default.createElement(TaskProgress, { team, ctx, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react54.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react54.default.createElement(Chat, { sessionId: shown, team }))), /* @__PURE__ */ import_react54.default.createElement(Overlays, { ...views }), /* @__PURE__ */ import_react54.default.createElement(ErrorToast, { ...views })));
 }
-function NativeBot({ ctx }) {
-  const root = (0, import_react51.useRef)(null);
-  const [ready, setReady] = (0, import_react51.useState)(false);
-  (0, import_react51.useLayoutEffect)(() => {
+function NativeBot({ ctx, requests }) {
+  const root = (0, import_react54.useRef)(null);
+  const [ready, setReady] = (0, import_react54.useState)(false);
+  (0, import_react54.useLayoutEffect)(() => {
     const release = mountScene(root.current);
     const locale = installLocale(createLocale(navigator.language));
     const dark = matchMedia("(prefers-color-scheme: dark)");
@@ -18938,16 +19336,130 @@ function NativeBot({ ctx }) {
       release();
     };
   }, []);
-  return /* @__PURE__ */ import_react51.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react51.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + "\n.dsb-side-list{padding-top:10px}.dsb-side-foot{position:relative}.mek-bot-menu{position:absolute;left:4px;bottom:48px;min-width:180px}.dsb-main{height:100%}")), ready && /* @__PURE__ */ import_react51.default.createElement(TeamView, { ctx }));
+  return /* @__PURE__ */ import_react54.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react54.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + "\n.dsb-side-list{padding-top:10px}.dsb-side-foot{position:relative}.mek-bot-menu{position:absolute;left:4px;bottom:48px;min-width:180px}.dsb-main{height:100%}")), ready && /* @__PURE__ */ import_react54.default.createElement(TeamView, { ctx, requests }));
+}
+
+// src/client/approval-notices.js
+function noticeApprovals({ work, roster, shownSession, openSession, since = Date.now() }) {
+  const told = /* @__PURE__ */ new Set();
+  const notify = () => {
+    const approvals = work.getSnapshot().approvals ?? [];
+    for (const id of told) {
+      if (!approvals.some((entry) => entry.id === id)) told.delete(id);
+    }
+    if (typeof Notification !== "function" || Notification.permission !== "granted") return;
+    for (const entry of approvals) {
+      if (told.has(entry.id)) continue;
+      told.add(entry.id);
+      if ((entry.at ?? 0) < since) continue;
+      const place = entry.taskOwner ? roster.getSnapshot().byId[entry.taskOwner]?.sessionId : entry.roomId ?? entry.sessionId;
+      if (scopedDocument.visibilityState === "visible" && shownSession() === place) continue;
+      const { byId, roomsById } = roster.getSnapshot();
+      const room2 = entry.roomId ? roomsById[entry.roomId] : void 0;
+      const note = new Notification(t("{name} is waiting for your approval", { name: byId[entry.botId]?.name ?? t("A Bot") }), {
+        body: [room2?.name, entry.tool].filter(Boolean).join(" · "),
+        tag: `ds-bot-approval-${entry.id}`
+      });
+      note.onclick = () => {
+        scopedWindow.focus();
+        openSession(entry.taskOwner ?? entry.roomId ?? entry.botId);
+        note.close();
+      };
+    }
+  };
+  notify();
+  return work.subscribe(notify);
+}
+
+// src/client/mek/notifications.js
+function watchNativeNotices(team, { notifyClass = globalThis.Notification, storage = globalThis.sessionStorage, since = Date.now(), shownSession = () => team.shown.getSnapshot(), show: show2 = (id) => team.actions.openSession(id) } = {}) {
+  const stopApprovals = noticeApprovals({ work: team.work, roster: team.roster, shownSession, openSession: show2, since });
+  const key = "mek-bot:noticed-events";
+  let told;
+  try {
+    told = new Set(JSON.parse(storage?.getItem(key) ?? "[]"));
+  } catch {
+    told = /* @__PURE__ */ new Set();
+  }
+  const notes = /* @__PURE__ */ new Set();
+  const sync = () => {
+    const view = team.roster.getSnapshot().mekTeam;
+    if (!view?.config?.notifications || notifyClass?.permission !== "granted") return;
+    for (const event of view.events ?? []) {
+      if (!event.attention || event.readAt || event.at < since || told.has(event.id)) continue;
+      told.add(event.id);
+      try {
+        storage?.setItem(key, JSON.stringify([...told].slice(-500)));
+      } catch {
+      }
+      const note = new notifyClass(copy2("Team update needs attention", "团队有事项需要处理"), { body: `${event.botName ?? "Bot"}: ${event.summary}`, tag: `mek-team-${event.id}` });
+      notes.add(note);
+      note.onclick = () => {
+        window.focus();
+        show2(view.config.supervisorBotId ?? event.botId);
+        note.close();
+      };
+      note.onclose = () => notes.delete(note);
+    }
+  };
+  const stop = team.roster.subscribe(sync);
+  sync();
+  return () => {
+    stop();
+    stopApprovals();
+    for (const note of notes) note.close();
+  };
+}
+function startNativeNotices({ show: show2, shownSession = () => null }) {
+  const roster = createSource(EMPTY_ROSTER);
+  const work = createSource({ approvals: [] });
+  const stopNotices = watchNativeNotices({ roster, work }, { show: show2, shownSession });
+  let stopped = false;
+  let pending = null;
+  const refresh = async () => {
+    if (stopped || pending) return;
+    const controller = new AbortController();
+    pending = controller;
+    try {
+      const value = await call("state", { since: roster.getSnapshot().revision, models: roster.getSnapshot().modelsKey ?? "" }, controller.signal);
+      if (stopped) return;
+      if (Array.isArray(value.bots)) roster.set(indexRoster(value));
+      else if (value.mekTeam) roster.set({ ...roster.getSnapshot(), mekTeam: value.mekTeam });
+      work.set(value.work ?? { approvals: [] });
+    } catch {
+    } finally {
+      if (pending === controller) pending = null;
+    }
+  };
+  const stopFeed = openFeed((event) => {
+    if (["hello", "revision", "live"].includes(event)) void refresh();
+  });
+  const timer = setInterval(() => void refresh(), 15e3);
+  void refresh();
+  return () => {
+    stopped = true;
+    pending?.abort();
+    clearInterval(timer);
+    stopFeed();
+    stopNotices();
+  };
 }
 
 // src/client/mek/index.jsx
-var import_react52 = __toESM(require("react"), 1);
+var import_react55 = __toESM(require("react"), 1);
 var inject = ["slots", "layout", "sessions", "uiWorkspace"];
 var PANEL = "mek-bot";
 function apply(ctx) {
-  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react52.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react52.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react52.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
-  ctx.slots.inject("main", () => ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react52.default.createElement(NativeBot, { ctx })));
+  const requests = createSource(null);
+  ctx.effect(() => startNativeNotices({
+    show: (id) => {
+      requests.set(id);
+      ctx.layout.selectPanel(PANEL);
+    },
+    shownSession: () => sceneRoot()?.querySelector("[data-mek-session]")?.dataset.mekSession ?? null
+  }));
+  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react55.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react55.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react55.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
+  ctx.slots.inject("main", () => ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react55.default.createElement(NativeBot, { ctx, requests })));
   ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));
 }
 return Object.defineProperty({ ...module.exports }, Symbol.toStringTag, { value: 'Module' })

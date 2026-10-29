@@ -12,10 +12,11 @@ export function coordinationResponse({ messages, tools, me, isMain, text, tool, 
     const used = previous?.content.find(item => item.type === 'tool_use' && item.id === block.tool_use_id)
     if (used?.name === 'list_tasks') {
       const value = typeof block.content === 'string' ? block.content : textOf(block.content)
-      const root = JSON.parse(value).find(item => item.work.some(work => work.instruction?.includes('MEK_COORDINATION_WORK')))
+      const root = JSON.parse(value).find(item => item.status !== 'completed' && item.work.some(work => work.status === 'review' && work.instruction?.includes('MEK_COORDINATION_WORK')))
+      if (!root) return [text('No task is ready for acceptance.')]
       const work = root.work.filter(item => item.status === 'review').at(-1)
       if (work.attempt === 1) return [tool('revise_bot_task', { task_id: work.id, feedback: 'VERIFY_EDGE_CASE: check the edge case and report evidence.' })]
-      return [tool('finish_bot_task', { task_id: root.id, summary: 'Reviewed implementation, routine decision, user choice and edge-case evidence.' })]
+      return [tool('finish_bot_task', { task_id: root.id, summary: 'Reviewed implementation, routine decision, user choice and edge-case evidence.', checks: (root.criteria ?? []).map(criterion => ({ criterion, passed: true, evidence: work.report.evidence })) })]
     }
     if (used?.name === 'finish_bot_task') return [text('已在当前对话完成验收：常规选择由我决定，你确认了必要偏好，子 Bot 补齐边界检查后交付完成。')]
     if (['message_bot', 'answer_bot_question', 'revise_bot_task'].includes(used?.name)) return [text(isMain ? '我会在这里继续处理。' : '')]

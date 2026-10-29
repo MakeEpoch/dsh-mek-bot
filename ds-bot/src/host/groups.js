@@ -788,6 +788,30 @@ export function install(rt) {
     return admin ? [admin, ...members.filter(bot => bot !== admin)] : members
   }
 
+  // Optional downstream coordinator: use the same group context and sessions,
+  // while tracking long-running member work independently of a relay round.
+  rt.prepareGroupTask = async (room, sender, text, files = []) => {
+    ensureRoomLog(room)
+    await loadGroupLines(room)
+    appendRoom(room, { who: sender.name, botId: sender.id, text, ...(files.length ? { files } : {}) })
+    await rt.save()
+    return openingSpeakers(room, { botId: sender.id, text, member: !rt.isMain(sender.id) && !rt.isAdminOf(room, sender.id) }).map(member => member.id)
+  }
+  rt.prepareGroupMemberTask = async (room, member) => {
+    const session = await groupSessionFor(room, member)
+    if (!session) throw new Error('The group member is no longer available')
+    await loadGroupLines(room)
+    const prompt = roomPrompt(room, member, { roomId: room.id, members: room.members, startSeq: room.seq, slots: [{ id: member.id, name: member.name, status: 'speaking' }], replies: [] })
+    return { sessionId: session.id, context: [session.brief, prompt.text].filter(Boolean).join('\n\n'), files: prompt.files }
+  }
+  rt.appendGroupTaskResult = async (roomId, botId, text) => {
+    const room = rt.roomOf(roomId)
+    if (!room) return
+    ensureRoomLog(room)
+    appendRoom(room, { who: rt.botOf(botId)?.name ?? 'Bot', botId, text })
+    await rt.save()
+  }
+
   // A Bot's message into the group's own Session, which relays it as a new round.
   // While a round runs, the post goes into the group's log and that round's replies at
   // once, so it is not held back until the round ends; the relay it still opens does not
@@ -857,6 +881,10 @@ export function install(rt) {
   // posts on its own. Only the members it calls with @ answer it, each a relay toward
   // the group's pause; the member that asked for the work answers the result.
   async function postStep(sessionId, info, text) {
+    if (rt.mekHandlesGroupTurn?.(sessionId, info)) {
+      const owner = rt.groupOwners.get(sessionId)
+      return rt.appendGroupTaskResult(owner.roomId, owner.botId, text)
+    }
     const waiter = info?.role === 'room' ? rt.roomWaiters.get(info.exchangeId) : undefined
     if (waiter !== undefined) return waiter.say(text)
     const { room, member } = memberIn(sessionId, info) ?? {}

@@ -44,7 +44,7 @@ test('the parent DSH gets one native Bot launcher and no outer Agent shortcut', 
   }
   const client = entry.factory(specifier => platform[specifier])
   const registrations = []
-  client.apply({ slots: { inject: (_slot, work) => work(), register: (seat, component) => registrations.push({ seat, component }) } })
+  client.apply({ effect: () => () => {}, slots: { inject: (_slot, work) => work(), register: (seat, component) => registrations.push({ seat, component }) } })
   assert.deepEqual(registrations.map(({ seat }) => seat.name), ['main', 'sidebar.panellist'])
   assert.equal(registrations[1].seat.label(), 'Bot')
   const frame = registrations[0].component()

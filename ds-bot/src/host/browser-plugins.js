@@ -132,6 +132,12 @@ export function install(rt) {
     return [...new Set([working, team].filter(root => typeof root === 'string' && isAbsolute(root)))]
   }
   const mounted = {}
+  const localHolds = new Map()
+  const holdOf = botId => rt.browserChannel?.holdOf(botId) ?? localHolds.get(botId) ?? null
+  const setHold = (botId, hold) => {
+    if (hold) localHolds.set(botId, hold); else localHolds.delete(botId)
+    rt.browserChannel?.setHold(botId, hold)
+  }
   mountBrowserPlugin(rt.ctx, {
     api: mounted,
     registerTool: definition => registerTeamTool(rt, definition),
@@ -148,8 +154,14 @@ export function install(rt) {
     playwrightUrl,
     executablePath,
     connect: process.env.DS_BOT_APP === '1' && typeof process.send === 'function' ? appBrowserEndpoint : undefined,
-    getHold: botId => rt.browserChannel?.holdOf(botId) ?? null,
-    onHold: (botId, hold) => rt.browserChannel?.setHold(botId, hold && handoffHold(rt, botId, hold)),
+    getHold: holdOf,
+    humanControl: rt.config.coordinateTasks === true,
+    onHold: (botId, hold) => {
+      if (rt.config.coordinateTasks === true && hold) {
+        if (hold.by === 'bot') rt.mekBrowserHeld?.(hold.sessionId, hold)
+        setHold(botId, hold)
+      } else setHold(botId, hold && handoffHold(rt, botId, hold))
+    },
     subscribeHolds: listener => rt.browserChannel?.subscribeHolds?.(listener),
     authorize: (exec, botId, action) => authorizeBrowserAction(rt, exec, botId, action),
     completeFor: rt.config.browserComplete
@@ -168,8 +180,30 @@ export function install(rt) {
     rt.deleteBot = async (id) => {
       const result = await originalDelete(id)
       await mounted.drop(id).catch(() => {})
+      setHold(id, null)
       return result
     }
   }
   rt.browserPlugin = plugin.id ?? name
+  if (rt.config.coordinateTasks === true) {
+    rt.mekBrowserView = () => ({ available: true, plugin: rt.browserPlugin, openBotIds: mounted.openIds(), holds: Object.fromEntries(localHolds) })
+    rt.mekBrowserEndpoint = async (endpoint, body = {}) => {
+      if (!['mek-browser-state', 'mek-browser-control'].includes(endpoint)) throw new Error('Unknown browser endpoint.')
+      await rt.load()
+      if (!rt.botOf(body.botId)) throw new Error('Unknown Bot.')
+      if (endpoint === 'mek-browser-control' && rt.readOnly?.() !== undefined) throw new Error('This session is read-only.')
+      const previous = holdOf(body.botId)
+      const value = endpoint === 'mek-browser-state' ? await mounted.observe(body.botId) : await mounted.control(body.botId, body)
+      if (endpoint === 'mek-browser-control' && body.action === 'release' && previous) {
+        let resumed
+        try { resumed = await rt.mekBrowserReturned?.(body.botId, previous) }
+        catch (error) { setHold(body.botId, previous); throw error }
+        if (!resumed && previous.callId && previous.sessionId) await rt.deliver({
+          toId: body.botId, sessionId: previous.sessionId, role: 'browser',
+          text: 'The user returned browser control. Check the current page and continue the same task.',
+        })
+      }
+      return { ...value, hold: holdOf(body.botId), botId: body.botId }
+    }
+  }
 }

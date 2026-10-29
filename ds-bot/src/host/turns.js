@@ -229,7 +229,7 @@ export function install(rt) {
     for (const source of rt.forgetBotWork?.(botId) ?? []) {
       if (!waiting.has(source.exchangeId)) waiting.set(source.exchangeId, [rt.chatOf(botId), source])
     }
-    for (const [id, source] of waiting.values()) tellSender(id, source, text)
+    for (const [id, source] of waiting.values()) { rt.mekFailWork?.(source.exchangeId, 'blocked'); tellSender(id, source, text) }
   }
 
   // A group Session is hidden as a whole, so its turns need no marking. A handoff
@@ -614,7 +614,7 @@ export function install(rt) {
           if (!rt.ownsWork?.(rt.selfOf(id), work)) return answer(source, reply)
           const asker = rt.workAsker(work)
           if (failure !== undefined || reason?.kind === 'aborted') {
-            rt.mekFailWork?.(work, 'failed')
+            rt.mekFailWork?.(work, failure ? 'failed' : 'blocked')
             return answer(asker, reply)
           }
           if (rt.mekSuspended?.(work)) return rt.holdWork(work, reply)
@@ -627,7 +627,9 @@ export function install(rt) {
             .catch(error => rt.warn('ds-bot: answer from %s not sent: %s', name, error))
         }
         // A retried turn answers the same waiter or sender, so this one passes nothing on.
-        if (!retry && info?.role === 'room') {
+        if (!retry && rt.mekHandlesGroupTurn?.(id, info)) {
+          finish(info, groupReply())
+        } else if (!retry && info?.role === 'room') {
           const waiter = roomWaiters.get(info.exchangeId)
           roomWaiters.delete(info.exchangeId)
           const stopped = stoppedRoomTurns.delete(info.exchangeId)
@@ -655,7 +657,7 @@ export function install(rt) {
           if (failure !== undefined || reason?.kind === 'aborted') {
             if (request.info.role === 'room') {
               if (failure !== undefined) void rt.lateRoomFailure?.(id, request.info, failure)
-            } else answer(request.info, '')
+            } else { rt.mekFailWork?.(request.info.exchangeId, failure ? 'failed' : 'blocked'); answer(request.info, '') }
             continue
           }
           void rt.deliver({

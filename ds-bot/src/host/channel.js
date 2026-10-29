@@ -56,6 +56,7 @@ export function install(rt) {
     exchangeTurns: state.exchangeTurns,
     questions: state.questions,
     ...(rt.mekTasksView ? { tasks: rt.mekTasksView() } : {}),
+    ...(rt.mekTeamView ? { mekTeam: rt.mekTeamView() } : {}),
     views: state.views ?? {},
     // Aside answers of each Bot's current part, newest first. Not part of the
     // model-visible history; earlier parts send their cards on their own pages.
@@ -98,6 +99,7 @@ export function install(rt) {
   // What a host that only reads the team may still answer.
   // Updates change the dsh profile, not the team, so a reading host may run them too.
   const READS = new Set(['state', 'models', 'efforts', 'providers', 'provider-models', 'earlier', 'chat', 'run-stats', 'room-progress', 'room-chat', 'exchange', 'exchange-text', 'file-text', 'usage', 'schedules', 'memory-view', 'browser-wait', 'browser-result', 'diagnostics', 'diagnostics-log', 'diagnostics-clear', 'update-check', 'update-install', 'dsh-update-install', 'repo-stars', 'approval-answer', 'thinking', 'avatar-library'])
+  for (const endpoint of ['mek-task-list', 'mek-activity-list', 'mek-browser-state', 'mek-policy-view', 'mek-knowledge-list', 'mek-workflow-list', 'mek-resource-list']) READS.add(endpoint)
 
   function setPrefs(body) {
     if (body.theme !== undefined) {
@@ -144,6 +146,18 @@ export function install(rt) {
       await rt.refresh()
       const readOnly = rt.readOnly()
       if (readOnly !== undefined && !READS.has(endpoint)) return fail(readOnly, 'bot/read-only')
+      if (endpoint.startsWith('mek-')) {
+      if (endpoint === 'mek-task-list') { await rt.load(); return ok(rt.mekTaskHistory?.(body) ?? { tasks: [], nextCursor: null }) }
+        await rt.load()
+        const handler = endpoint.startsWith('mek-browser-') ? rt.mekBrowserEndpoint
+          : endpoint.startsWith('mek-policy-') ? rt.mekPolicyAction
+            : endpoint.startsWith('mek-knowledge-') ? rt.mekKnowledgeAction
+              : endpoint.startsWith('mek-workflow-') ? rt.mekWorkflowAction
+                : endpoint.startsWith('mek-resource-') ? rt.mekResourceAction
+                  : rt.mekTeamEndpoint
+        if (!handler) return fail('This team capability is not available in this host.', 'bot/unavailable')
+        return ok(await handler(endpoint, body))
+      }
       switch (endpoint) {
         case 'state':
           if (typeof body.locale === 'string' && /^[a-z]{2,3}(-[\w-]+)?$/i.test(body.locale)) uiLocale = body.locale

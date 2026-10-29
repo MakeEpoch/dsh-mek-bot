@@ -28,6 +28,7 @@ const fetch = async (url,options={}) => {
  const {endpoint,payload} = JSON.parse(options.body)
  let value=null
  if(endpoint==='state') value=roster()
+ else if(endpoint==='mek-task-list') value={tasks:roster().tasks,nextCursor:null}
  else if(endpoint==='chat') value={sessionId:payload.botId,items:[],cursor:null}
  else if(endpoint==='delete-bot') {deleted=true;revision++;value=roster()}
  return new Response(JSON.stringify({ok:true,value}))
@@ -39,8 +40,9 @@ runInNewContext(readFileSync(`${plugin}/client.js`,'utf8'),{window:win,document:
 const platform={react:React,'react-dom':ReactDOM,'@deepseek-ai/dsh-client-ui-primitives':{MarkdownText:({text})=>React.createElement('span',null,text),FishLogo:()=>React.createElement('span',null,'Fish')}}
 const exports=win.moduleEntry.factory(name=>platform[name])
 const registrations=[]
+const effects=[]
 const hostSnapshot={byId:{},ids:[]};const list={getSnapshot:()=>hostSnapshot,subscribe:()=>()=>{}}
-exports.apply({slots:{inject:(_,work)=>work(),register:(seat,component)=>registrations.push({seat,component})},sessions:{list,refresh(){}},layout:{selectPanel(){}},uiWorkspace:{openSession(){}}})
+exports.apply({effect: create => effects.push(create()),slots:{inject:(_,work)=>work(),register:(seat,component)=>registrations.push({seat,component})},sessions:{list,refresh(){}},layout:{selectPanel(){}},uiWorkspace:{openSession(){}}})
 const main=registrations.find(row=>row.seat.name==='main')
 const root=createRoot(document.querySelector('#host'))
 const originalError=console.error;console.error=logger.error
@@ -73,6 +75,14 @@ try {
  assert.equal(document.activeElement.closest('[aria-hidden="true"],[inert]'), null)
  await click('[data-bot-id="keep"]')
  assert.equal(document.querySelector('textarea').getAttribute('aria-label'), 'Message Keeper')
+ await click('.mek-overview-entry')
+ assert.equal(document.querySelector('.mek-overview h1').textContent, 'Team overview')
+ for (let index=1;index<=6;index++) await click(`[aria-label="Team sections"] button:nth-child(${index})`)
+ assert.match(document.querySelector('.mek-browser-workspace').textContent, /not enabled on this host/)
+ assert.equal(document.querySelector('iframe'), null)
+ await click('[data-bot-id="main"]')
+ assert.equal(document.querySelector('.mek-overview'), null)
+ assert.equal(document.querySelector('textarea').getAttribute('aria-label'), 'Message Chief')
  assert.deepEqual(errors, [])
-} finally {await act(async()=>root.unmount());console.error=originalError;dom.window.close();for(const [key,descriptor] of saved) {if(descriptor) Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key]}}
+} finally {for(const stop of effects) stop?.(); await act(async()=>root.unmount());console.error=originalError;dom.window.close();for(const [key,descriptor] of saved) {if(descriptor) Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key]}}
 })
