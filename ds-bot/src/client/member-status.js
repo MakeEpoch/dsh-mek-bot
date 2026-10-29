@@ -128,7 +128,7 @@ const stateLine = (className, at, ...what) => h('span', { className },
   h('span', { className: 'bt-member-what' }, ...what),
   typeof at === 'number' ? h(Elapsed, { at, className: 'bt-member-time' }) : null)
 
-function ApprovalCard({ approval, bot, actions }) {
+export function ApprovalCard({ approval, bot, actions }) {
   const [busy, setBusy] = useState(false)
   const answer = (choice) => {
     setBusy(true)

@@ -115,6 +115,7 @@ export function install(rt) {
   // The works (handoffs.js) the calling turn does: what it answers, and the requests
   // that joined it.
   const worksOf = (exec) => {
+    if (rt.mekCurrentWorks) return rt.mekCurrentWorks(exec.agent?.id)
     const turn = rt.live.get(exec.agent?.id)
     return [rt.workOf(turn?.info), ...(turn?.joined ?? []).map(joined => rt.workOf(joined.info))].filter(Boolean)
   }
@@ -141,14 +142,14 @@ export function install(rt) {
 
   registerTeamTool(rt, defineTool({
     name: 'message_bot',
-    description: 'Send a message to another Bot on the team. If that Bot is working, it reads your message at its next step and can change course, then answers once that work is done; if it is idle, it starts on it right away. Its reply arrives later as a new message to you; with reply_to "user" it answers the user in its own chat instead. In a group chat it reaches only members of that group, as writing "@Name" there does. With request_id you name the request yourself: a repeat of that name with the same message is not sent again, but gives the receipt of the first call back.',
+    description: rt.config.coordinateTasks ? 'Delegate self-contained work to another Bot. Its result returns to you for review. Worker questions go to the original task owner, and user communication stays in that conversation. With request_id, repeating the same request returns its receipt without sending the work twice. In a group this calls a member in that group.' : 'Send a message to another Bot on the team. If that Bot is working, it reads your message at its next step and can change course, then answers once that work is done; if it is idle, it starts on it right away. Its reply arrives later as a new message to you; with reply_to "user" it answers the user in its own chat instead. In a group chat it reaches only members of that group, as writing "@Name" there does. With request_id you name the request yourself: a repeat of that name with the same message is not sent again, but gives the receipt of the first call back.',
     parameters: {
       to: { type: 'string', required: true, description: 'Exact Bot name from list_bots' },
       message: { type: 'string', required: true, description: 'Self-contained message; the other Bot cannot see this conversation' },
       reply_to: {
         type: 'string',
-        enum: ['me', 'user'],
-        description: '"me" (default): the reply comes back to you and the user does not see it. "user": the Bot answers the user in its own chat, where the user reads it, and nothing comes back to you. Use "user" whenever the user wants to hear from that Bot directly or asks Bots to say something in their own chats.',
+        enum: rt.config.coordinateTasks ? ['me'] : ['me', 'user'],
+        description: rt.config.coordinateTasks ? '"me": return the result to the delegating Bot. The user stays in the original task owner conversation.' : '"me" (default): the reply comes back to you and the user does not see it. "user": the Bot answers the user in its own chat, where the user reads it, and nothing comes back to you. Use "user" whenever the user wants to hear from that Bot directly or asks Bots to say something in their own chats.',
       },
       when: {
         type: 'string',
@@ -165,6 +166,7 @@ export function install(rt) {
       await rt.load()
       const sender = callerBot(exec)
       if (sender === undefined) return 'Only Bots on the team can use message_bot.'
+      if (rt.config.coordinateTasks && args.reply_to === 'user') refuse('Delegated work returns to its sender here. Keep questions and delivery in the task owner conversation; direct user conversations stay available through the sidebar.')
       const target = rt.findBot(args.to)
       if (target === undefined) return `No Bot named ${args.to}. Team: ${Object.values(state.bots).map(bot => bot.name).join(', ')}`
       if (target.id === sender.id) return 'You cannot message yourself.'
@@ -559,7 +561,7 @@ export function install(rt) {
     parameters: {
       group: GROUP_REF,
       message: { type: 'string', required: true, description: 'What to say; write "@Name" to choose who answers, and a name without "@" to only mention a member' },
-      report_back: { type: 'boolean', description: 'Also send the members\' replies back to you as a new message when the round ends' },
+      report_back: { type: 'boolean', description: rt.config.coordinateTasks ? 'Reports always come back to the task owner in this integration.' : 'Also send the members\' replies back to you as a new message when the round ends' },
     },
     output,
     async execute(args, exec) {
@@ -576,7 +578,7 @@ export function install(rt) {
       const text = absoluteLinks(String(args.message ?? '').trim(), rt.sessionFolder?.(exec.agent?.session ?? exec.agent))
       if (text === '') return 'Write a message to post.'
       const named = mentionSpans(text, room.members.map(rt.botOf).filter(Boolean)).flatMap(span => (span.bot && span.bot.id !== self ? [span.bot.id] : []))
-      const reportBack = args.report_back === true
+      const reportBack = args.report_back === true || rt.config.coordinateTasks === true
       if (member && reportBack && named.length === 0) {
         return 'Nobody would answer: your post only calls the members you name. Write "@Name" for each member who should answer, or post without report_back.'
       }
@@ -585,7 +587,7 @@ export function install(rt) {
       // Replies the poster waits for, while it works on what a Bot asked it for, are
       // work handed on for that request (handoffs.js).
       const work = reportBack ? worksOf(exec).find(id => rt.ownsWork(self, id)) : undefined
-      const sub = work === undefined ? undefined : randomUUID()
+      const sub = work === undefined && !rt.config.coordinateTasks ? undefined : randomUUID()
       if (sub !== undefined) rt.openWork(sub, { from: self, room: room.id, parent: work })
       try {
         await rt.postToRoom(room, sender, long.text, { ...(reportBack ? { reportBack: true } : {}), ...(member ? { member: true } : {}), ...(sub ? { sub } : {}), ...(long.length ? { length: long.length } : {}) }, long.files)
@@ -644,6 +646,8 @@ export function install(rt) {
         .filter(option => option.label !== '')
         .slice(0, 6)
       if (options.length === 0) return 'Give at least one option.'
+      const routed = await rt.mekQuestion?.({ ...args, options }, exec)
+      if (routed !== undefined) return routed
       // A hidden Bot-to-Bot turn shows none of its calls, so its card goes to the
       // composer dock, which takes questions without a call.
       const turn = rt.live.get(id)?.turn
@@ -691,6 +695,8 @@ export function install(rt) {
       if (checked.interactive && args.await_reply === false) return 'This view has controls to submit, so it waits for the user\'s answer; call show_view without await_reply: false.'
       const awaitReply = args.await_reply ?? checked.interactive
       if (!awaitReply) return 'The view is on screen.'
+      const routed = await rt.mekQuestion?.(args, exec, { title, view })
+      if (routed !== undefined) return routed
       // A hidden Bot-to-Bot turn shows none of its calls, so its card goes to the
       // composer dock, which takes a card without a call.
       const turn = rt.live.get(id)?.turn

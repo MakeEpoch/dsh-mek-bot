@@ -26,6 +26,7 @@ export const failureLine = failure => `${failure.code}${failure.status ? ` ${fai
 // for closes, and the answer goes up to the Bot that asked. `id` is the Session the
 // answer comes from; `source` is the trigger the turn answered.
 export function answerSender(rt, id, source, text, long) {
+  if (rt.mekAnswerSender?.(id, source, text, long)) return
   const back = rt.roomOf(source.senderRoomId)?.sessions?.[source.senderSessionId]
   const work = rt.closeWork?.(source.exchangeId, rt.botOf(rt.selfOf(id))?.name ?? 'The other Bot', text)
   void rt.deliver({
@@ -240,7 +241,7 @@ export function install(rt) {
       entry.joined = info.joined.filter(item => item?.info !== undefined && item.info !== null)
     }
     if (rt.groupOwners.has(sessionId)) return
-    if ((expectsReply(info) && !answersUser(info)) || info.role === 'room' || (info.role === 'handoff' && info.resume !== true)) {
+    if ((expectsReply(info) && !answersUser(info)) || (rt.config?.coordinateTasks && rt.ownsWork?.(rt.selfOf(sessionId), info.work)) || info.role === 'room' || (info.role === 'handoff' && info.resume !== true)) {
       markExchangeTurn(sessionId, entry.turn)
     }
   }
@@ -612,7 +613,11 @@ export function install(rt) {
           const work = rt.workOf?.(source)
           if (!rt.ownsWork?.(rt.selfOf(id), work)) return answer(source, reply)
           const asker = rt.workAsker(work)
-          if (failure !== undefined || reason?.kind === 'aborted') return answer(asker, reply)
+          if (failure !== undefined || reason?.kind === 'aborted') {
+            rt.mekFailWork?.(work, 'failed')
+            return answer(asker, reply)
+          }
+          if (rt.mekSuspended?.(work)) return rt.holdWork(work, reply)
           if (rt.waitsWork(work)) return rt.holdWork(work, reply)
           // With what came back, the answer may pass what one message carries.
           const text = rt.answerText(work, reply, name)

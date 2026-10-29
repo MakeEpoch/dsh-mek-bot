@@ -16,7 +16,7 @@ export function noticeApprovals({ work, roster, shownSession, openSession, since
       told.add(entry.id)
       // Waiting before this window opened is no news: the sidebar shows it.
       if ((entry.at ?? 0) < since) continue
-      const place = entry.roomId ?? entry.sessionId
+      const place = entry.taskOwner ? roster.getSnapshot().byId[entry.taskOwner]?.sessionId : entry.roomId ?? entry.sessionId
       if (document.visibilityState === 'visible' && shownSession() === place) continue
       const { byId, roomsById } = roster.getSnapshot()
       const room = entry.roomId ? roomsById[entry.roomId] : undefined
@@ -26,7 +26,7 @@ export function noticeApprovals({ work, roster, shownSession, openSession, since
       })
       note.onclick = () => {
         window.focus()
-        openSession(entry.roomId ?? entry.botId)
+        openSession(entry.taskOwner ?? entry.roomId ?? entry.botId)
         note.close()
       }
     }

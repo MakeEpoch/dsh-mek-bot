@@ -22,7 +22,7 @@ const React = require('react'); const { createRoot } = require('react-dom/client
 const { act } = React
 let deleted=false
 let revision=1
-const roster = () => ({revision,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:[],agents:[],exchangeTurns:{},questions:{},views:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},work:{bots:{},rooms:{},approvals:[]}})
+const roster = () => ({revision,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:[],agents:[],tasks:[{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]}],exchangeTurns:{},questions:{},views:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},work:{bots:{},rooms:{},approvals:[]}})
 const fetch = async (url,options={}) => {
  if(url.endsWith('/feed')) return new Response(new ReadableStream({ start(controller) { options.signal?.addEventListener('abort',()=>controller.close(),{once:true}) } }))
  const {endpoint,payload} = JSON.parse(options.body)
@@ -48,6 +48,10 @@ const pause=()=>new Promise(resolve=>setTimeout(resolve,15))
 async function click(selector) {const node=document.querySelector(selector);if(!node) throw new Error(`Missing ${selector}`);await act(async()=>{node.focus();node.click();await pause()})}
 try {
  await act(async()=>{root.render(React.createElement(main.component));await pause()})
+ await click('[data-bot-id="main"]')
+ assert.equal(document.querySelector('.mek-task').dataset.taskState, 'needs_decision')
+ await click('.mek-task summary')
+ assert.match(document.querySelector('.mek-task-body').textContent, /Which project convention/)
  await click('[data-bot-id="delete"]')
  await click('[aria-label="View conversation details"]')
  const panel = document.querySelector('.bt-panel')

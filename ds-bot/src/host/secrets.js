@@ -239,6 +239,7 @@ export function install(rt) {
   const usage = name => `$${envName(name)} in bash, or $env:${envName(name)} in PowerShell`
 
   async function tell(botId, text) {
+    if (await rt.mekSecretNote?.(botId, text)) return
     if (rt.botOf(botId) === undefined) return
     await rt.deliver({ toId: botId, role: 'secret', text })
       .catch(error => rt.warn('ds-bot: secret note to %s failed: %s', botId, error))
@@ -457,6 +458,7 @@ export function install(rt) {
         status: 'pending',
         askedAt: now,
       })
+      rt.mekSecretRequested?.(list.at(-1), exec)
       trimRequests(list)
       await rt.save()
       exec.concludeTurn?.()

@@ -12,6 +12,14 @@ The Bot sidebar keeps upstream's **New**, existing Bots, groups and optional **D
 
 Bots have persistent identities, roles, models and memory, and can delegate work or discuss it in groups. The Agent row opens ordinary conversations using DSH's existing workspace navigation. Models, keys and permissions come from your DSH configuration. New Bots do not automatically send a greeting: pick a model and send a message yourself.
 
+## Tasks stay with the Bot you contacted
+
+Delegated work returns to its original contact. When Chief assigns a worker, the worker's questions go to Chief; Chief decides routine matters, asks you here only when necessary, and resumes the same task. Direct conversations you start with another Bot remain direct. Delegation cannot redirect you to the worker's chat. Group posts request a report back automatically.
+
+Returned work awaits review. The owner can request a revision on the same task, inspect verification evidence, and accept the task only after outstanding work and decisions are resolved. A collapsible task summary shows workers, questions, results and cancellation in the owner's conversation. Real tool approvals and secure credential cards also appear there; Bots cannot approve themselves or see secret values.
+
+The adapter persists task ownership, questions and outgoing results in `mek-bot/state.json`. Queued decisions survive restarts. Uncertain deliveries are reconciled against inboxes and durable history before retrying; an unreadable history stays explicitly uncertain. New ownership applies to new delegations; old upstream handoffs are not silently reclassified. Coordination is installed only by `mek.js`; the retained upstream entry keeps its original behavior.
+
 ## Install
 
 Verified with DSH **0.2.2-alpha.2**, Node.js 24 and current Chromium. The browser must support CSS `@scope`.
@@ -21,7 +29,7 @@ cd ds-bot
 npm ci
 npm run build
 npm pack --ignore-scripts
-dsh plugin --profile web add -w ./dsh-mek-bot-0.1.2.tgz
+dsh plugin --profile web add -w ./dsh-mek-bot-0.1.3.tgz
 ```
 
 Enable the bundle and restart DSH. Do not enable the original `ds-bot` bundle alongside it. Use a package archive for production, never a source link. Keep `autoInstallPeers: false` in the profile; the DSH loader supplies the optional host API peers. Do not install duplicate Cordis, scope, tools or LLM cores.

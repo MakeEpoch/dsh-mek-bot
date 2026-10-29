@@ -28,6 +28,7 @@ import { installLocale, t } from '../i18n.js'
 import { createLocale } from '../../../../app/ui/src/locale.js'
 import { watchDeletedSubjects } from './lifecycle.js'
 import { attachAgentActions } from './agent-actions.js'
+import { TaskProgress, TASK_CSS } from './tasks.jsx'
 import { GroupChat } from './group-chat.jsx'
 import { mountScene, sceneRoot, scopeCss } from './dom.js'
 
@@ -80,7 +81,7 @@ function TeamView({ ctx }) {
         </div>
       </aside>
       <main className="dsb-main dsb_centerCol">
-        {shown && <React.Fragment key={shown}><div className="dsb-head"><HeaderPill {...views} sessionId={shown} useSession={team.sessionHook(shown)} /></div>{roster.roomsById[shown] ? <GroupChat sessionId={shown} team={team} /> : <Chat sessionId={shown} team={team} />}</React.Fragment>}
+        {shown && <React.Fragment key={shown}><div className="dsb-head"><HeaderPill {...views} sessionId={shown} useSession={team.sessionHook(shown)} /></div><TaskProgress team={team} sessionId={shown} />{roster.roomsById[shown] ? <GroupChat sessionId={shown} team={team} /> : <Chat sessionId={shown} team={team} />}</React.Fragment>}
       </main>
       <Overlays {...views} /><ErrorToast {...views} />
     </div>
@@ -99,7 +100,7 @@ export function NativeBot({ ctx }) {
     return () => { dark.removeEventListener('change', paint); locale(); release() }
   }, [])
   return <div ref={root} className="mek-bot-scene" style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0, position: 'relative', contain: 'layout paint', isolation: 'isolate', overflow: 'hidden' }}>
-    <style>{scopeCss(STYLES + '\n.dsb-side-list{padding-top:10px}.dsb-side-foot{position:relative}.mek-bot-menu{position:absolute;left:4px;bottom:48px;min-width:180px}.dsb-main{height:100%}')}</style>
+    <style>{scopeCss(STYLES + TASK_CSS + '\n.dsb-side-list{padding-top:10px}.dsb-side-foot{position:relative}.mek-bot-menu{position:absolute;left:4px;bottom:48px;min-width:180px}.dsb-main{height:100%}')}</style>
     {ready && <TeamView ctx={ctx} />}
   </div>
 }

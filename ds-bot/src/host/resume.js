@@ -342,6 +342,7 @@ export function install(rt) {
     // The turn ended with what it said: the answer goes up the way a finished turn's
     // does, with the results that came back for it and the text it held. A work that
     // still waits for what it handed on keeps its part until that comes back.
+    if (rt.mekSuspended?.(workId)) return
     if (rt.waitsWork(workId)) {
       rt.holdWork(workId, said)
       return

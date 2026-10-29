@@ -54,6 +54,7 @@
 // in the model input. MOCK_LOG_TOOLS=1 records each request's tool names as toolNames.
 // Non-streaming requests with web_search_* tools are treated as native search, and
 // POST /api/web_search is an Ollama-shaped search API for the searchApis config.
+import { coordinationResponse } from './mek-coordination-responses.mjs'
 import { createServer } from 'node:http'
 import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync } from 'node:fs'
@@ -135,6 +136,10 @@ function decide(body) {
   const me = /You are (.+?), a Bot on the user's team/.exec(system)?.[1] ?? 'Bot'
   const isMain = system.includes('You are the Main Bot')
   const isRelay = system.includes('# Group chat relay')
+  if (process.env.MEK_MOCK_COORDINATION === '1') {
+    const coordinated = coordinationResponse({ messages, tools, me, isMain, text, tool, textOf })
+    if (coordinated) return coordinated
+  }
 
   // Summary requests: the Bot's handoff prompt, or the backend's own one when the
   // plugin did not rewrite it. The note names which, and quotes the latest user lines.

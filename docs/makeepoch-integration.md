@@ -26,6 +26,12 @@ Use `npm pack --ignore-scripts` and a content-hashed archive for production. Kee
 
 Uninstalling leaves team state and DSH history in place. Native visual scoping is not an access-control sandbox: normal DSH authentication and model/tool permissions still apply.
 
+## Task coordination
+
+`src/host/mek-coordination.js` is installed only by the downstream entry. It reuses upstream handoffs and delivery, adding a persistent original task owner, suspended decisions, structured results, revisions, acceptance and cancellation. Small optional hooks in tools/turns/resume/approvals/secrets/channel preserve upstream behavior without the adapter. `mek/tasks.jsx` adds collapsible native progress and reuses the real approval and credential cards in the owner's chat.
+
+Question resumes use a fresh delivery id with the same handoff id; revisions use a new handoff linked to the original task. Replies are retained before the handoff closes. Uncertain delivery is reconciled before replay; unreadable history remains unknown. Independent direct user turns do not inherit pending delegated work. The stable ownership prompt guides decisions; runtime checks enforce routing, ownership and completion prerequisites. Existing pre-adapter handoffs are not silently reassigned. See the [downstream task design](plans/2026-10-30-mek-task-ownership.md).
+
 ## Merge and verify upstream
 
 Keep `upstream` pointing to `https://github.com/Fei2411/DS-Bot.git` and `origin` to MakeEpoch. Fetch upstream, create an update branch from downstream main, merge the desired commit and resolve metadata, the small API/export seams and native build bindings. Update the pinned commit. Preserve upstream ancestry and source locations; do not replace them with a copied client implementation.

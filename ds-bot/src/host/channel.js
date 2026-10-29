@@ -55,6 +55,7 @@ export function install(rt) {
     }),
     exchangeTurns: state.exchangeTurns,
     questions: state.questions,
+    ...(rt.mekTasksView ? { tasks: rt.mekTasksView() } : {}),
     views: state.views ?? {},
     // Aside answers of each Bot's current part, newest first. Not part of the
     // model-visible history; earlier parts send their cards on their own pages.
@@ -151,6 +152,10 @@ export function install(rt) {
           await rt.loadSecrets()
           if (body.since === state.revision && (body.models === undefined || body.models === modelsKey())) return ok({ revision: state.revision, unchanged: true, ...live() })
           return ok({ ...view(), ...live() })
+        case 'task-cancel':
+          await rt.load()
+          if (!rt.mekCancelTask) return fail('Task coordination is not enabled', 'bot/invalid')
+          return ok(await rt.mekCancelTask(body.taskId))
         case 'models':
           await rt.catalog({ fresh: true })
           return ok({ modelsKey: modelsKey() })

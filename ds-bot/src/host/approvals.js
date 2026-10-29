@@ -17,11 +17,13 @@ export function install(rt) {
     const owner = sessionId === undefined ? undefined : rt.groupOwners.get(sessionId)
     const botId = owner?.botId ?? (sessionId === undefined ? undefined : rt.chatOwners.get(sessionId))
     if (botId === undefined) return next()
+    const taskOwner = rt.mekApprovalOwner?.(sessionId)
     const id = randomUUID()
     const entry = {
       id,
       sessionId,
       botId,
+      ...(taskOwner ? { taskOwner } : {}),
       ...(owner ? { roomId: owner.roomId } : {}),
       tool: String(request.toolName ?? ''),
       reason: String(request.reason ?? '').slice(0, 500),
@@ -34,7 +36,7 @@ export function install(rt) {
       pending.delete(id)
       rt.noteApproval?.(sessionId, undefined)
     }
-    if (owner === undefined) return Promise.resolve(next()).finally(settled)
+    if (owner === undefined && taskOwner === undefined) return Promise.resolve(next()).finally(settled)
     rt.yieldRoomTurn?.(sessionId)
     return new Promise((resolve) => {
       entry.answer = (outcome) => {
