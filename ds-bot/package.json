@@ -1,6 +1,6 @@
 {
   "name": "dsh-mek-bot",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Native DS-Bot components inside DSH with a collapsible Bot sidebar and team Agent entry",
   "keywords": [
     "dsh-plugin",

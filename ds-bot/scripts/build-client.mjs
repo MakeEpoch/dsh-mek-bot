@@ -32,6 +32,11 @@ export async function bundleClient() {
       setup(builder) {
         const local = join(PLUGIN, 'src/client/mek')
         builder.onResolve({ filter: /^react-dom$/ }, args => args.importer === join(local, 'portal.js') ? { path: 'react-dom', external: true } : { path: join(local, 'portal.js') })
+        const feedApi = resolve(PLUGIN, '../app/ui/src/api.js')
+        builder.onResolve({ filter: /api\.js$/ }, args => {
+          if (args.importer !== join(local, 'feed.js') && resolve(dirname(args.importer), args.path) === feedApi) return { path: join(local, 'feed.js') }
+          return undefined
+        })
         builder.onLoad({ filter: /\.js$/ }, args => {
           const upstreamView = args.path.startsWith(join(PLUGIN, 'src/client/')) && !args.path.startsWith(local)
             || args.path.startsWith(resolve(PLUGIN, '../app/ui/src/'))

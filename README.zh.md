@@ -45,7 +45,7 @@ cd ds-bot
 npm ci
 npm run build
 npm pack --ignore-scripts
-dsh plugin --profile web add -w ./dsh-mek-bot-0.2.0.tgz
+dsh plugin --profile web add -w ./dsh-mek-bot-0.2.1.tgz
 ```
 
 启用 bundle 后重启 DSH，不要同时启用原 `ds-bot` bundle。生产安装必须使用打包文件，禁止 `link:`、符号链接或直连开发源码。profile 保持 `autoInstallPeers: false`；宿主 API 由 DSH 加载器提供，不能安装第二份 Cordis、scope、tools 或 LLM 核心。

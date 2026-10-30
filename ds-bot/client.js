@@ -2166,20 +2166,20 @@ function useDockHold(sessionId, kind, requestId, actions, inline) {
 // src/client/sources.js
 function createSource(initial) {
   let value = initial;
-  const listeners3 = /* @__PURE__ */ new Set();
+  const listeners4 = /* @__PURE__ */ new Set();
   return {
     getSnapshot: () => value,
     subscribe: (listener) => {
-      listeners3.add(listener);
+      listeners4.add(listener);
       return () => {
-        listeners3.delete(listener);
+        listeners4.delete(listener);
       };
     },
     set(next) {
       const resolved = typeof next === "function" ? next(value) : next;
       if (resolved === value) return;
       value = resolved;
-      for (const listener of [...listeners3]) listener();
+      for (const listener of [...listeners4]) listener();
     }
   };
 }
@@ -7425,6 +7425,101 @@ function openFeed(onEvent) {
   };
 }
 
+// src/client/mek/feed.js
+var listeners2 = /* @__PURE__ */ new Set();
+var disconnect = null;
+function connectVisible(emit) {
+  let channel;
+  try {
+    const path = new URL("api/bot/feed", globalThis.document.baseURI).href;
+    channel = new BroadcastChannel(`dsh-mek-bot:feed:${path}`);
+  } catch {
+    return openFeed(emit);
+  }
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const peers = /* @__PURE__ */ new Map([[id, Date.now()]]);
+  let leader = null, stop = null, pending = null, closed = false;
+  const post = (value) => channel.postMessage({ ...value, from: id });
+  const elect = () => {
+    pending = null;
+    for (const [peer, at] of peers) if (peer !== id && Date.now() - at > 1e4) peers.delete(peer);
+    const next = [...peers.keys()].sort()[0];
+    if (next === leader) return;
+    stop?.();
+    stop = null;
+    leader = next;
+    if (leader === id) stop = openFeed((event, data) => {
+      if (closed || leader !== id) return;
+      emit(event, data);
+      post({ type: "event", event, data });
+    });
+    else emit("hello", {});
+  };
+  const schedule = () => {
+    clearTimeout(pending);
+    pending = setTimeout(elect, 100);
+  };
+  channel.onmessage = ({ data }) => {
+    if (closed || !data || typeof data.from !== "string" || data.from === id) return;
+    if (data.type === "join" || data.type === "presence") {
+      peers.set(data.from, Date.now());
+      if (data.type === "join") post({ type: "presence" });
+      schedule();
+    } else if (data.type === "leave") {
+      peers.delete(data.from);
+      schedule();
+    } else if (data.type === "event" && data.from === leader && typeof data.event === "string") emit(data.event, data.data);
+  };
+  post({ type: "join" });
+  schedule();
+  const heartbeat = setInterval(() => {
+    post({ type: "presence" });
+    elect();
+  }, 3e3);
+  return () => {
+    closed = true;
+    clearTimeout(pending);
+    clearInterval(heartbeat);
+    stop?.();
+    post({ type: "leave" });
+    channel.close();
+  };
+}
+function notify(listener, event, data) {
+  try {
+    listener(event, data);
+  } catch (error) {
+    console.warn("[dsh-mek-bot] feed listener", error);
+  }
+}
+function publish(event, data) {
+  for (const listener of [...listeners2]) notify(listener, event, data);
+}
+function followVisibility() {
+  if (listeners2.size > 0 && !globalThis.document.hidden) {
+    if (!disconnect) disconnect = connectVisible(publish);
+  } else if (disconnect) {
+    disconnect();
+    disconnect = null;
+  }
+}
+function openFeed2(onEvent) {
+  const listener = (event, data) => onEvent(event, data);
+  const alreadyConnected = disconnect !== null;
+  const first = listeners2.size === 0;
+  listeners2.add(listener);
+  if (first) globalThis.document.addEventListener("visibilitychange", followVisibility);
+  followVisibility();
+  if (alreadyConnected) queueMicrotask(() => {
+    if (listeners2.has(listener)) notify(listener, "hello", {});
+  });
+  return () => {
+    if (!listeners2.delete(listener)) return;
+    followVisibility();
+    if (listeners2.size === 0) globalThis.document.removeEventListener("visibilitychange", followVisibility);
+  };
+}
+
 // ../app/ui/src/team.js
 var import_react14 = require("react");
 var CATCH_UP_MS = 15e3;
@@ -7443,16 +7538,16 @@ function useSelect(source, selector) {
   return (0, import_react14.useSyncExternalStore)(source.subscribe, read);
 }
 function createBus() {
-  const listeners3 = /* @__PURE__ */ new Set();
+  const listeners4 = /* @__PURE__ */ new Set();
   return {
     on(listener) {
-      listeners3.add(listener);
+      listeners4.add(listener);
       return () => {
-        listeners3.delete(listener);
+        listeners4.delete(listener);
       };
     },
     emit(event, data) {
-      for (const listener of listeners3) listener(event, data);
+      for (const listener of listeners4) listener(event, data);
     }
   };
 }
@@ -7632,7 +7727,7 @@ function createTeam() {
       });
     };
     read();
-    const closeFeed = openFeed((event, data) => {
+    const closeFeed = openFeed2((event, data) => {
       if (READ_AGAIN.has(event)) read();
       onFeed(event, data);
     });
@@ -10177,19 +10272,19 @@ var FOLDER_CSS = `
 var import_react24 = require("react");
 var POLL_MS = 3e4;
 var shared = null;
-var listeners2 = /* @__PURE__ */ new Set();
-function publish(view) {
+var listeners3 = /* @__PURE__ */ new Set();
+function publish2(view) {
   shared = view;
-  for (const listener of listeners2) listener(view);
+  for (const listener of listeners3) listener(view);
 }
 function useSchedules(actions) {
   const [view, setView] = (0, import_react24.useState)(shared);
   (0, import_react24.useEffect)(() => {
-    listeners2.add(setView);
+    listeners3.add(setView);
     let stopped = false;
     let timer;
     const load = () => actions.schedules?.().then((next) => {
-      if (!stopped) publish(next);
+      if (!stopped) publish2(next);
     }).catch(() => {
     }).finally(() => {
       if (!stopped) timer = setTimeout(load, POLL_MS);
@@ -10198,7 +10293,7 @@ function useSchedules(actions) {
     return () => {
       stopped = true;
       clearTimeout(timer);
-      listeners2.delete(setView);
+      listeners3.delete(setView);
     };
   }, []);
   return view;
@@ -10406,7 +10501,7 @@ function SchedulesPage({ roster, actions, start }) {
   if (view === null) return (0, import_react24.createElement)("div", { className: "bt-set-hint" }, t("Loading…"));
   if (!view.available) return (0, import_react24.createElement)(AutomationOff, { actions });
   const shown = (next) => {
-    publish(next);
+    publish2(next);
     setAdding(false);
   };
   const byChat = [
@@ -10419,7 +10514,7 @@ function SchedulesPage({ roster, actions, start }) {
       "section",
       { key: id, className: "bt-set-section" },
       (0, import_react24.createElement)("h3", { className: "bt-task-head" }, avatar, name),
-      (0, import_react24.createElement)("div", { className: "bt-set-card" }, tasks.map((task) => (0, import_react24.createElement)(TaskRow, { key: task.id, task, actions, roster, onView: publish })))
+      (0, import_react24.createElement)("div", { className: "bt-set-card" }, tasks.map((task) => (0, import_react24.createElement)(TaskRow, { key: task.id, task, actions, roster, onView: publish2 })))
     ))
   ];
 }
@@ -10440,7 +10535,7 @@ function BotSchedules({ bot, roster, actions }) {
         (0, import_react24.createElement)("span", { className: "bt-set-copy" }, (0, import_react24.createElement)("span", { className: "bt-set-hint" }, t("Switch on Automation tasks on the Plugins page in Harness settings."))),
         actions.openHarnessSettings ? (0, import_react24.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: actions.openHarnessSettings }, t("Open Harness settings")) : null
       ) : [
-        ...tasks.map((task) => (0, import_react24.createElement)(TaskRow, { key: task.id, task, actions, roster, onView: publish })),
+        ...tasks.map((task) => (0, import_react24.createElement)(TaskRow, { key: task.id, task, actions, roster, onView: publish2 })),
         (0, import_react24.createElement)("button", { key: "new", type: "button", className: "bt-set-row bt-bs-row bt-gs-add", onClick: () => actions.openSettings("schedules", bot.id) }, (0, import_react24.createElement)(PlusIcon), t("New task"))
       ]
     )
@@ -19168,7 +19263,7 @@ function TeamOverview({ team, ctx, initialTab = "activity", onClose }) {
     }
   };
   const tabs = [["activity", "Activity", "近况"], ["tasks", "Tasks", "任务"], ["knowledge", "Knowledge", "知识"], ["workflows", "Workflows", "流程"], ["policies", "Behavior", "行为"], ["browser", "Browser", "浏览器"]];
-  const notify = async () => {
+  const notify2 = async () => {
     if (typeof Notification !== "function") {
       setError(copy2("Notifications are not supported in this browser.", "此浏览器不支持系统通知。"));
       return;
@@ -19180,7 +19275,7 @@ function TeamOverview({ team, ctx, initialTab = "activity", onClose }) {
     setTab(id);
     setError("");
     setSuccess("");
-  } }, copy2(en, zh)))), /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-overview-content", "aria-busy": busy }, error && /* @__PURE__ */ import_react52.default.createElement("p", { role: "alert" }, error), success && /* @__PURE__ */ import_react52.default.createElement("p", { role: "status" }, success), tab === "activity" && /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement(TeamActivity, { roster, mutate }), /* @__PURE__ */ import_react52.default.createElement("button", { onClick: () => void notify() }, copy2("Enable browser notifications", "启用浏览器通知"))), tab === "tasks" && /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement("h2", null, copy2("Task ledger", "任务台账")), /* @__PURE__ */ import_react52.default.createElement(TaskProgress, { team, ctx, all: true })), tab === "knowledge" && /* @__PURE__ */ import_react52.default.createElement(Knowledge, { roster, mutate }), tab === "workflows" && /* @__PURE__ */ import_react52.default.createElement(Workflows, { roster, mutate }), tab === "policies" && /* @__PURE__ */ import_react52.default.createElement(Policies, { roster, mutate }), tab === "browser" && /* @__PURE__ */ import_react52.default.createElement(BrowserWorkspace, { roster })));
+  } }, copy2(en, zh)))), /* @__PURE__ */ import_react52.default.createElement("div", { className: "mek-overview-content", "aria-busy": busy }, error && /* @__PURE__ */ import_react52.default.createElement("p", { role: "alert" }, error), success && /* @__PURE__ */ import_react52.default.createElement("p", { role: "status" }, success), tab === "activity" && /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement(TeamActivity, { roster, mutate }), /* @__PURE__ */ import_react52.default.createElement("button", { onClick: () => void notify2() }, copy2("Enable browser notifications", "启用浏览器通知"))), tab === "tasks" && /* @__PURE__ */ import_react52.default.createElement(import_react52.default.Fragment, null, /* @__PURE__ */ import_react52.default.createElement("h2", null, copy2("Task ledger", "任务台账")), /* @__PURE__ */ import_react52.default.createElement(TaskProgress, { team, ctx, all: true })), tab === "knowledge" && /* @__PURE__ */ import_react52.default.createElement(Knowledge, { roster, mutate }), tab === "workflows" && /* @__PURE__ */ import_react52.default.createElement(Workflows, { roster, mutate }), tab === "policies" && /* @__PURE__ */ import_react52.default.createElement(Policies, { roster, mutate }), tab === "browser" && /* @__PURE__ */ import_react52.default.createElement(BrowserWorkspace, { roster })));
 }
 var OVERVIEW_CSS = `.mek-overview{display:flex;flex-direction:column;height:100%;min-height:0;max-width:1100px;width:100%;margin:auto;color:var(--bt-ink);font:13px/18px var(--bt-font, system-ui)}.mek-overview header{display:flex;justify-content:space-between;align-items:center;padding:16px 24px}.mek-overview h1{font-size:17px;line-height:24px;margin:0;font-weight:500}.mek-overview h2{font-size:15px;line-height:20px;margin:0 0 12px;font-weight:600}.mek-overview h3{font-size:13px;font-weight:600;margin:24px 0 12px}.mek-overview nav{display:flex;gap:4px;border-bottom:1px solid var(--bt-line);padding:0 24px 8px;overflow:auto}.mek-overview button,.mek-overview select,.mek-overview input,.mek-overview textarea{font:inherit;color:var(--bt-ink);border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-card);min-height:32px;box-sizing:border-box}.mek-overview button{padding:6px 12px;cursor:pointer}.mek-overview button:hover{background:var(--bt-hover)}.mek-overview button:disabled{cursor:default;opacity:.5}.mek-overview nav [aria-current]{background:var(--bt-active);border-color:var(--bt-line-2)}.mek-overview input,.mek-overview textarea,.mek-overview select{padding:6px 8px;width:100%}.mek-overview input[type=checkbox]{width:16px;min-height:16px;margin:0;accent-color:var(--bt-accent)}.mek-overview-content{overflow:auto;flex:1;padding:20px 24px 32px;min-height:0}.mek-overview label{display:flex;flex-direction:column;gap:6px;margin:8px 0}.mek-overview textarea{resize:vertical}.mek-overview p{margin:8px 0 16px;white-space:pre-wrap;overflow-wrap:anywhere}.mek-overview form{margin:12px 0 20px}.mek-overview details{margin:12px 0}.mek-overview summary{cursor:pointer;padding:8px 0;min-height:28px}.mek-form-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:12px 0}.mek-form-row>label{flex:1;min-width:140px;margin:0}.mek-form-row>input{flex:1;min-width:160px}.mek-form-row>select{width:auto}.mek-check{flex-direction:row!important;align-items:center;gap:8px!important;min-height:32px}.mek-event{padding:12px 16px;border:1px solid var(--bt-line);border-radius:12px;margin:8px 0;background:var(--bt-card)}.mek-event[data-attention]{border-inline-start:3px solid var(--bt-accent)}.mek-event>div{display:flex;gap:12px;flex-wrap:wrap}.mek-event span,.mek-event time,.mek-event small{color:var(--bt-ink-2);font-size:12px}.mek-event time{margin-left:auto}.mek-overview [role=alert]{color:var(--bt-danger, var(--bt-accent))}.mek-overview :is(button,input,select,textarea):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-overview-entry{display:block;width:calc(100% - 16px);margin:8px;border:1px solid var(--bt-line);border-radius:10px;background:var(--bt-card);color:var(--bt-ink);min-height:36px;font:13px var(--bt-font, system-ui);cursor:pointer}.mek-overview-entry[aria-pressed=true]{background:var(--bt-active)}.dsb-frame[data-rail] .mek-overview-entry{font-size:18px;min-width:28px;width:32px;margin:8px auto}.mek-overview-entry:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}@media(max-width:700px){.mek-overview header,.mek-overview-content{padding:12px}.mek-overview nav{padding-left:12px;padding-right:12px}.mek-overview header button{max-width:140px}}`;
 
@@ -19342,7 +19437,7 @@ function NativeBot({ ctx, requests }) {
 // src/client/approval-notices.js
 function noticeApprovals({ work, roster, shownSession, openSession, since = Date.now() }) {
   const told = /* @__PURE__ */ new Set();
-  const notify = () => {
+  const notify2 = () => {
     const approvals = work.getSnapshot().approvals ?? [];
     for (const id of told) {
       if (!approvals.some((entry) => entry.id === id)) told.delete(id);
@@ -19367,8 +19462,8 @@ function noticeApprovals({ work, roster, shownSession, openSession, since = Date
       };
     }
   };
-  notify();
-  return work.subscribe(notify);
+  notify2();
+  return work.subscribe(notify2);
 }
 
 // src/client/mek/notifications.js
@@ -19431,7 +19526,7 @@ function startNativeNotices({ show: show2, shownSession = () => null }) {
       if (pending === controller) pending = null;
     }
   };
-  const stopFeed = openFeed((event) => {
+  const stopFeed = openFeed2((event) => {
     if (["hello", "revision", "live"].includes(event)) void refresh();
   });
   const timer = setInterval(() => void refresh(), 15e3);
