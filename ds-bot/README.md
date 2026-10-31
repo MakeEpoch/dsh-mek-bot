@@ -4,7 +4,9 @@ MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多
 
 本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.4**，已合并上游 **v0.2.4**；逐版本的吸收情况见[上游合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)。
 
-![DSH 中的 Bot 界面；本地假模型演示](https://raw.githubusercontent.com/MakeEpoch/dsh-mek-bot/main/docs/images/mek-bot.png)
+![dsh-mek-bot 0.2.4：顶部 Bot 导航、任务摘要与 Bot 详情](https://raw.githubusercontent.com/MakeEpoch/dsh-mek-bot/main/docs/images/mek-bot-0.2.4.png)
+
+截图于 2026-10-31，来自 DSH 0.2.2-alpha.2 中安装的 dsh-mek-bot 0.2.4；使用隔离环境和本地模拟模型，展示顶部导航、负责人任务摘要与 Bot 详情。
 
 ## 项目提供什么
 
