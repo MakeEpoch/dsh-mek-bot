@@ -1,42 +1,99 @@
 # dsh-mek-bot
 
-[中文](README.zh.md) · [Upstream DS-Bot](https://github.com/Fei2411/DS-Bot)
+MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多 Bot 协作插件**。在现有 DeepSeek Harness 工作区中组织长期助手：由一个 Bot 接收需求，调用其他 Bot 分工处理，收集问题和结果，再审查、返工并向用户交付。
 
-MakeEpoch's DS-Bot integration for DeepSeek Harness. One **Bot** sidebar entry opens native React components from DS-Bot in the current DSH page. The Bot interface does not boot another DSH application or use an iframe.
+本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.4**，已合并上游 **v0.2.4**；逐版本的吸收情况见[上游合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)。
 
-![Native Bot interface in DSH; local mock-model example](https://raw.githubusercontent.com/MakeEpoch/dsh-mek-bot/main/docs/images/mek-bot.png)
+![DSH 中的 Bot 界面；本地假模型演示](https://raw.githubusercontent.com/MakeEpoch/dsh-mek-bot/main/docs/images/mek-bot.png)
 
-## Use
+## 项目提供什么
 
-The top navigation lists Bots, groups and the optional **DSH Agent**. Select a conversation to open it; select it again to toggle its details. The top-right menu contains New, Usage, Connectors and Bot settings. Details appear beside the chat when space permits and cover it inside the Bot pane on narrow layouts. DSH's own sidebar keeps its normal collapse and expand controls. Deleting the current Bot or group returns to an available conversation and closes obsolete overlays. Logout, scheduled-task controls and the Agent-mode switch are omitted from this Bot surface; DSH's own interface remains available.
+- **长期 Bot 团队**：为每个 Bot 配置名字、职责、指令、模型、工作目录和记忆；上下文轮换时身份保持不变，历史仍可查询。
+- **单聊与群聊**：可以直接找某个 Bot，也可以由 Bot 委派任务、组织群聊讨论。对话和执行沿用 DSH Session，不另外实现一套 Agent 运行时。
+- **负责人交付闭环**：用户最初联系的 Bot 持有任务，执行 Bot 的问题和结果回到这里；结果经过检查与验收后再交付。
+- **团队运营**：集中查看任务和重要动态，配置执行策略、共享摘要、项目事实与可复用流程。
+- **融入现有 DSH**：保留宿主导航及其他插件，Bot 界面在自己的面板内渲染；模型、密钥和授权继续使用已有配置。
 
-Bots have persistent identities, roles, models and memory, and can delegate work or discuss it in groups. The Agent row opens ordinary conversations using DSH's existing workspace navigation. Models, keys and permissions come from your DSH configuration. New Bots do not automatically send a greeting: pick a model and send a message yourself.
+长期身份、记忆、群聊、Bot 间通信、浏览器和基础文档能力来自上游。本项目重点增加插件共存方式、固定任务归属、决策回流、结构化验收和团队运营；不把上游原有功能都归为 fork 新增。
 
-## Tasks stay with the Bot you contacted
+## 与上游有什么不同
 
-Delegated work returns to its original contact. When Chief assigns a worker, the worker's questions go to Chief; Chief decides routine matters, asks you here only when necessary, and resumes the same task. Direct conversations you start with another Bot remain direct. Delegation cannot redirect you to the worker's chat. Group posts request a report back automatically.
+对照范围为当前合并的上游 **v0.2.4**。上游本身也支持插件与委派，下面列的是本项目的接入选择和扩展。
 
-Returned work awaits review. The owner can request a revision on the same task, inspect verification evidence, and accept the task only after outstanding work and decisions are resolved. A collapsible task summary shows workers, questions, results and cancellation in the owner's conversation. Real tool approvals and secure credential cards also appear there; Bots cannot approve themselves or see secret values.
+### 前端交互
 
-The adapter persists task ownership, questions and outgoing results in `mek-bot/state.json`. Queued decisions survive restarts. Uncertain deliveries are reconciled against inboxes and durable history before retrying; an unreadable history stays explicitly uncertain. New ownership applies to new delegations; old upstream handoffs are not silently reclassified. Coordination is installed only by `mek.js`; the retained upstream entry keeps its original behavior.
+| 方面 | 上游 DS-Bot | 本项目 |
+|---|---|---|
+| 产品形态 | 提供独立桌面、移动端及 DSH 插件 | 只交付 DSH 插件；保留的 `app/`、`mobile/` 是共享源码及上游参考 |
+| 导航布局 | Bot 模式的全局界面与 Bot 侧栏 | DSH 左侧只加一个 Bot 入口，Bot、群聊和可选 Agent 放在顶部导航 |
+| 详情面板 | 配合上游 Bot 侧栏布局 | 再次点击当前对话切换 Bot 详情；宽屏并排，窄屏在 Bot 面板内覆盖聊天 |
+| 宿主共存 | 上游客户端入口管理全局 Bot 界面 | 原生 React 组件接入公开 slots，CSS、弹窗和坐标限定在 Bot 面板内；无 iframe、无第二套 DSH |
+| Agent 与设置 | 提供 Bot/Agent 模式切换及账户、计划任务入口 | Agent 从顶部列表打开 DSH 普通会话；不增加外层 Agent 菜单，Bot 内隐藏登出、模式切换及计划任务控件，自动化由 DSH 管理 |
+| 任务可见性 | 已有运行及委派进度 | 负责人对话内增加任务摘要、待决问题、结果、取消及真实授权/凭据卡；团队概况集中查看历史和产物 |
+| 状态恢复 | 使用上游的会话与界面状态 | 每个标签页恢复 Bot 面板和所选 Bot/群聊；按 Bot 身份找到最新会话段，显式 DSH 会话链接优先；删除对象后清理失效面板并切换到可用对话 |
 
-## Team operations
+**当前 Bot 面板未接入 DSH 原生会话右侧栏。** 上表的“详情面板”是 Bot 自己的详情。通过宿主主会话挂载文件/终端侧栏的方案暂不实施。
 
-**Bot settings → Team overview** brings task history, important activity, policies, project facts and reusable workflows together.
+### 底层协作逻辑
 
-- **Supervisor awareness:** choose a supervisor and per-Bot summary sharing. Explicit task summaries are shared by default; routine progress is recorded without a supervisor call, while blockers, failures and essential decisions receive deduplicated notices. Direct department work retains its owner. Private transcripts are not harvested. Notifications and sharing are separate controls; already-delivered history cannot be revoked.
-- **Reliable delivery:** state transitions and outgoing messages persist together. Delegated groups track each member through questions, approvals, delayed results and revisions. Failed, cancelled or uncertain work cannot pass as success. Declared criteria require individual evidence before acceptance. Task artifacts open from their producing session.
-- **Execution policy:** select general, coding or custom responsibilities and disabled tools per Bot; set task parallelism, revision, deadline and token limits. Limits apply before the next model request or tool dispatch; in-flight output may exceed a token limit. Missing provider usage stays unknown; external service prices are not estimated.
-- **Resource coordination:** recognized workspace writers, browser tools and explicitly bound account tools claim exclusive resources. Stale leases remain exclusive until released. This is cooperative coordination, not a sandbox for arbitrary shell commands, background processes or external clients. Use separate workspaces/accounts when isolation is required.
-- **Project facts:** users define sharing scopes; members deliberately submit sourced, versioned facts. Conflicts remain visible until resolved, old versions remain available, and expiry is explicit. Private memory and credentials are not auto-imported.
-- **Reusable workflows:** save inputs, instructions and acceptance checks; complete and accept a validation run before activating that version. Edits create new drafts. Runs reuse the task coordinator; scheduled execution uses existing DSH automation without a second Bot scheduling menu.
-- **Browser observation and takeover:** inspect an already-open Bot browser, explicitly take control and return it. Bot input pauses during human control. Observation never launches a browser. An available browser capability is required; password fields are masked in screenshots and input text is not added to task records.
+| 方面 | 上游已有行为 | 本项目的扩展或约束 |
+|---|---|---|
+| Bot 间委派 | `message_bot` 可触发其他 Bot，默认结果回发起方，也支持 `reply_to: user` 让执行 Bot 在自己的窗口直答用户 | 在本项目入口强制委派结果回发起方，拒绝 `reply_to: user`；原始用户联系者保持任务负责人 |
+| 执行中遇到问题 | 已有提问、消息、handoff 和回传机制 | 委派中的 `ask_user` 转给负责人并挂起原工作；负责人处理常规选择，必要时在自己的对话问用户，再恢复同一子任务 |
+| 子任务完成 | 上游执行并汇总委派结果 | 执行 Bot 用 `report_bot_task` 返回状态、结果、验证证据和产物，完成报告进入待审状态，不能自行把整项任务验收为成功 |
+| 返工和最终验收 | 沿用上游任务传递底座 | `revise_bot_task` 在同一根任务下创建新尝试；只有负责人能 `finish_bot_task`，未结工作、问题、失败、未知送达和缺失证据会阻止验收 |
+| 群聊协作 | 群聊讨论、@成员及结果回传 | 经 `post_to_group` 委派的工作自动要求回报并跟踪成员；讨论轮次结束不等于整个任务完成 |
+| 重启与重复投递 | 上游已有持久 handoff、结果保留及命名请求去重 | 额外持久化根任务、问题和待发消息，恢复时核对收件箱和持久历史；不能确认送达时保留“不确定”，不盲目重复 |
+| 团队知情 | 已有团队、群组和记忆 | 增加可控的任务摘要共享与重要事件通知；主助理知情不会改变直接联系 Bot 的任务归属，也不会自动读取私聊原文 |
+| 执行与数据边界 | 使用 DSH 模型和工具服务 | 团队工具限制在团队会话；新增策略、资源协调、项目事实和流程校验；团队状态默认独立存于 `DSH_HOME/mek-bot` |
 
-Automated acceptance uses a local scripted model. It verifies system behavior, not real-model judgment or business correctness; evidence and unresolved issues remain available for review.
+这里的“主代理/子代理”主要指**负责人与执行 Bot**。它们是长期 Bot 之间的任务关系，不等同于 DSH 单个 Session 内的临时 subagent。上游 Main Bot 是拥有团队管理权限的角色；本项目任务负责人则是用户最初联系的 Bot，不要求它一定是 Main Bot。
 
-## Install
+## 主 Bot 如何调用其他 Bot 并收回结果
 
-Verified with DSH **0.2.2-alpha.2**, Node.js 24 and current Chromium. The browser must support CSS `@scope`.
+例如，你对主 Bot 说：“请让编程 Bot 修复问题，再请测试 Bot 验证。”
+
+1. 主 Bot 通过 `message_bot` 向编程 Bot 发送目标、上下文、约束和验收标准。执行 Bot 收到任务后运行；其结果会作为新消息唤醒发起方，无需持续轮询等待。
+2. 编程 Bot 遇到需要决定的问题，使用 `ask_user` 挂起当前子任务。问题先回负责人；负责人可自行判断的用 `answer_bot_question` 回答，必须由用户决定的仍在主 Bot 对话中询问。
+3. 编程 Bot 用 `report_bot_task` 回报完成、阻塞或失败，并附验证证据与产物。主 Bot 通过 `list_tasks`、`read_task` 检查结果，可继续委派测试 Bot 验证。
+4. 有遗漏时，主 Bot 用 `revise_bot_task` 要求修正，保留同一根任务及前后尝试的关联。群聊委派同样回到原负责人，不要求用户换窗口追踪。
+5. 子任务和问题全部解决、验收条件有证据后，负责人用 `finish_bot_task` 接受任务，在原对话交付结果与剩余限制；也可用 `cancel_bot_task` 取消尚未完成的任务。
+
+用户直接找编程 Bot 开始的对话仍然独立，不会自动归到主 Bot。真实工具授权及安全凭据请求必须由用户在对应卡片中处理，负责人不能代批，Bot 也看不到凭据值。已有的旧上游 handoff 不会被擅自重新归类，新归属机制从新的委派开始生效。
+
+这些规则同时由提示词和运行时状态、工具权限及验收检查支持。系统可以检查回报和证据是否齐全，但不保证真实模型一定正确执行或判断业务结果。
+
+## 团队协作与复用
+
+在 **Bot 设置 → 团队概况** 中集中查看任务历史、重要动态、执行策略、项目事实和复用流程。
+
+- **主助理知情**：选择主助理，按 Bot 开关摘要共享。默认共享明确登记的任务摘要；普通进展只记录，阻塞、失败或需要用户决定时发送去重通知。关闭通知仍可查询授权摘要；关闭共享后不能继续查询该 Bot 的摘要，已送达历史无法撤回。
+- **执行策略**：设置通用、编程或自定义职责及禁用工具，限制任务并发、返工次数、期限和 token 预算。预算在后续模型请求及工具调用前检查，正在生成的回复可能超过限额；服务商缺失用量保持未知，不估算费用。
+- **资源协调**：已识别的工作区写入、浏览器和显式绑定的账号工具先取得独占使用权；过期但未确认释放的资源仍保留占用。它不能隔离任意 shell、后台进程或未接入的外部客户端，真正隔离需使用独立工作区和账号。
+- **项目事实**：用户创建共享范围，成员主动提交带来源、版本和失效时间的事实；冲突保留待核实，旧版本可查，不自动汇入私聊记忆或凭据。
+- **复用流程**：保存输入、指令和验收标准，先完成并接受验证任务，再启用该版本；更新产生新草稿。运行复用任务协调器，定时触发使用 DSH 自动化。
+- **产物查看**：从任务查看来源会话中的文本、图片和文件，保留产物来源；预览和下载沿用宿主公开文件接口。
+- **浏览器观察与接管**：观察已打开的 Bot 浏览器，显式接管和归还；人工接管时暂停 Bot 输入。观察本身不新建浏览器，需要可用的浏览器能力；密码框在截图中遮盖，输入文本不写入任务记录。
+
+多标签页/多窗口通过共享 feed 与心跳选举减少重复长连接；不支持 BroadcastChannel 的浏览器退回每个可见页面一条流。群聊历史从持久化 Session 日志分页读取，不依赖给模型看的有限上下文。
+
+## 日常使用
+
+顶部导航选择 Bot、群聊或可选 DSH Agent；再次点击当前对话展开或关闭详情。右上角菜单提供新建、用量、连接器和 Bot 设置。删除当前 Bot 或群聊会清理过期弹层并回到可用对话，DSH 左侧栏保留原有开合行为。
+
+聊天支持选择、粘贴和拖拽图片，发送前可预览，也可只发图片；发送被拒绝时保留文字和图片。图片输入等共享能力不作为本 fork 独有功能宣传。
+
+模型、密钥和权限来自已有 DSH 配置。新 Bot 默认不会主动调用模型发欢迎消息，选择模型后自行开始聊天。模型调用使用所配置服务商的额度。
+
+## 当前能力边界
+
+上游 v0.2.4 的私有 Bot、Office 文档、技能建议、AGENTS.md 更新建议、群聊全部停止和 Deep View 代码已并入。私有 Bot 的工具/路径限制不构成系统级隔离；Office 在 DSH Web 中依赖额外运行环境，完整文档处理链路尚未验证；与独立 Deep View 插件共存也尚未实测。不要将“源码已合并”理解为所有部署环境都已验收，逐项状态见[版本合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)。
+
+自动化与隔离 DSH 验证使用本地脚本模型，只证明相应系统流程，不代表真实模型或实际业务必然正确。UI 的分层测试、用例及验收记录方式见 [UI 测试方案](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/dev/mek-ui-testing.md)。
+
+## 安装
+
+已验证 DSH **0.2.2-alpha.2**、Node.js 24 和当前 Chromium。浏览器需要支持 CSS `@scope`。
 
 ```sh
 cd ds-bot
@@ -46,9 +103,9 @@ npm pack --ignore-scripts
 dsh plugin --profile web add -w ./dsh-mek-bot-0.2.4.tgz
 ```
 
-Enable the bundle and restart DSH. Do not enable the original `ds-bot` bundle alongside it. Use a package archive for production, never a source link. Keep `autoInstallPeers: false` in the profile; the DSH loader supplies the optional host API peers. Do not install duplicate Cordis, scope, tools or LLM cores.
+启用 bundle 后重启 DSH，不要同时启用原 `ds-bot` bundle。生产安装必须使用打包文件，禁止 `link:`、符号链接或直连开发源码。profile 保持 `autoInstallPeers: false`；宿主 API 由 DSH 加载器提供，不能安装第二份 Cordis、scope、tools 或 LLM 核心。
 
-Browser support includes the optional Playwright dependency and requires a local Chromium/Chrome executable. For example on Linux, adjust the executable path to your installation:
+浏览器功能随包提供可选 Playwright 依赖；启用前需本机 Chromium/Chrome。Linux 示例（按实际安装路径调整）：
 
 ```yaml
 - id: mek-bot
@@ -58,17 +115,24 @@ Browser support includes the optional Playwright dependency and requires a local
     browserExecutablePath: /usr/bin/google-chrome
 ```
 
-A service restart closes in-process browsers. Per-Bot login profiles remain; interrupted browser handoffs become blocked results for their original owner and require an explicit retry instead of automatic browser action replay.
+服务重启会关闭进程内浏览器。登录资料保留在各 Bot 独立目录；等待交接的任务会明确转为阻塞并回报负责人，需确认后重开，不会自动重复网页操作。
 
-## Data and boundaries
+## 数据与配置
 
-Team state is saved under `DSH_HOME/mek-bot`, separately from upstream's `DSH_HOME/bot`. Session history stays in DSH. Uninstalling leaves both in place. The bundle does not change global search, presets or native chat settings, and team tools are active only for team-owned sessions.
+团队数据默认在 `DSH_HOME/mek-bot`，与上游的 `DSH_HOME/bot` 分开；聊天历史仍由 DSH Session 服务保存，卸载不会删除这些数据。可在当前用户的 `cordis.patch.yml` 中设置：
 
-The native adapter scopes Bot CSS, portals, DOM reads and popup coordinates to its own pane. It does not replace browser globals or patch DSH. Bot dialogs reuse upstream components; group history pages the durable Session log rather than the bounded model-context log.
+```yaml
+- id: mek-bot
+  config:
+    mainName: 小音
+    mainRole: 主助手
+```
 
-## Develop and update upstream
+插件不改 DSH 源码、全局搜索、预设或原生聊天设置。团队工具只对团队拥有的会话生效。Bot 的 CSS、弹窗、DOM 读取与坐标限定在自己的面板内，不替换浏览器全局对象，不重复加载其他 DSH 插件。群聊记录从持久化 Session 日志分页读取，不依赖给模型看的有限上下文日志。
 
-The original source layout, Apache license and public Git ancestry are retained. The baseline is pinned in [.makeepoch/upstream.json](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/.makeepoch/upstream.json). Development dependencies are installed independently in `ds-bot/dev/harness`.
+## 开发与文档维护
+
+保留上游目录、Apache 许可证和公开 Git 历史，基线见 [.makeepoch/upstream.json](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/.makeepoch/upstream.json)。插件入口是 `ds-bot/mek.js`，原生界面位于 `ds-bot/src/client/mek/`，任务协调和团队运营位于 `ds-bot/src/host/mek-*.js`。保留的上游入口不安装本项目协调扩展。
 
 ```sh
 cd ds-bot
@@ -80,8 +144,14 @@ node scripts/build-client.mjs --check
 npm run lint
 ```
 
-See [fork characteristics, upstream differences and documentation requirements](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md), [integration boundaries and merge procedure](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/makeepoch-integration.md), and the [UI test plan](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/dev/mek-ui-testing.md). New features and changed flows must update their documentation in the same change. The retained desktop/Docker code is upstream reference material, not this plugin's release entry. Original documentation remains in [README.upstream.md](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/README.upstream.md).
+项目介绍、当前特性和上下游差异统一维护在本中文版 README；`ds-bot/README.md` 是安装包内的同步副本，`README.zh.md` 仅保留兼容链接。新增功能或改变交互、权限、持久化及恢复行为，必须在同一改动中更新这里及相关集成/设计文档；界面变化同步更新 UI 测试矩阵，合并上游则更新版本记录。
 
-## License
+- [上游版本与合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)：每个版本上游改了什么、本项目采用什么、保留什么及验证状态。
+- [集成边界](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/makeepoch-integration.md)：宿主职责、适配位置、运行及恢复约束。
+- [任务所有权设计](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/plans/2026-10-30-mek-task-ownership.md)、[团队运营设计](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/plans/2026-10-30-mek-team-operations.md)：底层机制与契约。
+- [UI 测试方案](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/dev/mek-ui-testing.md)：组件、真实浏览器、隔离 DSH 和安装包的验证层次。
+- [上游原始说明](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/README.upstream.zh.md)：保留上游介绍，不作为本项目功能与验收声明。
 
-[Apache-2.0](LICENSE), with [upstream and third-party notices](NOTICE) preserved. This is an independent community integration, not an official DeepSeek product.
+## 许可证
+
+继承上游 **Apache-2.0**，保留 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。本项目是独立社区集成，与 DeepSeek 官方无隶属关系。
