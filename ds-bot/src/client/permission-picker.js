@@ -2,7 +2,7 @@ import { createElement as h, useEffect, useRef, useState } from 'react'
 import { Segmented } from './motion.js'
 import { t } from './i18n.js'
 
-const LABELS = { 'read-only': 'Read only', 'workspace-write': 'Workspace', 'danger-full-access': 'Full access' }
+const LABELS = { auto: 'Auto review', 'read-only': 'Read only', 'workspace-write': 'Workspace', 'danger-full-access': 'Full access' }
 const DANGER = new Set(['danger-full-access'])
 
 export const presetDanger = value => DANGER.has(value)

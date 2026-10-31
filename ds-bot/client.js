@@ -485,6 +485,15 @@ var ZH = {
   "Removes the Bot from the team.": "把这个 Bot 从团队里移除。",
   "Pick a model and {name} can start.": "选好模型，{name} 就能开始工作。",
   "Permissions": "权限",
+  "Current session permissions": "当前会话权限",
+  "Bot permissions across conversations": "Bot 跨会话权限",
+  "Applies to this chat, groups using this Bot’s permissions, and future conversations.": "应用到当前单聊、继承 Bot 权限的群聊和后续新会话。",
+  "Could not load session permissions": "无法加载当前会话权限",
+  "Loading session permissions…": "正在加载当前会话权限…",
+  "Set in DSH": "在 DSH 中设置",
+  "Unavailable": "不可用",
+  "Auto review": "自动审查",
+  "Retry": "重试",
   "Read only": "仅可查看",
   "Workspace": "工作区内修改",
   "Full access": "完全权限",
@@ -12453,7 +12462,7 @@ function VoiceMode({ sessionId, roster, actions, useSessions, useSessionStatus }
 
 // src/client/permission-picker.js
 var import_react35 = require("react");
-var LABELS = { "read-only": "Read only", "workspace-write": "Workspace", "danger-full-access": "Full access" };
+var LABELS = { auto: "Auto review", "read-only": "Read only", "workspace-write": "Workspace", "danger-full-access": "Full access" };
 var DANGER = /* @__PURE__ */ new Set(["danger-full-access"]);
 var presetDanger = (value) => DANGER.has(value);
 var presetName = (value, catalog) => LABELS[value] ? t(LABELS[value]) : catalog?.options?.find((option) => option.value === value)?.name ?? value;
@@ -17040,12 +17049,25 @@ var EMPTY_TABS = { ids: [], active: null };
 function PermissionRow({ bot, roster, actions, run: run2 }) {
   const catalog = roster.permissions;
   if (!catalog?.options?.length) return null;
+  const defaults = (0, import_react47.createElement)(PermissionPicker, { catalog, saved: bot.permission ?? catalog.defaultPreset, repick: bot.permission === void 0, onPick: (permission) => run2(actions.updateBot(bot.id, { permission })) });
+  if (actions.sessionPermission) return (0, import_react47.createElement)(
+    "div",
+    { className: "bt-drawer-permission" },
+    (0, import_react47.createElement)("div", { className: "bt-section-title" }, t("Current session permissions")),
+    actions.sessionPermission(currentPart(bot)),
+    (0, import_react47.createElement)(
+      "details",
+      { className: "mek-permission-defaults" },
+      (0, import_react47.createElement)("summary", null, t("Bot permissions across conversations")),
+      (0, import_react47.createElement)("div", { className: "bt-note" }, t("Applies to this chat, groups using this Bot’s permissions, and future conversations.")),
+      defaults
+    )
+  );
   return (0, import_react47.createElement)(
     "div",
     { className: "bt-drawer-permission" },
     (0, import_react47.createElement)("div", { className: "bt-section-title" }, t("Permissions")),
-    // A Bot without its own preset may run on another one set in DSH, so its first pick always applies.
-    (0, import_react47.createElement)(PermissionPicker, { catalog, saved: bot.permission ?? catalog.defaultPreset, repick: bot.permission === void 0, onPick: (permission) => run2(actions.updateBot(bot.id, { permission })) })
+    defaults
   );
 }
 function RunStats({ bot, part, running, actions }) {
@@ -20540,17 +20562,54 @@ function NativeQuestion({ ctx, sessionId }) {
   return /* @__PURE__ */ import_react59.default.createElement(NativeQuestionCard, { key: `${sessionId}:${pending.key}`, pending });
 }
 
-// src/client/mek/view.jsx
+// src/client/mek/permissions.jsx
 var import_react60 = __toESM(require("react"), 1);
+function PermissionValue({ source }) {
+  const value = (0, import_react60.useSyncExternalStore)(source.subscribe, source.getSnapshot);
+  return /* @__PURE__ */ import_react60.default.createElement("span", { className: "mek-session-permission-value" }, value?.currentValue ? presetName(value.currentValue) : t("Unavailable"));
+}
+function SessionPermissions({ ctx, sessionId }) {
+  const [attempt, setAttempt] = (0, import_react60.useState)(0);
+  const [state, setState] = (0, import_react60.useState)(null);
+  (0, import_react60.useEffect)(() => {
+    let active = true;
+    let reference;
+    setState(null);
+    try {
+      reference = ctx.sessions.retain(sessionId, { source: "mekBotPermissions" });
+      void reference.ready.then((binding) => {
+        if (active) setState({ source: binding.session.projections.faceOf("permissions") });
+      }, (error) => {
+        if (active) setState({ error });
+      });
+    } catch (error) {
+      setState({ error });
+    }
+    return () => {
+      active = false;
+      reference?.release();
+    };
+  }, [ctx, sessionId, attempt]);
+  if (state?.error) return /* @__PURE__ */ import_react60.default.createElement("div", { role: "alert", className: "bt-note" }, t("Could not load session permissions"), " ", /* @__PURE__ */ import_react60.default.createElement("button", { type: "button", className: "bt-soft-sm", onClick: () => setAttempt((value) => value + 1) }, t("Retry")));
+  const open = () => {
+    ctx.uiWorkspace.openSession(sessionId);
+    ctx.layout.selectPanel(null);
+  };
+  return /* @__PURE__ */ import_react60.default.createElement("div", { className: "mek-session-permissions" }, state?.source ? /* @__PURE__ */ import_react60.default.createElement(PermissionValue, { source: state.source }) : /* @__PURE__ */ import_react60.default.createElement("span", { className: "bt-note", role: "status" }, t("Loading session permissions…")), /* @__PURE__ */ import_react60.default.createElement("button", { type: "button", className: "mek-session-permission-open", disabled: !state?.source, onClick: open }, t("Set in DSH"), " ", /* @__PURE__ */ import_react60.default.createElement("span", { "aria-hidden": "true" }, "↗")));
+}
+var PERMISSION_CSS = `.mek-session-permissions{min-height:32px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.mek-session-permission-value{font-size:13px}.mek-session-permission-open{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:4px 10px;border:1px solid var(--bt-line);border-radius:999px;background:transparent;color:var(--bt-ink-2);font:inherit;font-size:12px;cursor:pointer}.mek-session-permission-open:hover:not(:disabled){background:var(--bt-hover);color:var(--bt-ink)}.mek-session-permission-open:disabled{opacity:.5;cursor:default}.mek-session-permission-open:focus-visible,.mek-permission-defaults summary:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-permission-defaults{margin-top:12px}.mek-permission-defaults>summary{cursor:pointer;color:var(--bt-ink-2);font-size:12px}.mek-permission-defaults .bt-note{margin:8px 0}`;
+
+// src/client/mek/view.jsx
+var import_react61 = __toESM(require("react"), 1);
 var STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS2 + HANDOFF_CSS + SIDE_CSS + app_default;
 function TeamView({ ctx, requests, viewport }) {
-  const team = (0, import_react60.useMemo)(() => {
+  const team = (0, import_react61.useMemo)(() => {
     const value = createTeam();
     value.actions.schedules = void 0;
     attachAgentActions(value, ctx);
     return value;
   }, [ctx]);
-  (0, import_react60.useEffect)(() => {
+  (0, import_react61.useEffect)(() => {
     const stopWatching = watchDeletedSubjects(team);
     const stopRemembering = rememberConversation(team);
     const stop = team.start();
@@ -20561,10 +20620,11 @@ function TeamView({ ctx, requests, viewport }) {
     };
   }, [team]);
   const { hooks, actions } = team;
+  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react61.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
   const shown = hooks.useShown((value) => value);
   const roster = hooks.useRoster((value) => value);
   const prefs = roster.prefs;
-  (0, import_react60.useEffect)(() => {
+  (0, import_react61.useEffect)(() => {
     const root = sceneRoot();
     if (!root) return;
     root.dataset.btMotion = prefs?.motion ?? "normal";
@@ -20572,7 +20632,7 @@ function TeamView({ ctx, requests, viewport }) {
     root.style.setProperty("--bt-msg-w", String(widthOf(prefs) / 100));
     root.style.setProperty("--bt-flat-w", String(flatWidthOf(prefs) / 100));
   }, [prefs]);
-  (0, import_react60.useEffect)(() => {
+  (0, import_react61.useEffect)(() => {
     if (!requests) return;
     const show2 = () => {
       const id = requests.getSnapshot();
@@ -20583,8 +20643,8 @@ function TeamView({ ctx, requests, viewport }) {
     show2();
     return requests.subscribe(show2);
   }, [team, requests]);
-  const OverviewPage = (0, import_react60.useMemo)(() => function OverviewPage2() {
-    return /* @__PURE__ */ import_react60.default.createElement(TeamOverview, { team, ctx, embedded: true });
+  const OverviewPage = (0, import_react61.useMemo)(() => function OverviewPage2() {
+    return /* @__PURE__ */ import_react61.default.createElement(TeamOverview, { team, ctx, embedded: true });
   }, [team, ctx]);
   const views = {
     ...hooks,
@@ -20592,18 +20652,18 @@ function TeamView({ ctx, requests, viewport }) {
     TeamOverview: OverviewPage,
     useFrame: (selector) => selector({ viewport, sidebarWidth: 0, collapsedWidth: 0 }),
     useSessions: (selector) => {
-      const host = (0, import_react60.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
+      const host = (0, import_react61.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
       return hooks.useSessions((own) => selector({ ...own, byId: Object.fromEntries([.../* @__PURE__ */ new Set([...Object.keys(host.byId), ...Object.keys(own.byId)])].map((id) => [id, { ...host.byId[id], retainedBy: {}, ...own.byId[id] }])) }));
     }
   };
   const themed = themeCss(allThemes()[prefs?.theme] ?? allThemes().deepseek, prefs?.accent);
-  return /* @__PURE__ */ import_react60.default.createElement(import_react60.default.Fragment, null, /* @__PURE__ */ import_react60.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react60.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react60.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react60.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react60.default.createElement(import_react60.default.Fragment, { key: shown }, /* @__PURE__ */ import_react60.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react60.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react60.default.createElement(TaskProgress, { team, ctx, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react60.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react60.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react60.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react60.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react60.default.createElement(ErrorToast, { ...views })));
+  return /* @__PURE__ */ import_react61.default.createElement(import_react61.default.Fragment, null, /* @__PURE__ */ import_react61.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react61.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react61.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react61.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react61.default.createElement(import_react61.default.Fragment, { key: shown }, /* @__PURE__ */ import_react61.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react61.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react61.default.createElement(TaskProgress, { team, ctx, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react61.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react61.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react61.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react61.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react61.default.createElement(ErrorToast, { ...views })));
 }
 function NativeBot({ ctx, requests }) {
-  const root = (0, import_react60.useRef)(null);
-  const [ready, setReady] = (0, import_react60.useState)(false);
-  const [viewport, setViewport] = (0, import_react60.useState)(0);
-  (0, import_react60.useLayoutEffect)(() => {
+  const root = (0, import_react61.useRef)(null);
+  const [ready, setReady] = (0, import_react61.useState)(false);
+  const [viewport, setViewport] = (0, import_react61.useState)(0);
+  (0, import_react61.useLayoutEffect)(() => {
     const release = mountScene(root.current);
     const measure = () => setViewport(root.current?.clientWidth ?? 0);
     const observer = new ResizeObserver(measure);
@@ -20622,7 +20682,7 @@ function NativeBot({ ctx, requests }) {
       release();
     };
   }, []);
-  return /* @__PURE__ */ import_react60.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react60.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS)), ready && /* @__PURE__ */ import_react60.default.createElement(TeamView, { ctx, requests, viewport }));
+  return /* @__PURE__ */ import_react61.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react61.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + PERMISSION_CSS)), ready && /* @__PURE__ */ import_react61.default.createElement(TeamView, { ctx, requests, viewport }));
 }
 
 // src/client/approval-notices.js
@@ -20732,7 +20792,7 @@ function startNativeNotices({ show: show2, shownSession = () => null }) {
 }
 
 // src/client/mek/index.jsx
-var import_react61 = __toESM(require("react"), 1);
+var import_react62 = __toESM(require("react"), 1);
 var inject = ["slots", "layout", "sessions", "uiWorkspace"];
 var PANEL = "mek-bot";
 function apply(ctx) {
@@ -20744,9 +20804,9 @@ function apply(ctx) {
     },
     shownSession: () => sceneRoot()?.querySelector("[data-mek-session]")?.dataset.mekSession ?? null
   }));
-  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react61.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react61.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react61.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
+  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react62.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react62.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react62.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
   ctx.slots.inject("main", () => {
-    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react61.default.createElement(NativeBot, { ctx, requests }));
+    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react62.default.createElement(NativeBot, { ctx, requests }));
     ctx.effect(() => rememberPanel(ctx.layout, PANEL));
   });
   ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));

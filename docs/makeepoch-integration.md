@@ -20,6 +20,8 @@ The Bot list stays in the top header. Navigation mode never reserves a left colu
 
 Small UI seams export existing Composer/GroupReplies/GroupMessage components and the standalone controller's refresh/state sources. The details pane tolerates detached cleanup and scoped CSS rules. Upstream defaults remain unchanged when a capability is present.
 
+`mek/permissions.jsx` retains only the displayed Bot part through public `ctx.sessions.retain` with its own reference source and reads the `permissions` projection. It releases its reference on teardown and ignores late acquisition results. The current-session permission entry explicitly opens that exact Session through public `uiWorkspace` navigation; native DSH owns the selector, catalog, experimental badge and risk confirmation. It neither executes `/permission auto` on the user’s behalf nor changes the Bot preset. Existing cross-session Bot permissions remain in a separately labelled disclosure with their original propagation behavior. DSH’s `conversation.input.permission` child slot has one declaration owner; redeclaring it breaks composition, and this version exposes no reusable public permission component. The abandoned embedding prototype was removed. This explicit navigation is independent of binding the Bot pane to DSH’s main conversation or adding its right sidebar.
+
 ## Host and installation
 
 `ds-bot/mek.js` wraps upstream `index.js`. Team state defaults to `DSH_HOME/mek-bot`. `team-registration.js` uses DSH 0.2.2's tool admission condition for team sessions; ordinary DSH sessions do not receive team tools. Optional browser tools use the same seam. `autoGreet: false` avoids automatic model greetings, and downstream automatic update checking is disabled.

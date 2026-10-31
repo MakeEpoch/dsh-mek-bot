@@ -39,10 +39,17 @@ const EMPTY_TABS = { ids: [], active: null }
 function PermissionRow({ bot, roster, actions, run }) {
   const catalog = roster.permissions
   if (!catalog?.options?.length) return null
+  // A Bot without its own preset may run on another one set in DSH, so its first pick always applies.
+  const defaults = h(PermissionPicker, { catalog, saved: bot.permission ?? catalog.defaultPreset, repick: bot.permission === undefined, onPick: permission => run(actions.updateBot(bot.id, { permission })) })
+  if (actions.sessionPermission) return h('div', { className: 'bt-drawer-permission' },
+    h('div', { className: 'bt-section-title' }, t('Current session permissions')),
+    actions.sessionPermission(currentPart(bot)),
+    h('details', { className: 'mek-permission-defaults' },
+      h('summary', null, t('Bot permissions across conversations')),
+      h('div', { className: 'bt-note' }, t('Applies to this chat, groups using this Bot’s permissions, and future conversations.')),
+      defaults))
   return h('div', { className: 'bt-drawer-permission' },
-    h('div', { className: 'bt-section-title' }, t('Permissions')),
-    // A Bot without its own preset may run on another one set in DSH, so its first pick always applies.
-    h(PermissionPicker, { catalog, saved: bot.permission ?? catalog.defaultPreset, repick: bot.permission === undefined, onPick: permission => run(actions.updateBot(bot.id, { permission })) }))
+    h('div', { className: 'bt-section-title' }, t('Permissions')), defaults)
 }
 
 // The current part's turns, speed, cache hits and context, for a window without DSH's
