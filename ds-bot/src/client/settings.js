@@ -2,7 +2,7 @@ import { createElement as h, useCallback, useEffect, useRef, useState } from 're
 import { ACCENT_INKS, INKS } from './inks.js'
 import { isMainOf } from './sources.js'
 import { MESSAGE_WIDTH, allThemes, flatWidthOf, layoutOf, thinkingShown, widthOf } from './themes.js'
-import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, ConnectorIcon, InfoIcon, PlugIcon, PlusIcon, SlidersIcon, SETTINGS_ICONS } from './icons.js'
+import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, ConnectorIcon, InfoIcon, PlugIcon, PlusIcon, SlidersIcon, PeopleIcon, SETTINGS_ICONS } from './icons.js'
 import { AdminStar, BotAvatar, RoomAvatar } from './mark.js'
 import { useEscape } from './overlay-hooks.js'
 import { BotSettingsForm, Switch } from './bot-settings.js'
@@ -27,7 +27,7 @@ const capitalize = word => word[0].toUpperCase() + word.slice(1)
 // their members, and one opens on its own settings form. Usage widens the dialog.
 // Models is there only in a window without DSH's own settings, which carry the providers.
 const SETTINGS_PAGES = [['general', 'General'], ['models', 'Models'], ['bots', 'Bots'], ['groups', 'Group chats'], ['connectors', 'Connectors'], ['capabilities', 'Capabilities'], ['browser', 'Browser'], ['schedules', 'Scheduled tasks'], ['usage', 'Usage'], ['secrets', 'Secrets'], ['feedback', 'Feedback'], ['about', 'About DS Bot']]
-const PAGE_ICONS = { ...SETTINGS_ICONS, models: SlidersIcon, connectors: ConnectorIcon, capabilities: PlugIcon, browser: ConnectorIcon, schedules: ClockIcon, secrets: KeyIcon, feedback: FeedbackIcon, about: InfoIcon }
+const PAGE_ICONS = { ...SETTINGS_ICONS, team: PeopleIcon, models: SlidersIcon, connectors: ConnectorIcon, capabilities: PlugIcon, browser: ConnectorIcon, schedules: ClockIcon, secrets: KeyIcon, feedback: FeedbackIcon, about: InfoIcon }
 
 function SetSection({ title, className = '', children }) {
   return h('section', { className: `bt-set-section ${className}`.trim() }, h('h3', null, title), h('div', { className: 'bt-set-card' }, children))
@@ -227,7 +227,7 @@ function GroupsPage({ roster, actions, run }) {
 }
 
 // While `leaving`, the dialog plays its exit and takes no input.
-export function SettingsDialog({ page, id, roster, actions, useUpdate, leaving = false }) {
+export function SettingsDialog({ page, id, roster, actions, useUpdate, TeamOverview, leaving = false }) {
   const [error, setError] = useState('')
   const close = useCallback(() => actions.closeSettings(), [])
   useEscape(close)
@@ -237,7 +237,7 @@ export function SettingsDialog({ page, id, roster, actions, useUpdate, leaving =
   // A Bot or group deleted while its form is open leaves its page on the list.
   const bot = page === 'bots' && id ? roster.byId[id] : undefined
   const room = page === 'groups' && id ? roster.roomsById[id] : undefined
-  const pages = SETTINGS_PAGES.filter(([key]) => (key !== 'models' || actions.providers !== undefined) && (key !== 'schedules' || actions.schedules !== undefined))
+  const pages = SETTINGS_PAGES.flatMap(entry => entry[0] === 'usage' && TeamOverview ? [entry, ['team', 'Team overview']] : [entry]).filter(([key]) => (key !== 'models' || actions.providers !== undefined) && (key !== 'schedules' || actions.schedules !== undefined))
   const shown = pages.some(([key]) => key === page) ? page : 'general'
   const usageFocus = shown === 'usage' && id ? id : null
   const label = t(pages.find(([key]) => key === shown)[1])
@@ -274,8 +274,9 @@ export function SettingsDialog({ page, id, roster, actions, useUpdate, leaving =
         h('div', { className: 'bt-settings-head' },
           back ? h('button', { type: 'button', className: 'bt-icon-btn', 'aria-label': back, title: back, onClick: () => actions.openSettings(shown) }, h(ChevronLeftIcon)) : null,
           h('h2', { key: bot?.id ?? room?.id ?? shown }, bot?.name ?? room?.name ?? label)),
-        shown === 'usage' ? null : h('div', { key: pageKey, className: 'bt-settings-scroll bt-settings-page', 'data-move': last.current.move },
+        shown === 'usage' ? null : h('div', { key: pageKey, className: `bt-settings-scroll bt-settings-page${shown === 'team' ? ' bt-settings-team' : ''}`, 'data-move': last.current.move },
           errorLine,
+          shown === 'team' ? h(TeamOverview) : null,
           shown === 'general' ? h(GeneralPage, { roster, actions, run }) : null,
           shown === 'models' ? h(ProvidersPage, { actions, run, Section: SetSection }) : null,
           bot ? h('div', { className: 'bt-settings-form' }, h(BotSettingsForm, { key: bot.id, bot, roster, actions, run })) : null,

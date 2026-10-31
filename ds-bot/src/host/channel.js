@@ -13,6 +13,12 @@ const LANGUAGES = { zh: 'Chinese (简体中文)', en: 'English' }
 const RUN_STATS = ['sessionStats', 'tokenUsage', 'contextPressure']
 
 const invalid = message => Object.assign(new Error(message), { code: 'bot/invalid' })
+export function promptContent(body) {
+  const text = String(body.text ?? '').trim()
+  const images = body.images ?? []
+  if (!Array.isArray(images) || images.some(image => !image || !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(image.mediaType) || typeof image.data !== 'string' || !image.data || (image.name !== undefined && typeof image.name !== 'string'))) throw invalid('Invalid image attachment.')
+  return [...images.map(({ mediaType, data, name }) => ({ type: 'image', mediaType, data, ...(name ? { name } : {}) })), ...(text ? [{ type: 'text', text }] : [])]
+}
 // Programming and file system errors are DS Bot's own faults, logged with their stack;
 // any other error is a refusal whose message is meant for the user.
 const isInternal = error => error instanceof TypeError || error instanceof ReferenceError || error instanceof RangeError
@@ -82,6 +88,7 @@ export function install(rt) {
     memory: rt.memoryEnabled !== false,
     // Set while another dsh host holds the team (store.js): why this one cannot change it.
     readOnly: rt.readOnly() ?? null,
+    imageLimits: ctx.get?.('attachments')?.imageLimits ?? null,
   })
   // What changes without a new revision, sent with every state answer. `memoryNews`:
   // per Bot or group chat, its latest memory change; `memoryReviews`: memory reviews waiting or
@@ -100,6 +107,7 @@ export function install(rt) {
   // Updates change the dsh profile, not the team, so a reading host may run them too.
   const READS = new Set(['state', 'models', 'efforts', 'providers', 'provider-models', 'earlier', 'chat', 'run-stats', 'room-progress', 'room-chat', 'exchange', 'exchange-text', 'file-text', 'usage', 'schedules', 'memory-view', 'browser-wait', 'browser-result', 'diagnostics', 'diagnostics-log', 'diagnostics-clear', 'update-check', 'update-install', 'dsh-update-install', 'repo-stars', 'approval-answer', 'thinking', 'avatar-library'])
   for (const endpoint of ['mek-task-list', 'mek-activity-list', 'mek-browser-state', 'mek-policy-view', 'mek-knowledge-list', 'mek-workflow-list', 'mek-resource-list']) READS.add(endpoint)
+  READS.add('image')
 
   function setPrefs(body) {
     if (body.theme !== undefined) {
@@ -221,6 +229,10 @@ export function install(rt) {
           if (typeof body.file?.attachmentId !== 'string') return fail('No file named', 'bot/invalid')
           const read = await rt.fileText(body.file)
           return read === undefined ? fail('This file cannot be read here', 'bot/unavailable') : ok(read)
+        }
+        case 'image': {
+          if (typeof body.sessionId !== 'string' || !body.sessionId || typeof body.attachment?.attachmentId !== 'string') return fail('No image named', 'bot/invalid')
+          return ok(await ctx.sessionController.attachment({ sessionId: body.sessionId, attachment: body.attachment }))
         }
         case 'earlier':
           await rt.load()
@@ -435,18 +447,18 @@ export function install(rt) {
           return ok(true)
         }
         case 'send': {
-          const text = String(body.text ?? '').trim()
-          if (text === '' || typeof body.sessionId !== 'string') return fail('Nothing to send', 'bot/invalid')
+          const content = promptContent(body)
+          if (content.length === 0 || typeof body.sessionId !== 'string') return fail('Nothing to send', 'bot/invalid')
           await rt.load()
           // A Bot id or an earlier part of its own chat means the current part.
           const past = rt.pastOwners.get(body.sessionId)
           const sessionId = rt.botOf(body.sessionId) ? rt.chatOf(body.sessionId) : past && past.roomId === undefined ? rt.chatOf(past.botId) : body.sessionId
           await rt.ensureCapabilities(sessionId)
           await ctx.sessionController.prompt({
-            requestId: randomUUID(),
+            requestId: typeof body.requestId === 'string' && body.requestId.length > 0 && body.requestId.length <= 128 ? body.requestId : randomUUID(),
             sessionId,
             mode: 'queue',
-            content: [{ type: 'text', text }],
+            content,
           }, AbortSignal.timeout(30_000))
           return ok(true)
         }

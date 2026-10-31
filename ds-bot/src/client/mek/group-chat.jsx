@@ -57,6 +57,6 @@ export function GroupChat({ sessionId, team }) {
         {error && <button className="bt-soft" role="alert" onClick={() => refresh.current?.()}>{error} · {t('Try again')}</button>}
       </div></div>
     </div>
-    <div className="dsb-composer-root"><Composer sessionId={sessionId} placeholder={t('Message {name}', { name: room?.name ?? '' })} onSend={async text => { await actions.send(sessionId, text); await refresh.current?.() }} actions={actions} useUi={hooks.useUi} useRoster={hooks.useRoster} /></div>
+    <div className="dsb-composer-root"><Composer sessionId={sessionId} placeholder={t('Message {name}', { name: room?.name ?? '' })} onSend={async (text, images, id) => { await actions.send(sessionId, text, images, id); await refresh.current?.() }} actions={actions} useUi={hooks.useUi} useRoster={hooks.useRoster} /></div>
   </div>
 }

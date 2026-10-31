@@ -3,7 +3,8 @@ import { call } from '../../../ds-bot/src/client/api.js'
 import { Bubbles, ChatRows, Shimmer } from '../../../ds-bot/src/client/cells.js'
 import { ComposerPlus, ComposerVoice } from '../../../ds-bot/src/client/composer.js'
 import { t } from '../../../ds-bot/src/client/i18n.js'
-import { ArrowUpIcon } from '../../../ds-bot/src/client/icons.js'
+import { ArrowUpIcon, CloseIcon } from '../../../ds-bot/src/client/icons.js'
+import { imageFiles, readImages, requestId } from './image-input.js'
 import { ModelChoiceDock } from '../../../ds-bot/src/client/model-menu.js'
 import { PendingQuestion } from '../../../ds-bot/src/client/questions.js'
 
@@ -72,12 +73,12 @@ function useChat(botId, part, feed) {
   }), [feed, botId, load])
 
   // Shown at once: the message can come back on the feed before the request returns.
-  const send = async (text, actions, sessionId) => {
-    const entry = { kind: 'user', text, time: Date.now() }
+  const send = async (text, actions, sessionId, images, id) => {
+    const entry = { kind: 'user', text, time: Date.now(), imagePreviews: images.map(image => `data:${image.mediaType};base64,${image.data}`) }
     setPending(list => [...list, entry])
     actions.noteSent(sessionId)
     try {
-      await actions.send(sessionId, text)
+      await actions.send(sessionId, text, images, id)
     } catch (error) {
       setPending(list => list.filter(item => item !== entry))
       throw error
@@ -101,8 +102,34 @@ function useInput(field, setText) {
 export function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, useRoster }) {
   const [text, setText] = useState('')
   const [error, setError] = useState(null)
+  const [images, setImages] = useState([])
+  const [preparing, setPreparing] = useState(false)
+  const [sending, setSending] = useState(false)
+  const limits = useRoster(value => value.imageLimits)
+  const keptImages = useRef([])
+  const intake = useRef(Promise.resolve())
+  const pending = useRef(0)
+  const active = useRef(true)
+  const locked = useRef(false)
+  const attempt = useRef(null)
   const field = useRef(null)
   const inputActions = useInput(field, setText)
+  useEffect(() => { active.current = true; return () => { active.current = false } }, [])
+  const replaceImages = value => { keptImages.current = value; setImages(value) }
+  const addImages = files => {
+    if (!files.length || disabled || locked.current) return
+    pending.current += 1
+    setPreparing(true)
+    setError(null)
+    intake.current = intake.current.then(async () => {
+      if (!active.current) return
+      const loaded = await readImages(files, keptImages.current, limits)
+      if (active.current) replaceImages([...keptImages.current, ...loaded])
+    }).catch(failure => { if (active.current) setError(failure.message) }).finally(() => {
+      pending.current -= 1
+      if (active.current) setPreparing(pending.current > 0)
+    })
+  }
   useLayoutEffect(() => {
     const node = field.current
     node.style.height = 'auto'
@@ -111,30 +138,50 @@ export function Composer({ sessionId, placeholder, disabled, onSend, actions, us
   useEffect(() => { if (!disabled) field.current?.focus() }, [sessionId, disabled])
   const submit = async () => {
     const value = text.trim()
-    if (value === '' || disabled) return
+    if ((value === '' && keptImages.current.length === 0) || disabled || locked.current || pending.current > 0) return
+    const selected = keptImages.current
+    const key = JSON.stringify([value, selected.map(image => image.id)])
+    if (attempt.current?.key !== key) attempt.current = { key, id: requestId() }
+    locked.current = true
+    setSending(true)
     setError(null)
-    setText('')
     try {
-      await onSend(value)
+      await onSend(value, selected.map(({ mediaType, data, name }) => ({ mediaType, data, name })), attempt.current.id)
+      if (active.current) { setText(''); replaceImages([]); attempt.current = null }
     } catch (failure) {
-      setText(current => (current === '' ? value : current))
-      setError(failure.message)
-    }
+      if (active.current) setError(failure.message)
+    } finally { locked.current = false; if (active.current) setSending(false) }
   }
   return h('div', { className: 'dsb-composer-wrap' },
     error ? h('p', { className: 'dsb-composer-error', role: 'alert' }, error) : null,
-    h('div', { className: 'dsb-composer', 'data-composer-card': '', 'data-multiline': text.includes('\n') || undefined },
-      h('div', { className: 'dsb-composer-tools' }, h(ComposerPlus, { sessionId, inputActions, useRoster, actions })),
+    images.length ? h('div', { className: 'dsb-composer-images', 'aria-label': t('Image attachments') }, images.map(image => h('div', { key: image.id, className: 'dsb-composer-image' },
+      h('img', { src: image.preview, alt: image.name }),
+      h('button', { type: 'button', disabled: sending, 'aria-label': t('Remove image'), title: image.name, onClick: () => replaceImages(keptImages.current.filter(item => item.id !== image.id)) }, h(CloseIcon))))) : null,
+    preparing ? h('div', { className: 'bt-hint', role: 'status' }, t('Adding images…')) : null,
+    h('div', { className: 'dsb-composer', 'data-composer-card': '', 'data-multiline': text.includes('\n') || undefined, 'data-has-content': text.trim() || images.length || preparing ? '' : undefined, 'aria-busy': sending || preparing,
+      onDragOver: event => { if (!disabled && !sending && [...(event.dataTransfer?.types ?? [])].includes('Files')) event.preventDefault() },
+      onDrop: event => { const files = imageFiles(event.dataTransfer); if (files.length) { event.preventDefault(); addImages(files) } },
+    },
+      h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', multiple: true, hidden: true, disabled: disabled || sending, 'aria-label': t('Add images'), onChange: event => { addImages([...(event.target.files ?? [])]); event.target.value = '' } }),
+      h('div', { className: 'dsb-composer-tools' }, h(ComposerPlus, { sessionId, inputActions, useRoster, actions, fileLabel: 'Add images', disabled: disabled || sending })),
       h('div', { className: 'dsb-composer-input', 'data-input-scroll': '' },
         h('textarea', {
           ref: field,
           rows: 1,
           value: text,
-          disabled,
+          disabled: disabled || sending,
           placeholder,
           'aria-label': placeholder,
           'data-composer-input': '',
           onChange: event => setText(event.target.value),
+          onPaste: event => {
+            const files = imageFiles(event.clipboardData)
+            if (!files.length) return
+            event.preventDefault()
+            addImages(files)
+            const pastedText = event.clipboardData.getData('text/plain')
+            if (pastedText) inputActions.insertText(pastedText, inputActions.captureInsertion())
+          },
           onKeyDown: (event) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
@@ -144,7 +191,7 @@ export function Composer({ sessionId, placeholder, disabled, onSend, actions, us
         })),
       h('div', { className: 'dsb-composer-trailing' },
         h(ComposerVoice, { sessionId, inputActions, actions, useUi }),
-        h('button', { type: 'button', className: 'dsb-send', disabled: disabled || text.trim() === '', 'aria-label': t('Send message'), title: t('Send message'), onClick: () => { void submit() } }, h(ArrowUpIcon)))))
+        h('button', { type: 'button', className: 'dsb-send', disabled: disabled || sending || preparing || (text.trim() === '' && images.length === 0), 'aria-label': t('Send message'), title: t('Send message'), onClick: () => { void submit() } }, h(ArrowUpIcon)))))
 }
 
 // One conversation in the main view, drawn with the Bot views' own rows, cards and docks.
@@ -193,7 +240,7 @@ export function Chat({ sessionId, team }) {
         sessionId,
         disabled: waiting,
         placeholder: waiting ? t('Pick a model and {name} can start.', { name }) : name ? t('Message {name}', { name }) : t('Message'),
-        onSend: text => send(text, actions, sessionId),
+        onSend: (text, images, id) => send(text, actions, sessionId, images, id),
         actions,
         useUi: hooks.useUi,
         useRoster: hooks.useRoster,

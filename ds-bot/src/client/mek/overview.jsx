@@ -108,7 +108,7 @@ function Workflow({ flow, roster, mutate }) {
     {selected?.status === 'validated' && <button onClick={() => mutate('mek-workflow-activate', { id: flow.id, version: Number(version) })}>{copy('Activate this version', '启用此版本')}</button>}
   </details>
 }
-export function TeamOverview({ team, ctx, initialTab = 'activity', onClose }) {
+export function TeamOverview({ team, ctx, initialTab = 'activity', onClose, embedded = false }) {
   const roster = team.hooks.useRoster(value => value)
   const [tab, setTab] = useState(initialTab)
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [success, setSuccess] = useState('')
@@ -117,7 +117,7 @@ export function TeamOverview({ team, ctx, initialTab = 'activity', onClose }) {
   const tabs = [['activity','Activity','近况'],['tasks','Tasks','任务'],['knowledge','Knowledge','知识'],['workflows','Workflows','流程'],['policies','Behavior','行为'],['browser','Browser','浏览器']]
   const notify = async () => { if (typeof Notification !== 'function') { setError(copy('Notifications are not supported in this browser.', '此浏览器不支持系统通知。')); return } const outcome = await Notification.requestPermission(); setSuccess(outcome === 'granted' ? copy('Browser notifications enabled.', '已启用浏览器通知。') : copy('Notifications remain off. Important events are still available here.', '浏览器通知未开启，重要事项仍会保留在这里。')) }
   return <section className="mek-overview" aria-label={copy('Team overview', '团队概况')}>
-    <header><h1>{copy('Team overview', '团队概况')}</h1><button onClick={onClose}>{copy('Back to conversation', '返回对话')}</button></header>
+    {!embedded && <header><h1>{copy('Team overview', '团队概况')}</h1><button onClick={onClose}>{copy('Back to conversation', '返回对话')}</button></header>}
     <nav aria-label={copy('Team sections', '团队页面')}>{tabs.map(([id,en,zh]) => <button key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); setError(''); setSuccess('') }}>{copy(en,zh)}</button>)}</nav>
     <div className="mek-overview-content" aria-busy={busy}>
       {error && <p role="alert">{error}</p>}{success && <p role="status">{success}</p>}

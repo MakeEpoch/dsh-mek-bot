@@ -72,6 +72,14 @@ html[data-mac] .dsb-frame .dsb-side{padding-top:var(--dsb-band)}
 [data-composer-card]:has(.dsb-send:disabled) .bt-voice{display:inline-grid}
 body[data-bt-room] [data-composer-card]:has(.dsb-send:disabled) .bt-mic:not([aria-pressed=true]){background:var(--bt-accent);color:var(--bt-accent-ink,#fff)}
 .dsb-composer-error{margin:0 0 6px 4px;font-size:12px;line-height:16px;color:var(--bt-danger)}
+.dsb-composer-images{display:flex;gap:8px;overflow-x:auto;padding:8px 4px}
+.dsb-composer-image{position:relative;flex:none}
+.dsb-composer-image img{display:block;width:80px;height:64px;object-fit:contain;background:var(--bt-card);border:1px solid var(--bt-line);border-radius:8px}
+.dsb-composer-image button{position:absolute;right:2px;top:2px;display:grid;place-items:center;width:24px;height:24px;padding:0;border:1px solid var(--bt-line);border-radius:50%;background:var(--bt-main);color:var(--bt-ink);cursor:pointer}
+.dsb-composer-image button:disabled{opacity:.5;cursor:default}
+.dsb-composer[data-has-content] .bt-voice{display:none!important}
+.bt-history-images{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.bt-history-images img{display:block;max-width:min(220px,100%);max-height:180px;object-fit:contain;border-radius:8px}
 
 /* Markdown in the bubbles (primitives.js). */
 .md_markdown{overflow-wrap:anywhere}

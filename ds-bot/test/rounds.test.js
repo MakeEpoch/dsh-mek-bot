@@ -4,6 +4,9 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileS
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { createRequire } from 'node:module'
+import { Context } from '@deepseek-ai/cordis'
+import LocalAttachments from '@deepseek-ai/dsh-attachment-local'
 import { createRuntime } from '../index.js'
 import { lineText } from '../src/host/groups.js'
 import { fakeAttachments, fakeContext } from './fake-ctx.js'
@@ -106,6 +109,47 @@ function start({ home = mkdtempSync(join(tmpdir(), 'ds-bot-rounds-')) } = {}) {
 }
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 20))
+
+test('native image-only sends reach DSH image admission and remain readable after an attachment-store restart', async t => {
+  const home = mkdtempSync(join(tmpdir(), '.dsh-test-bot-images-'))
+  const owner = new Context()
+  await owner.plugin(LocalAttachments, { dshHome: home })
+  const view = start({ home })
+  t.after(async () => { await view.stop({ keep: true }); await owner.fiber.dispose(); rmSync(home, { recursive: true, force: true }) })
+  const originalGet = view.ctx.get
+  view.ctx.get = name => name === 'attachments' ? owner.attachments : originalGet(name)
+  const originalPrompt = view.ctx.sessionController.prompt
+  view.ctx.sessionController.prompt = async request => originalPrompt({ ...request, content: await owner.attachments.admitPromptContent(request.content) })
+  view.ctx.sessionController.attachment = async ({ attachment }) => {
+    const image = await owner.attachments.readImage(attachment)
+    return { attachment: image.ref, data: Buffer.from(image.data).toString('base64') }
+  }
+  const sharp = createRequire(new URL('../dev/harness/package.json', import.meta.url))('sharp')
+  const image = await sharp({ create: { width: 4, height: 3, channels: 3, background: { r: 20, g: 80, b: 120 } } }).png().toBuffer()
+  const state = (await view.call('state')).value
+  const requestId = randomUUID()
+  assert.equal((await view.call('send', { sessionId: state.mainBotId, text: '', requestId, images: [{ mediaType: 'image/png', data: image.toString('base64'), name: 'clipboard.png' }] })).ok, true)
+  const message = view.inboxOf(state.mainBotId).nextTurn.at(-1)
+  assert.equal(message.source.rpcId, requestId)
+  assert.equal(message.content.length, 1)
+  assert.equal(message.content[0].type, 'image')
+  const ref = message.content[0].attachment
+  assert.equal(ref.width, 4)
+  assert.equal(ref.height, 3)
+  const rows = view.rt.displayItems(state.mainBotId, [{ type: 'user/message', seq: 1, time: 1, data: message }])
+  assert.equal(rows[0].imageAttachments[0].attachmentId, ref.attachmentId)
+  assert.equal(rows[0].imageSessionId, state.mainBotId)
+  assert.equal((await view.call('image', { sessionId: state.mainBotId, attachment: ref })).ok, true)
+  const restored = new Context()
+  try {
+    await restored.plugin(LocalAttachments, { dshHome: home })
+    assert.equal((await restored.attachments.readImage(ref)).ref.attachmentId, ref.attachmentId)
+  } finally { await restored.fiber.dispose() }
+  const before = view.inboxOf(state.mainBotId).nextTurn.length
+  assert.equal((await view.call('send', { sessionId: state.mainBotId, images: [{ mediaType: 'image/svg+xml', data: 'AAAA' }] })).ok, false)
+  assert.equal((await view.call('send', { sessionId: state.mainBotId, images: [{ mediaType: 'image/png', data: 'broken-base64' }] })).ok, false)
+  assert.equal(view.inboxOf(state.mainBotId).nextTurn.length, before)
+})
 const waitFor = async (check) => {
   for (let at = 0; at < 100; at += 1) {
     const value = check()

@@ -22,6 +22,8 @@ const React = require('react'); const { createRoot } = require('react-dom/client
 const { act } = React
 let deleted=false
 let revision=1
+const sends=[]
+let refuseSend=true
 const roster = () => ({revision,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:[],agents:[],tasks:[{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]}],exchangeTurns:{},questions:{},views:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},work:{bots:{},rooms:{},approvals:[]}})
 const fetch = async (url,options={}) => {
  if(url.endsWith('/feed')) return new Response(new ReadableStream({ start(controller) { options.signal?.addEventListener('abort',()=>controller.close(),{once:true}) } }))
@@ -30,13 +32,14 @@ const fetch = async (url,options={}) => {
  if(endpoint==='state') value=roster()
  else if(endpoint==='mek-task-list') value={tasks:roster().tasks,nextCursor:null}
  else if(endpoint==='chat') value={sessionId:payload.botId,items:[],cursor:null}
+ else if(endpoint==='send') {sends.push(payload);if(refuseSend)return new Response(JSON.stringify({ok:false,error:{code:'bot/refused',message:'Mock send refused'}}))}
  else if(endpoint==='delete-bot') {deleted=true;revision++;value=roster()}
  return new Response(JSON.stringify({ok:true,value}))
 }
 win.__ModuleLoader__={load: value=>{win.moduleEntry=value}}
 const errors=[]
 const logger={...console,error:(...args)=>{errors.push(args.map(x=>x?.stack??String(x)).join(' '))}}
-runInNewContext(readFileSync(`${plugin}/client.js`,'utf8'),{window:win,document:win.document,navigator:win.navigator,console:logger,fetch,Response,ReadableStream,TextDecoder,AbortController,URL,URLSearchParams,Element:win.Element,HTMLElement:win.HTMLElement,MutationObserver:win.MutationObserver,ResizeObserver,localStorage:win.localStorage,CSS:{escape:x=>x},getComputedStyle:win.getComputedStyle.bind(win),requestAnimationFrame:win.requestAnimationFrame.bind(win),cancelAnimationFrame:win.cancelAnimationFrame.bind(win),matchMedia:win.matchMedia,setTimeout,clearTimeout,setInterval,clearInterval,queueMicrotask})
+runInNewContext(readFileSync(`${plugin}/client.js`,'utf8'),{window:win,document:win.document,navigator:win.navigator,console:logger,fetch,Response,ReadableStream,TextDecoder,AbortController,URL,URLSearchParams,Element:win.Element,HTMLElement:win.HTMLElement,MutationObserver:win.MutationObserver,ResizeObserver,localStorage:win.localStorage,sessionStorage:win.sessionStorage,FileReader:win.FileReader,crypto:globalThis.crypto,CSS:{escape:x=>x},getComputedStyle:win.getComputedStyle.bind(win),requestAnimationFrame:win.requestAnimationFrame.bind(win),cancelAnimationFrame:win.cancelAnimationFrame.bind(win),matchMedia:win.matchMedia,setTimeout,clearTimeout,setInterval,clearInterval,queueMicrotask,performance})
 const platform={react:React,'react-dom':ReactDOM,'@deepseek-ai/dsh-client-ui-primitives':{MarkdownText:({text})=>React.createElement('span',null,text),FishLogo:()=>React.createElement('span',null,'Fish')}}
 const exports=win.moduleEntry.factory(name=>platform[name])
 const registrations=[]
@@ -51,17 +54,42 @@ async function click(selector) {const node=document.querySelector(selector);if(!
 try {
  await act(async()=>{root.render(React.createElement(main.component));await pause()})
  await click('[data-bot-id="main"]')
+ await click('.dsb-composer .bt-plus')
+ assert.equal(document.querySelector('.bt-plus-menu [role="menuitem"]').textContent, 'Add images')
+ await click('.dsb-composer .bt-plus')
+ const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII='
+ const image=new win.File([Buffer.from(png,'base64')],'clipboard.png',{type:'image/png'})
+ const paste=new win.Event('paste',{bubbles:true,cancelable:true})
+ Object.defineProperty(paste,'clipboardData',{value:{items:[{kind:'file',type:'image/png',getAsFile:()=>image}],getData:()=>''}})
+ await act(async()=>{document.querySelector('textarea').dispatchEvent(paste);await pause();await pause()})
+ assert.equal(paste.defaultPrevented,true)
+ assert.equal(document.querySelector('.dsb-composer-images img').src, 'data:image/png;base64,'+png)
+ assert.equal(sends.length,0)
+ assert.equal(document.querySelector('.dsb-send').disabled,false)
+ await click('.dsb-send')
+ assert.equal(sends.length,1)
+ assert.equal(sends[0].text,'')
+ assert.equal(sends[0].images[0].data,png)
+ assert.equal(sends[0].images[0].mediaType,'image/png')
+ assert.match(document.querySelector('[role="alert"]').textContent,/Mock send refused/)
+ assert.ok(document.querySelector('.dsb-composer-images img'))
+ refuseSend=false
+ await click('.dsb-send')
+ assert.equal(sends.length,2)
+ assert.equal(sends[0].requestId,sends[1].requestId)
+ assert.equal(document.querySelector('.dsb-composer-images'),null)
+ assert.equal(document.querySelector('.dsb-send').disabled,true)
  assert.equal(document.querySelector('.mek-task').dataset.taskState, 'needs_decision')
  await click('.mek-task summary')
  assert.match(document.querySelector('.mek-task-body').textContent, /Which project convention/)
  await click('[data-bot-id="delete"]')
- await click('[aria-label="View conversation details"]')
+ await click('[data-bot-id="delete"]')
  const panel = document.querySelector('.bt-panel')
  await click('[aria-label="Close details"]')
  assert.equal(panel.hasAttribute('inert'), true)
  assert.equal(panel.getAttribute('aria-hidden'), 'true')
  assert.equal(panel.contains(document.activeElement), false)
- await click('[aria-label="View conversation details"]')
+ await click('[data-bot-id="delete"]')
  assert.equal(panel.hasAttribute('inert'), false)
  assert.equal(panel.hasAttribute('aria-hidden'), false)
  await click('[aria-label="Edit Bot"]')
@@ -75,14 +103,45 @@ try {
  assert.equal(document.activeElement.closest('[aria-hidden="true"],[inert]'), null)
  await click('[data-bot-id="keep"]')
  assert.equal(document.querySelector('textarea').getAttribute('aria-label'), 'Message Keeper')
- await click('.mek-overview-entry')
- assert.equal(document.querySelector('.mek-overview h1').textContent, 'Team overview')
+ assert.equal(document.querySelector('.dsb-side'), null)
+ assert.ok(document.querySelector('.mek-team-header [data-bot-id="main"]'))
+ assert.equal(document.querySelector('.mek-team-header .bt-brand'), null)
+ assert.ok(document.querySelector('.mek-team-tools [aria-label="Search"]'))
+ assert.ok(document.querySelector('[data-bot-id="keep"] .bt-pill-go svg'))
+ assert.equal(document.querySelector('[data-bot-id="main"] .bt-pill-go'), null)
+ assert.equal(document.querySelector('[data-bot-id="keep"]').getAttribute('aria-expanded'), 'false')
+ await click('[data-bot-id="keep"]')
+ assert.equal(document.querySelector('[data-bot-id="keep"]').getAttribute('aria-expanded'), 'true')
+ await click('[data-bot-id="keep"]')
+ assert.equal(document.querySelector('[data-bot-id="keep"]').getAttribute('aria-expanded'), 'false')
+ assert.equal(document.querySelector('.mek-overview-entry'), null)
+ await click('[aria-label="More"]')
+ assert.ok(document.querySelector('[role="menu"] [role="menuitem"]'))
+ await act(async()=>{document.activeElement.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await pause()})
+ assert.equal(document.querySelector('[aria-label="More"]').getAttribute('aria-expanded'), 'false')
+ await click('[aria-label="More"]')
+ assert.equal(document.querySelector('.mek-overview-entry'), null)
+ await click('.mek-team-menu button:last-child')
+ assert.ok(document.querySelector('[role="dialog"][aria-label="DS Bot settings"]'))
+ await act(async()=>{[...document.querySelectorAll('.bt-settings-item')].find(node=>node.textContent==='Team overview').click();await pause()})
+ assert.equal(document.querySelector('.bt-settings-head h2').textContent, 'Team overview')
+ assert.equal(document.querySelector('.mek-overview header'), null)
  for (let index=1;index<=6;index++) await click(`[aria-label="Team sections"] button:nth-child(${index})`)
  assert.match(document.querySelector('.mek-browser-workspace').textContent, /not enabled on this host/)
  assert.equal(document.querySelector('iframe'), null)
+ await act(async()=>{[...document.querySelectorAll('.bt-settings-item')].find(node=>node.textContent==='Usage').click();await pause()})
+ assert.equal(document.querySelector('.bt-settings-head h2').textContent, 'Usage')
+ await click('[aria-label="Close settings"]')
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,180))})
  await click('[data-bot-id="main"]')
  assert.equal(document.querySelector('.mek-overview'), null)
+ assert.equal(document.querySelector('[data-bot-id="main"]').getAttribute('aria-expanded'), 'false')
  assert.equal(document.querySelector('textarea').getAttribute('aria-label'), 'Message Chief')
+ await click('[data-bot-id="keep"]')
+ await act(async()=>{root.render(null);await pause()})
+ await act(async()=>{root.render(React.createElement(main.component));await pause()})
+ assert.equal(document.querySelector('textarea').getAttribute('aria-label'), 'Message Keeper')
+ assert.equal(document.querySelector('[data-bot-id="keep"]').getAttribute('aria-current'), 'page')
  assert.deepEqual(errors, [])
 } finally {for(const stop of effects) stop?.(); await act(async()=>root.unmount());console.error=originalError;dom.window.close();for(const [key,descriptor] of saved) {if(descriptor) Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key]}}
 })

@@ -407,13 +407,32 @@ const scrollParent = (node) => {
   return null
 }
 
-function EarlierUser({ row }) {
+function HistoryImage({ attachment, sessionId, actions }) {
+  const [src, setSrc] = useState(null)
+  const [failed, setFailed] = useState(false)
+  const [retry, setRetry] = useState(0)
+  useEffect(() => {
+    let active = true
+    setFailed(false)
+    actions.readImage(sessionId, attachment).then(value => {
+      if (active) setSrc(`data:${value.attachment.mediaType};base64,${value.data}`)
+    }).catch(() => { if (active) setFailed(true) })
+    return () => { active = false }
+  }, [sessionId, attachment.attachmentId, actions.readImage, retry])
+  return src ? h('img', { src, alt: attachment.name ?? t('Image'), loading: 'lazy' })
+    : failed ? h('button', { type: 'button', className: 'bt-soft bt-soft-sm', onClick: () => setRetry(value => value + 1) }, t('Try again'))
+      : h('span', { className: 'bt-hint' }, t('Loading…'))
+}
+
+function EarlierUser({ row, sessionId, actions }) {
   const { shown, folded, control } = useFold(row.text ?? '')
   const body = row.text ? h(MarkdownText, { text: shown, labels: mdLabels(), variant: 'compact' }) : null
   return h('div', { className: 'bt-urow' }, h('div', { className: 'bt-ububble', 'data-folded': folded || undefined },
     control ? h('div', { className: 'bt-fold-body' }, body) : body,
     control,
-    row.images ? h('span', { className: 'bt-uimages' }, row.images === 1 ? t('1 image') : t('{count} images', { count: row.images })) : null))
+    row.imagePreviews?.length ? h('div', { className: 'bt-history-images' }, row.imagePreviews.map((src, index) => h('img', { key: index, src, alt: t('Image') })))
+      : row.imageAttachments?.length && actions?.readImage ? h('div', { className: 'bt-history-images' }, row.imageAttachments.map(attachment => h(HistoryImage, { key: attachment.attachmentId, attachment, sessionId: row.imageSessionId ?? sessionId, actions })))
+        : row.images ? h('span', { className: 'bt-uimages' }, row.images === 1 ? t('1 image') : t('{count} images', { count: row.images })) : null))
 }
 
 // The earlier parts of a Bot's own chat, above its current part as one conversation.
@@ -525,7 +544,7 @@ export function ChatRows({ items, sessionId, roster, actions, useUi, clock = fal
 function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDelete }) {
   switch (row.kind) {
     case 'divider': return h(PartLine, { key, time: row.time })
-    case 'user': return h(EarlierUser, { key, row })
+    case 'user': return h(EarlierUser, { key, row, sessionId, actions })
     case 'answer': return h(AnsweredReply, { key, node: { data: row } })
     // A display-only view replays from the blueprint the host kept on the call.
     case 'view': return h(WidgetCell, { key, sessionId, callId: row.callId, args: { text: name => name === 'title' ? row.title : undefined, value: name => name === 'view' ? row.view : undefined }, done: true, isError: false, roster, actions })

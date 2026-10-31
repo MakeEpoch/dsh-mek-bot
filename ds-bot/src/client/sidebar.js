@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { FishLogo } from './dsh-primitives.js'
 import { isMainOf } from './sources.js'
 import { currentPart, previewOf, relativeShort } from './text.js'
-import { PlusIcon, SearchIcon, SidebarIcon, GaugeIcon, ClockIcon, GearIcon, PinMarkIcon, ConnectorIcon, SwitchIcon, CloudDownloadIcon, SignOutIcon } from './icons.js'
+import { PlusIcon, SearchIcon, SidebarIcon, GaugeIcon, ClockIcon, GearIcon, PinMarkIcon, ConnectorIcon, SwitchIcon, CloudDownloadIcon, SignOutIcon, GoArrow } from './icons.js'
 import { MAIN_LOOK } from './characters.js'
 import { botState, BotMark, BotAvatar, RoomAvatar } from './mark.js'
 import { reducedMotion } from './activity-row.js'
@@ -43,7 +43,7 @@ const waitingFor = (roster, waits) => {
   return names.length === 0 ? '' : t('Waiting for {names}', { names: names.join(t(' and ')) })
 }
 
-function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessionRetainInfo, useActivity, useWork, wide, marked }) {
+function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessionRetainInfo, useActivity, useWork, wide, marked, navigation, details }) {
   const id = bot.id
   const part = currentPart(bot)
   const preview = useSessions(list => previewOf(list, part, roster.exchangeTurns[part]))
@@ -72,7 +72,7 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
   }
   const pinned = bot.pinned === true && !tile
   const label = [bot.name, main ? t('Main Bot') : '', pinned ? t('Pinned') : '', running || away ? t('Working') : '', waitsFor, approval ? t('Waiting for your approval') : alert ? t('Waiting for your answer') : '', unread ? t('Unread activity') : ''].filter(Boolean).join(', ')
-  if (tile && wide) {
+  if (tile && wide && !navigation) {
     return h('div', { className: 'bt-tile-wrap' }, h('button', {
       type: 'button', className: 'bt-tile', 'aria-label': label, 'aria-current': active ? 'page' : undefined,
       'data-bot-id': id, title: preview || bot.name, onClick: () => actions.openSession(id), onContextMenu,
@@ -83,9 +83,10 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
   }
   return h('button', {
     type: 'button', className: 'bt-row', 'aria-label': label, 'aria-current': active ? 'page' : undefined,
+    'aria-expanded': navigation && active ? details === part : undefined,
     'data-bot-id': id, title: wide ? undefined : bot.name, onClick: () => actions.openSession(id), onContextMenu,
   },
-  h(BotAvatar, { bot, size: 36, state, main }),
+  h(BotAvatar, { bot, size: navigation ? 22 : 36, state, main }),
   pinned && !wide ? h(PinMark) : null,
   wide ? h('span', { className: 'bt-row-body' },
     h('span', { className: 'bt-row-name' }, h('span', { className: 'bt-row-title' }, bot.name), pinned ? h(PinMark) : null),
@@ -93,10 +94,11 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
       : awayLine ? h('span', { className: 'bt-row-preview' }, awayLine)
         : waitsFor ? h('span', { className: 'bt-row-preview' }, waitsFor)
           : preview ? h('span', { className: 'bt-row-preview' }, preview) : null) : null,
-  wide && unread && !active ? h('span', { className: 'bt-unread', 'aria-hidden': true }) : null)
+  wide && unread && !active ? h('span', { className: 'bt-unread', 'aria-hidden': true }) : null,
+  navigation && active ? h('span', { className: 'bt-pill-go', 'aria-hidden': true }, h(GoArrow)) : null)
 }
 
-function RoomRow({ room, roster, actions, useSessions, useSessionStatus, useSessionRetainInfo, useWork, wide, marked }) {
+function RoomRow({ room, roster, actions, useSessions, useSessionStatus, useSessionRetainInfo, useWork, wide, marked, navigation, details }) {
   const id = room.id
   const fallback = useSessions(list => previewOf(list, id))
   const preview = room.preview?.replace(/\s+/g, ' ').trim() || fallback
@@ -112,16 +114,18 @@ function RoomRow({ room, roster, actions, useSessions, useSessionStatus, useSess
   const label = [room.name, pinned ? t('Pinned') : '', members.length > 0 ? t('Working') : '', approval ? t('Waiting for your approval') : ''].filter(Boolean).join(', ')
   return h('button', {
     type: 'button', className: 'bt-row', 'aria-label': label, 'aria-current': active ? 'page' : undefined,
+    'aria-expanded': navigation && active ? details === id : undefined,
     'data-room-id': id, onClick: () => actions.openSession(id),
     onContextMenu: (event) => { event.preventDefault(); actions.openMenu({ kind: 'room', id, x: event.clientX, y: event.clientY }) },
   },
-  h(RoomAvatar, { room, roster, size: 36 }),
+  h(RoomAvatar, { room, roster, size: navigation ? 22 : 36 }),
   pinned && !wide ? h(PinMark) : null,
   wide ? h('span', { className: 'bt-row-body' },
     h('span', { className: 'bt-row-name' }, h('span', { className: 'bt-row-title' }, room.name), pinned ? h(PinMark) : null),
     workingLine ? h('span', { className: 'bt-row-preview' }, workingLine) : preview ? h('span', { className: 'bt-row-preview' }, preview) : null) : null,
   wide && approval && !active ? h('span', { className: 'bt-unread bt-unread-wait', 'aria-hidden': true })
-    : wide && unread && !active ? h('span', { className: 'bt-unread', 'aria-hidden': true }) : null)
+    : wide && unread && !active ? h('span', { className: 'bt-unread', 'aria-hidden': true }) : null,
+  navigation && active ? h('span', { className: 'bt-pill-go', 'aria-hidden': true }, h(GoArrow)) : null)
 }
 
 // One expanded DSH Agent Session row: title, relative stamp, rename field, and a
@@ -249,12 +253,13 @@ function useListGlide(listRef, layout, key) {
 }
 
 export function TeamSidebar(props) {
-  const { wide, expandSidebar, useRoster, useUi, useSessions, actions } = props
+  const { wide, expandSidebar, useRoster, useUi, useSessions, actions, navigation } = props
   const listRef = useRef(null)
   const closing = useRef(false)
   useLayoutEffect(() => { closing.current = false })
   const roster = useRoster(value => value)
   const markedUnread = useUi(value => value.unread)
+  const details = useUi(value => value.details)
   props.useRegistry(value => value)
   const updated = useSessions(list => {
     const stamps = {}
@@ -279,7 +284,7 @@ export function TeamSidebar(props) {
   // until React commits the result.
   const navigate = (open, id) => {
     const result = open(id)
-    if (wide && window.innerWidth < 1024 && !closing.current) {
+    if (!navigation && wide && window.innerWidth < 1024 && !closing.current) {
       closing.current = true
       expandSidebar?.()
       actions.toggleSidebar()
@@ -293,7 +298,7 @@ export function TeamSidebar(props) {
     openAgentSession: id => navigate(actions.openAgentSession, id),
     newAgentSession: id => navigate(actions.newAgentSession, id),
   }
-  const rowProps = { roster, actions: rowActions, useSessions, useUi, useSessionStatus: props.useSessionStatus, useSessionRetainInfo: props.useSessionRetainInfo, useActivity: props.useActivity, useWork: props.useWork, wide }
+  const rowProps = { roster, actions: rowActions, useSessions, useUi, useSessionStatus: props.useSessionStatus, useSessionRetainInfo: props.useSessionRetainInfo, useActivity: props.useActivity, useWork: props.useWork, wide, navigation, details }
   // Typing while the sidebar has focus starts a search.
   const typeToSearch = (event) => {
     if (event.defaultPrevented || event.key.length !== 1 || event.key === ' ' || event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing) return
@@ -301,8 +306,8 @@ export function TeamSidebar(props) {
     event.preventDefault()
     actions.openPalette(event.key)
   }
-  return h('div', { className: wide ? 'bt-side' : 'bt-side bt-rail', onKeyDown: typeToSearch },
-    wide ? h('div', { className: 'bt-side-top' },
+  return h('div', { className: navigation ? 'bt-side mek-team-nav' : wide ? 'bt-side' : 'bt-side bt-rail', onKeyDown: typeToSearch },
+    navigation ? null : wide ? h('div', { className: 'bt-side-top' },
       h('span', { className: 'bt-brand' }, h(BrandMark, { size: 22 }), h(BrandName)),
       h(UpdateButton, { useUpdate: props.useUpdate, actions }),
       h('button', { type: 'button', className: 'bt-round', 'aria-label': t('Search'), title: t('Search'), onClick: () => actions.openPalette() }, h(SearchIcon)),

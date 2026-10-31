@@ -106,7 +106,7 @@ export function menuIcons(roster) {
 // menu, whose plan, permission, model and compact rows reach past what DS Bot keeps
 // for its Bots; "/" still opens that menu. Files go through the shell's own file
 // input beside it.
-export function ComposerPlus({ sessionId, inputActions, useRoster, actions }) {
+export function ComposerPlus({ sessionId, inputActions, useRoster, actions, allowFiles = true, fileLabel = 'Add files', disabled = false }) {
   const roster = useRoster(value => value)
   const [open, setOpen] = useState(null)
   const [shown, leaving] = useLinger(open, 120)
@@ -122,11 +122,13 @@ export function ComposerPlus({ sessionId, inputActions, useRoster, actions }) {
     return () => { window.removeEventListener('mousedown', onDown, true); window.removeEventListener('keydown', onKey, true) }
   }, [open])
   const target = roster.byId?.[sessionId]?.id ?? roster.roomsById?.[sessionId]?.id
-  const fileInput = () => button.current?.closest('[data-composer-card]')?.querySelector('input[type=file]')
+  const fileInput = () => allowFiles ? button.current?.closest('[data-composer-card]')?.querySelector('input[type=file]') : null
   const toggle = () => {
     if (open) { setOpen(null); return }
+    if (disabled) return
     // Files go through the composer's own file input; a composer without one takes none.
-    setOpen({ files: Boolean(fileInput()) })
+    const files = Boolean(fileInput())
+    if (files || canReference || actions.schedules) setOpen({ files })
   }
   const attach = () => {
     setOpen(null)
@@ -151,17 +153,17 @@ export function ComposerPlus({ sessionId, inputActions, useRoster, actions }) {
     return { left: rect.left, bottom: viewBottom() - rect.top + 8 }
   }, [shown, open, tick])
   // A roster update can remove the target while this composer is still mounted.
-  if (sessionId === undefined || target === undefined) return null
+  if (sessionId === undefined || target === undefined || (!allowFiles && !canReference && !actions.schedules)) return null
   return h(Fragment, null,
     h('button', {
       ref: button, type: 'button', className: 'bt-plus', 'aria-label': t('Add'), title: t('Add'),
-      'aria-haspopup': 'menu', 'aria-expanded': Boolean(open), onMouseDown: keepComposerFocus, onClick: toggle,
+      disabled, 'aria-haspopup': 'menu', 'aria-expanded': Boolean(open), onMouseDown: keepComposerFocus, onClick: toggle,
     }, h(PlusIcon)),
-    shown ? createPortal(h('div', {
+    shown && (shown.files || canReference || actions.schedules) ? createPortal(h('div', {
       ref: menu, className: 'bt-menu bt-menu-up bt-plus-menu', role: 'menu', 'aria-label': t('Add'),
       style: place ?? {}, 'data-leaving': leaving || undefined,
     },
-    shown.files ? h('button', { type: 'button', role: 'menuitem', onClick: attach }, h(PaperclipIcon), h('span', { className: 'bt-menu-label' }, t('Add files'))) : null,
+    shown.files ? h('button', { type: 'button', role: 'menuitem', onClick: attach }, h(PaperclipIcon), h('span', { className: 'bt-menu-label' }, t(fileLabel))) : null,
     canReference ? h('button', { type: 'button', role: 'menuitem', onMouseDown: keepComposerFocus, onClick: reference }, h(ChatsIcon), h('span', { className: 'bt-menu-label' }, t('Reference a chat'))) : null,
     actions.schedules ? h('button', { type: 'button', role: 'menuitem', onClick: schedule }, h(ClockIcon), h('span', { className: 'bt-menu-label' }, t('Scheduled task'))) : null), document.body) : null)
 }
