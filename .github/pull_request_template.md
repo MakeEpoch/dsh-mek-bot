@@ -28,7 +28,7 @@ Fixes #
 
 ### Downstream documentation and evidence / 下游文档与证据
 
-<!-- Give document paths, test case IDs, source/bundle version or hash, environment, results and evidence paths. Distinguish fixtures from DSH integration and installed-package checks. Explain skipped cases; do not claim unrun cases passed. For docs-only changes, record link/source/translation review. / 填文档路径、用例编号、源码/产物版本或哈希、环境、结果与证据路径，区分夹具、DSH 集成与安装包验证；说明跳过原因，不把未执行写成通过。纯文档变更填链接、代码依据及双语复核。 -->
+<!-- Give document paths, test case IDs, source/bundle version or hash, environment, results and evidence paths. Distinguish fixtures from DSH integration and installed-package checks. Explain skipped cases; do not claim unrun cases passed. For docs-only changes, record link/source/root-package consistency review. / 填文档路径、用例编号、源码/产物版本或哈希、环境、结果与证据路径，区分夹具、DSH 集成与安装包验证；说明跳过原因，不把未执行写成通过。纯文档变更填链接、代码依据及根/包内副本复核。 -->
 
 - Documentation updated / 已更新文档：
 - Verification scope and results / 验证范围与结果：
@@ -37,7 +37,7 @@ Fixes #
 ## Checklist / 检查
 
 - [ ] One issue, one subject. / 只做一件事。
-- [ ] Features, changed flows and upstream adaptations update the fork inventory and applicable integration/design/README/UI-test documents in this PR. / 新功能、流程变化及上游适配已在本 PR 同步更新差异清单和相关集成、设计、README、UI 测试文档。
+- [ ] Features, changed flows and upstream adaptations update the Chinese README feature inventory, per-version merge records and applicable integration/design/UI-test documents in this PR. / 新功能、流程变化及上游适配已在本 PR 同步更新中文版 README 特性与差异、版本合并记录和相关集成、设计、UI 测试文档。
 - [ ] `src/client/` changed → `npm run build` ran and `client.js` is committed. / 改了 `src/client/` 就已重新 build 并提交 `client.js`。
 - [ ] No keys, tokens or personal data, also in screenshots. / 没有密钥、token 或个人信息，截图里也没有。
 - [ ] No AI tool as author or `Co-authored-by`. / 没有把 AI 工具写成作者或 `Co-authored-by`。

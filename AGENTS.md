@@ -4,13 +4,13 @@ Instructions for AI coding agents that work on this repository. Human contributo
 
 ## MakeEpoch fork: read first
 
-This checkout ships **dsh-mek-bot, a native DSH plugin**, not the upstream standalone application. The sections below retain upstream context; for downstream product shape, integration, merge and acceptance decisions, follow [fork differences and documentation rules](docs/fork-vs-upstream.md), [integration boundaries](docs/makeepoch-integration.md) and the [UI test plan](docs/dev/mek-ui-testing.md).
+This checkout ships **dsh-mek-bot, a native DSH plugin**, not the upstream standalone application. The sections below retain upstream context; for downstream product shape, integration, merge and acceptance decisions, follow [project overview and differences](README.md), [version merge records and documentation rules](docs/fork-vs-upstream.md), [integration boundaries](docs/makeepoch-integration.md) and the [UI test plan](docs/dev/mek-ui-testing.md).
 
 - Keep one native Bot launcher, a top conversation list and scene-local UI. DSH owns its sidebar, ordinary sessions, settings and scheduling. Retained `app/` and `mobile/` code is shared source/reference, not a downstream release target.
 - Preserve downstream task ownership, review, navigation restoration, team operations and shared-feed behavior during upstream merges. Classify each upstream capability as reused, adapted, omitted or pending verification; do not equate upstream release notes with fork acceptance.
-- **Every new feature, changed user flow, capability restriction or upstream adaptation must update its applicable documentation in the same change.** Update the feature inventory and merge boundaries in `docs/fork-vs-upstream.md`; update integration/design notes when contracts change, the English/Chinese READMEs (root and packaged `ds-bot/` copies) when usage changes, and the UI test matrix when visible behavior changes. Remove obsolete descriptions. A feature is not done while its documentation describes the old behavior.
+- **Every new feature, changed user flow, capability restriction or upstream adaptation must update its applicable documentation in the same change.** Maintain the current feature inventory and upstream differences in the single Chinese `README.md`, synchronize its packaged `ds-bot/README.md` copy, and keep `README.zh.md` files as compatibility links. Record upstream changes and adoption per version in `docs/fork-vs-upstream.md`; update integration/design notes when contracts change and the UI test matrix when visible behavior changes. Remove obsolete descriptions. A feature is not done while its documentation describes the old behavior.
 - UI changes require relevant automated checks plus real-browser evidence under the UI test plan. Upstream merges also require an isolated DSH integration pass. Record the exact tested source/bundle, environment, skipped cases and remaining unknowns. A fixture pass is not a DSH installation or release pass.
-- For documentation-only changes, check links, commands against source, bilingual consistency and factual status. Do not rerun model/UI suites unless the documentation work exposes a behavior change that needs validation.
+- For documentation-only changes, check links, commands against source, root/package copy consistency and factual status. Do not rerun model/UI suites unless the documentation work exposes a behavior change that needs validation.
 
 ## What this project is
 
@@ -79,4 +79,4 @@ The full workflow is in [CONTRIBUTING.md](CONTRIBUTING.md#how-we-work). The part
 - Write a comment only when the reason is not clear from the code: a hidden constraint, an invariant, a workaround. Do not describe what the code does.
 - Commit messages in English, imperative subject, the reason in the body. Keep commits small.
 - The person who asked for the change is the commit author. Do not set an AI agent or bot as author or committer, and do not add `Co-authored-by` lines for one.
-- User-facing text in the plugin is English. Keep the README and README.zh.md in step when you change one of them.
+- User-facing text in the plugin is English. Project documentation uses one Chinese README as the source of truth; synchronize the packaged copy and retain the old README.zh.md links. Do not create a parallel English project overview.
