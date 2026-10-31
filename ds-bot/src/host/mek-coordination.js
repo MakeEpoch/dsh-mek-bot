@@ -8,6 +8,10 @@ import { textOf } from './text.js'
 import { SOURCE_KIND, TEXT_KEPT } from './constants.js'
 
 const final = task => ['completed', 'cancelled'].includes(task?.status)
+const completedReport = work => work.report?.status === 'completed'
+  && typeof work.report.summary === 'string' && work.report.summary.trim() !== ''
+  && typeof work.report.evidence === 'string' && work.report.evidence.trim() !== ''
+const needsReport = work => work.to && work.status === 'review' && !completedReport(work)
 const refuse = message => { throw Object.assign(new Error(message), { code: 'bot/refused' }) }
 const rules = `## Task ownership (takes precedence over the ordinary team messaging rules)
 - The Bot the user contacted owns the task, even when it delegates. Keep the entire conversation, questions, decisions, and final delivery in that Bot's chat. Never tell the user to visit a worker's chat. Direct user conversations with other Bots remain independent.
@@ -15,6 +19,7 @@ const rules = `## Task ownership (takes precedence over the ordinary team messag
 - A worker needing information or a decision calls ask_user: for delegated work it asks the task owner, not the user. This suspends that work rather than completing it. Never send a new message_bot request to an ancestor to ask a question.
 - When a task decision arrives, inspect its task and evidence with list_tasks/read_task. Decide routine implementation details using the user's instructions, existing conventions and available evidence. Answer with answer_bot_question. Do not forward routine choices to the user. Ask the user in your own chat only for essential missing information, unresolved intent, or authorization that only the user can give. After their answer, answer_bot_question to resume the same worker task.
 - A worker's result is evidence to review, not automatic success. Check the goal and acceptance criteria; request concrete corrections or missing checks with revise_bot_task. This continues the same task. Do not thank a worker or echo status messages. You may send follow-up work when it is necessary to finish the goal.
+- A needs_report result has returned but lacks a structured completed report. Use revise_bot_task with its work id to request the missing report and evidence from the retained result; do not repeat completed external actions. Missing documentation alone is not a reason to cancel. A review task awaits your acceptance, not further worker execution. Cancel only work the user has abandoned or superseded.
 - Workers should call report_bot_task with a concrete outcome, verification evidence and artifacts before ending delegated work. Use blocked or failed when the task cannot be completed. Ask a question with ask_user when a decision could unblock it.
 - Use list_tasks to recover pending work and decisions after another user message or a restart. Use read_task for a full result when its preview is cut. Do not copy unrelated private conversations into a task.
 - Only the task owner calls finish_bot_task, after all delegated work and questions are settled and the results satisfy the user's request. Then deliver the actual outcome, evidence, artifacts, and remaining limitations in the owner's conversation. A failed or blocked worker must not be described as success. cancel_bot_task stops a task and its outstanding delegated work.
@@ -37,6 +42,14 @@ export function install(rt) {
   rt.mekTaskSubscribe = listener => { subscribers.add(listener); return () => subscribers.delete(listener) }
   const workOf = id => own(data().works, id)
   const rootOf = id => own(data().roots, workOf(id)?.rootId ?? id)
+  const currentWorks = root => Object.values(data().works).filter(work => work.rootId === root.id && work.status !== 'superseded')
+  const reviewAdvice = work => {
+    const root = rootOf(work.id)
+    const missing = currentWorks(root).filter(needsReport)
+    return `\n\n[Task review required]\nTask ${root.id}; returned work ${work.id}. Read the retained result with read_task. ${missing.length
+      ? `Structured completed reports are missing for: ${missing.map(item => item.id).join(', ')}. Use read_task to identify the affected returned assignment and its original delegator. That delegator should use revise_bot_task with the affected work id (for returned groups, their group aggregate id) to request the missing report, verification evidence and artifacts from the existing result. Do not revise an unrelated worker that already supplied evidence. Do not repeat completed external actions or cancel solely because a report is missing.`
+      : 'Review the result and verification evidence. Use finish_bot_task when all assignments, decisions and acceptance criteria are settled; use revise_bot_task for concrete corrections. A returned result does not accept the user task automatically.'}`
+  }
   rt.mekTaskRoot = id => { const root = rootOf(id); return root ? structuredClone(root) : undefined }
   const current = sessionId => {
     const entry = rt.live.get(sessionId)
@@ -233,14 +246,17 @@ export function install(rt) {
         work.outcome = 'blocked'
         text += '\nNo result or verification evidence was returned. Request a concrete result before accepting this task.'
       }
-      if (work.report) text = `${text}\n\n[Structured result]\n${JSON.stringify(work.report)}`
-      item.args.text = long && work.report ? `${long.text}\n\n[Structured result]\n${JSON.stringify(work.report)}` : long?.text ?? text
+      const structured = work.report ? `\n\n[Structured result]\n${JSON.stringify(work.report)}` : ''
       work.resultExchangeId = id
       work.resultSessionId = back ?? rt.chatOf(source.senderSessionId)
       data().outbox[id] = item
       // No await between recording the reply and closing the work: two turn-end
       // observers must never prepare two different replies for one handoff.
       rt.closeWork(source.exchangeId, rt.botOf(rt.selfOf(sessionId) ?? work.to)?.name ?? 'Bot', text)
+      // Put review instructions in the original durable reply, including long
+      // replies. Recovery only reminds owners of results from older versions.
+      item.args.text = `${long?.text ?? text}${structured}${reviewAdvice(work)}`
+      work.reviewNoticeId = id
       await save()
       await send(item)
       announce('result', rootOf(work.rootId), work)
@@ -408,7 +424,7 @@ export function install(rt) {
     const bad = children.find(child => ['failed', 'blocked', 'unknown', 'cancelled'].includes(child.status))
     if (bad) work.outcome = bad.status === 'cancelled' ? 'blocked' : bad.status
     const result = children.map(child => `${rt.botOf(child.to)?.name ?? 'Bot'}:\n${child.result ?? 'No result retained.'}`).join('\n\n') || work.result || 'No group result.'
-    work.report = { status: bad || work.outcome === 'blocked' ? 'blocked' : 'completed', summary: result.slice(0, TEXT_KEPT),
+    work.report = { status: bad || work.outcome === 'blocked' ? 'blocked' : children.some(needsReport) ? 'needs_report' : 'completed', summary: result.slice(0, TEXT_KEPT),
       evidence: children.map(child => child.report?.evidence ?? 'Structured verification was not returned.').join('\n'), artifacts: children.flatMap(child => child.report?.artifacts ?? []) }
     const id = randomUUID()
     work.resultExchangeId = id
@@ -416,7 +432,8 @@ export function install(rt) {
     rt.closeWork(work.id, `Group "${rt.roomOf(work.room)?.name ?? 'Unavailable'}"`, result)
     const returnSession = rt.roomOf(work.fromRoom)?.sessions?.[work.from]
     const item = prepare(root.id, { toId: work.from, ...(returnSession ? { sessionId: returnSession } : {}), role: 'reply', roomId: work.room, replyTo: work.id, exchangeId: id,
-      ...(parent && own(state.works, parent) ? { work: parent } : {}), text: `Group task result for ${root.id}:\n${result}\nReview it in the original conversation; use read_task for individual evidence.` })
+      ...(parent && own(state.works, parent) ? { work: parent } : {}), text: `Group task result for ${root.id}:\n${result}${reviewAdvice(work)}` })
+    work.reviewNoticeId = id
     await save(); await send(item)
     announce('result', root, work)
   }
@@ -602,7 +619,7 @@ export function install(rt) {
     const id = randomUUID()
     open(id, { from: work.from, ...(work.to ? { to: work.to } : { room: work.room }), ...(own(state.works, work.parent) ? { parent: work.parent } : {}) })
     const next = { ...work, id, previous: work.id, status: 'queued', attempt: work.attempt + 1, instruction: `Original task: ${work.instruction}\nRevision required: ${feedback}`, createdAt: Date.now() }
-    for (const key of ['browserHold', 'restartResumeId', 'dispatching', 'members', 'result', 'resultLength', 'resultAt', 'resultExchangeId', 'resultSessionId', 'outcome', 'report']) delete next[key]
+    for (const key of ['browserHold', 'restartResumeId', 'reviewNoticeId', 'dispatching', 'members', 'result', 'resultLength', 'resultAt', 'resultExchangeId', 'resultSessionId', 'outcome', 'report']) delete next[key]
     work.status = 'superseded'
     const replaced = new Set([work.id])
     let grew = true
@@ -632,7 +649,8 @@ export function install(rt) {
     if (Object.values(data().decisions).some(item => item.rootId === root.id && item.status === 'open')) refuse('A worker question is still open.')
     if (Object.values(data().outbox).some(item => item.rootId === root.id && ['pending', 'sending', 'uncertain'].includes(item.status))) refuse('A task delivery is not yet confirmed.')
     if (!String(summary ?? '').trim()) refuse('Record the accepted outcome and evidence.')
-    if (work.some(item => item.to && item.status === 'review' && item.report?.status !== 'completed')) refuse('A worker has not returned a structured completed result with verification evidence. Request that report before acceptance.')
+    const missing = work.filter(needsReport)
+    if (missing.length) refuse(`A worker has not returned a structured completed result with verification evidence. Use read_task, then revise_bot_task to request the missing report for work ${missing.map(item => item.id).join(', ')} (for returned groups, revise their group aggregate). Preserve existing results; do not cancel solely for a missing report.`)
     for (const criterion of root.criteria ?? []) if (!checks.some(check => check.criterion === criterion && check.passed === true && String(check.evidence ?? '').trim())) refuse('Every task criterion needs a passed check and concrete evidence.')
     rt.mekPolicyGuard?.({ root, action: 'finish' })
     root.checks = checks
@@ -684,9 +702,27 @@ export function install(rt) {
   function taskView(root, self = root.owner) {
     const visible = Object.values(data().works).filter(item => item.rootId === root.id && (root.owner === self || item.from === self || item.to === self))
     const pending = Object.values(data().decisions).some(item => item.rootId === root.id && item.status === 'open')
-    return { ...root, ...(!final(root) && pending ? { status: 'needs_decision' } : {}), work: visible.map(({ resultExchangeId, resultSessionId, ...item }) => ({ ...item, name: rt.botOf(item.to)?.name ?? rt.roomOf(item.room)?.name ?? 'Unavailable Bot' })),
+    // Derive the display state from durable work, so old open tasks benefit
+    // without rewriting their outcome or pretending that a result was accepted.
+    const active = currentWorks(root)
+    const deliveries = Object.values(data().outbox).filter(item => item.rootId === root.id && ['pending', 'sending', 'uncertain'].includes(item.status))
+    let status = root.status
+    if (!final(root)) {
+      if (pending) status = 'needs_decision'
+      else if (deliveries.some(item => item.status === 'uncertain')) status = 'unknown'
+      else if (active.some(item => ['failed', 'blocked', 'unknown', 'cancelled'].includes(item.status))) status = 'blocked'
+      else if (active.some(item => ['queued', 'running'].includes(item.status))) {
+        if (!['failed', 'blocked', 'needs_user'].includes(status)) status = 'running'
+      } else if (!['failed', 'blocked', 'needs_user'].includes(status)) {
+        const waiting = ['waiting_approval', 'waiting_secret', 'waiting_browser', 'waiting_decision'].find(value => active.some(item => item.status === value))
+        if (waiting) status = waiting
+        else if (active.some(needsReport)) status = 'needs_report'
+        else if (active.some(item => item.status === 'review')) status = 'review'
+      }
+    }
+    return { ...root, status, work: visible.map(({ resultExchangeId, resultSessionId, reviewNoticeId, ...item }) => ({ ...item, ...(!final(root) && needsReport(item) ? { status: 'needs_report' } : {}), name: rt.botOf(item.to)?.name ?? rt.roomOf(item.room)?.name ?? 'Unavailable Bot' })),
       decisions: Object.values(data().decisions).filter(item => item.rootId === root.id && (root.owner === self || item.worker === self)),
-      deliveries: Object.values(data().outbox).filter(item => item.rootId === root.id && ['pending', 'sending', 'uncertain'].includes(item.status)).map(item => ({ id: item.id, status: item.status, error: item.error })) }
+      deliveries: deliveries.map(item => ({ id: item.id, status: item.status, error: item.error })) }
   }
   rt.mekTaskView = (id, viewer) => { const root = rootOf(id); return root && canRead(root, viewer ?? root.owner) ? taskView(root, viewer) : undefined }
   rt.mekTaskHistory = ({ before, limit = 50, owner, status, search } = {}) => {
@@ -763,6 +799,21 @@ export function install(rt) {
           if (old) decision.resumeId = old.id
           else { work.status = 'unknown'; work.result = 'A prior version saved this decision without a resume receipt. Check the worker history before retrying.' }
         }
+      }
+      for (const work of Object.values(data().works)) {
+        const root = rootOf(work.id)
+        if (work.status !== 'review' || !work.resultAt || work.reviewNoticeId || !root || final(root)) continue
+        // Group members report through their aggregate. Do not send a second,
+        // independent handoff that could wake or redirect a completed member.
+        if (work.groupRoot && work.parent === work.groupRoot) continue
+        if (!rt.botOf(work.from)) continue
+        const delivery = own(data().outbox, work.resultExchangeId)
+        if (delivery && ['pending', 'sending', 'uncertain'].includes(delivery.status)) continue
+        const parent = own(state.works, work.id)?.parent
+        const returnSession = rt.roomOf(work.fromRoom)?.sessions?.[work.from]
+        const notice = prepare(root.id, { toId: work.from, ...(work.to ? { fromId: work.to } : { roomId: work.room }), ...(returnSession ? { sessionId: returnSession } : {}), role: 'reply', replyTo: work.id,
+          ...(parent && own(state.works, parent) ? { work: parent } : {}), text: `A previously returned task still needs owner review.${reviewAdvice(work)}` })
+        work.reviewNoticeId = notice.id
       }
       await save()
       for (const work of Object.values(data().works)) {

@@ -1485,9 +1485,11 @@ var call = async (endpoint, payload, signal) => {
 
 // src/client/mek/portal.js
 var import_react_dom = require("react-dom");
-var createPortal = (children, _target, key) => {
+var createPortal = (children, target, key) => {
   const root = sceneRoot();
-  return root ? (0, import_react_dom.createPortal)(children, root, key) : null;
+  if (!root) return null;
+  const local = target && (root.contains(target) || target.host && root.contains(target.host));
+  return (0, import_react_dom.createPortal)(children, local ? target : root, key);
 };
 
 // src/client/dsh-primitives.js
@@ -2460,18 +2462,38 @@ function QuestionCard({ matched }) {
   const questions = pending.questions ?? [];
   const [index, setIndex] = (0, import_react4.useState)(0);
   const [answers, setAnswers] = (0, import_react4.useState)([]);
+  const [busy, setBusy] = (0, import_react4.useState)(false);
+  const [failure, setFailure] = (0, import_react4.useState)("");
+  const [settled, setSettled] = (0, import_react4.useState)(false);
+  const locked = (0, import_react4.useRef)(false);
   const question = questions[index];
-  if (question === void 0) return null;
+  if (question === void 0 || settled) return null;
+  const submit = (make) => {
+    if (locked.current) return;
+    locked.current = true;
+    setBusy(true);
+    setFailure("");
+    void Promise.resolve().then(make).then(() => setSettled(true), (error) => setFailure(error?.message ?? String(error))).finally(() => {
+      locked.current = false;
+      setBusy(false);
+    });
+  };
   const onAnswer = (answer) => {
+    if (locked.current) return;
     const next = [...answers, { id: question.id, ...answer }];
     if (index + 1 < questions.length) {
       setAnswers(next);
       setIndex(index + 1);
       return;
     }
-    pending.answer({ answers: next });
+    submit(() => pending.answer({ answers: next }));
   };
-  return (0, import_react4.createElement)(QuestionView, { key: index, question, onAnswer, onDismiss: () => pending.dismiss(), ownAnswer: true, raised: true });
+  return (0, import_react4.createElement)(
+    "div",
+    { className: "bt-native-question" },
+    (0, import_react4.createElement)(QuestionView, { key: index, question, onAnswer, onDismiss: () => submit(() => pending.dismiss()), onInteract: () => pending.engage?.(), busy, ownAnswer: true, raised: true }),
+    failure ? (0, import_react4.createElement)("p", { role: "alert" }, failure) : null
+  );
 }
 function PendingQuestion({ sessionId, question, actions, inline }) {
   const [answered, setAnswered] = (0, import_react4.useState)(null);
@@ -9027,7 +9049,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
     )
   );
 }
-function Chat({ sessionId, team }) {
+function Chat({ sessionId, team, children }) {
   const { actions, hooks, chat: feed } = team;
   const roster = hooks.useRoster((value) => value);
   const bot = roster.byId[sessionId];
@@ -9036,6 +9058,7 @@ function Chat({ sessionId, team }) {
   const scroller = (0, import_react20.useRef)(null);
   const follow = (0, import_react20.useRef)(true);
   const question = roster.questions?.[sessionId];
+  const pendingView = roster.views?.[sessionId];
   const running = hooks.useSessionStatus((map) => map.get(sessionId)?.running === true);
   (0, import_react20.useLayoutEffect)(() => {
     const node = scroller.current;
@@ -9043,7 +9066,16 @@ function Chat({ sessionId, team }) {
       node.scrollTop = node.scrollHeight - keep.current;
       keep.current = null;
     } else if (follow.current) node.scrollTop = node.scrollHeight;
-  }, [view.items, stream, pending, running, question]);
+  }, [view.items, stream, pending, running, question, pendingView, children]);
+  (0, import_react20.useEffect)(() => {
+    const node = scroller.current;
+    const flow = node.querySelector("[data-chat-flow]");
+    const observer = new MutationObserver(() => {
+      if (follow.current && keep.current === null) node.scrollTop = node.scrollHeight;
+    });
+    observer.observe(flow, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, [sessionId]);
   const onScroll = () => {
     const node = scroller.current;
     follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < FOLLOW_PX;
@@ -9066,9 +9098,11 @@ function Chat({ sessionId, team }) {
           (0, import_react20.createElement)(ChatRows, { items: view.items, sessionId, roster, actions, useUi: hooks.useUi, clock: true }),
           pending.length ? (0, import_react20.createElement)("div", { className: "dsb-pending" }, (0, import_react20.createElement)(ChatRows, { items: pending, sessionId, roster, actions })) : null,
           stream?.text ? (0, import_react20.createElement)(Bubbles, { texts: [stream.text], roster, selfId: bot?.id, actions, streaming: true, sessionId }) : null,
-          // The Bot views' activity row (from the header pill) draws itself in here.
-          (0, import_react20.createElement)("div", { "data-chat-running": "" }),
-          question ? (0, import_react20.createElement)(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true }) : null
+          question ? (0, import_react20.createElement)(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true }) : null,
+          pendingView ? (0, import_react20.createElement)(PendingView, { key: JSON.stringify([sessionId, pendingView.id]), sessionId, view: pendingView, actions, inline: true }) : null,
+          children,
+          // This is transient presentation, never a row in the Session history.
+          (0, import_react20.createElement)("div", { "data-chat-running": "" })
         )
       )
     ),
@@ -19992,6 +20026,10 @@ var states = {
   waiting_secret: ["Waiting for a secure credential", "等待安全凭据"],
   waiting_decision: ["Waiting for the owner", "等待负责人决策"],
   review: ["Awaiting review", "待验收"],
+  needs_report: ["Report required", "待补报告"],
+  needs_user: ["Waiting for you", "等待用户决定"],
+  waiting_approval: ["Waiting for approval", "等待授权"],
+  unknown: ["Outcome unknown", "结果待核对"],
   completed: ["Accepted", "已验收"],
   cancelled: ["Cancelled", "已取消"],
   failed: ["Needs attention", "需要处理"],
@@ -20000,6 +20038,15 @@ var states = {
   waiting_browser: ["Waiting for browser control", "等待浏览器交接"]
 };
 var taskStatus = (value) => label(...states[value] ?? [value, value]);
+var foldsKey = "mek-bot:task-list-folds";
+var savedFolds = () => {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(foldsKey));
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+};
 function TaskProgress({ team, sessionId, ctx, all = false }) {
   const roster = team.hooks.useRoster((value) => value);
   const work = team.hooks.useWork((value) => value);
@@ -20011,6 +20058,7 @@ function TaskProgress({ team, sessionId, ctx, all = false }) {
   const [cursor, setCursor] = (0, import_react54.useState)(null);
   const [loading, setLoading] = (0, import_react54.useState)(false);
   const [failure, setFailure] = (0, import_react54.useState)("");
+  const [folds, setFolds] = (0, import_react54.useState)(savedFolds);
   const query = (0, import_react54.useRef)(0);
   (0, import_react54.useEffect)(() => {
     if (!all) return;
@@ -20057,6 +20105,15 @@ function TaskProgress({ team, sessionId, ctx, all = false }) {
   const known = all ? [...new Map([...history, ...roster.tasks ?? []].map((task) => [task.id, task])).values()] : roster.tasks ?? [];
   const owned = known.filter((task) => all || task.owner === owner);
   const tasks = owned.filter((task) => !all || (filter === "all" || (filter === "open" ? !["completed", "cancelled"].includes(task.status) : task.status === filter)) && `${task.summary ?? ""} ${roster.byId[task.owner]?.name ?? ""}`.toLowerCase().includes(search.toLowerCase()));
+  const expanded = all || folds[owner] !== true;
+  const toggleTasks = () => setFolds((previous) => {
+    const next = { ...previous, [owner]: previous[owner] !== true };
+    try {
+      window.sessionStorage.setItem(foldsKey, JSON.stringify(next));
+    } catch {
+    }
+    return next;
+  });
   const secrets = !owner || all ? [] : Object.entries(roster.secretRequests ?? {}).flatMap(([botId, requests]) => requests.filter((request) => request.taskOwner === owner && request.status === "pending").map((request) => ({ botId, request })));
   const approvals = !owner || all ? [] : (work.approvals ?? []).filter((approval) => approval.taskOwner === owner);
   const cancel = async (taskId) => {
@@ -20071,9 +20128,9 @@ function TaskProgress({ team, sessionId, ctx, all = false }) {
     }
   };
   if (!all && !owned.length && !approvals.length && !secrets.length) return null;
-  return /* @__PURE__ */ import_react54.default.createElement("section", { className: `mek-tasks${all ? " mek-task-ledger" : ""}`, "aria-label": label("Team tasks", "团队任务") }, all && /* @__PURE__ */ import_react54.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react54.default.createElement("input", { "aria-label": label("Search tasks", "搜索任务"), placeholder: label("Search tasks", "搜索任务"), value: search, onChange: (event) => setSearch(event.target.value) }), /* @__PURE__ */ import_react54.default.createElement("select", { "aria-label": label("Task status", "任务状态"), value: filter, onChange: (event) => setFilter(event.target.value) }, [["open", "Open tasks", "未完成"], ["completed", "Accepted", "已验收"], ["cancelled", "Cancelled", "已取消"], ["all", "All tasks", "全部任务"]].map(([key, en, zh]) => /* @__PURE__ */ import_react54.default.createElement("option", { key, value: key }, label(en, zh))))), all && !tasks.length && /* @__PURE__ */ import_react54.default.createElement("p", null, label("No matching tasks.", "没有符合条件的任务。")), secrets.map(({ botId, request }) => /* @__PURE__ */ import_react54.default.createElement(SecretCard, { key: request.id, sessionId: request.sessionId, bot: roster.byId[botId], request, roster, actions: team.actions })), approvals.map((approval) => /* @__PURE__ */ import_react54.default.createElement(ApprovalCard, { key: approval.id, approval, bot: roster.byId[approval.botId] ?? { name: "Bot" }, actions: team.actions })), tasks.slice(0, all ? tasks.length : limit).map((task) => /* @__PURE__ */ import_react54.default.createElement("details", { key: task.id, className: "mek-task", "data-task-state": task.status }, /* @__PURE__ */ import_react54.default.createElement("summary", null, /* @__PURE__ */ import_react54.default.createElement("span", null, label("Team task", "团队任务")), /* @__PURE__ */ import_react54.default.createElement("span", null, taskStatus(task.status)), /* @__PURE__ */ import_react54.default.createElement("span", { className: "mek-task-preview" }, task.summary)), /* @__PURE__ */ import_react54.default.createElement("div", { className: "mek-task-body" }, (task.work ?? []).filter((item) => item.status !== "superseded").map((item) => /* @__PURE__ */ import_react54.default.createElement("div", { key: item.id, className: "mek-task-step" }, /* @__PURE__ */ import_react54.default.createElement("strong", null, item.name), /* @__PURE__ */ import_react54.default.createElement("span", null, taskStatus(item.status)), item.report && /* @__PURE__ */ import_react54.default.createElement("p", null, item.report.summary, /* @__PURE__ */ import_react54.default.createElement("br", null), item.report.evidence), !item.report && item.result && /* @__PURE__ */ import_react54.default.createElement("p", null, item.result), item.report?.artifacts?.length > 0 && /* @__PURE__ */ import_react54.default.createElement(Artifacts, { values: item.report.artifacts, sessionId: item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to, ctx }))), (task.decisions ?? []).filter((item) => item.status === "open").map((item) => /* @__PURE__ */ import_react54.default.createElement("p", { key: item.id }, label("Question being handled by the owner: ", "负责人正在处理的问题："), item.question)), task.deliveries?.some((item) => item.status === "uncertain") && /* @__PURE__ */ import_react54.default.createElement("p", { role: "status" }, label("A delivery is being reconciled. The task has not been repeated.", "消息送达情况待核对，未重复执行任务。")), !["completed", "cancelled"].includes(task.status) && /* @__PURE__ */ import_react54.default.createElement("button", { type: "button", disabled: busy === task.id, onClick: () => cancel(task.id) }, label("Cancel task", "取消任务"))))), !all && tasks.length > limit && /* @__PURE__ */ import_react54.default.createElement("button", { onClick: () => setLimit((value) => value + 8) }, label("Show more tasks", "显示更多任务")), all && cursor && /* @__PURE__ */ import_react54.default.createElement("button", { disabled: loading, onClick: () => void loadEarlier() }, label("Load earlier tasks", "加载更早任务")), all && loading && /* @__PURE__ */ import_react54.default.createElement("p", { role: "status" }, label("Loading tasks…", "正在加载任务…")), failure && /* @__PURE__ */ import_react54.default.createElement("p", { role: "alert" }, failure));
+  return /* @__PURE__ */ import_react54.default.createElement("section", { className: `mek-tasks${all ? " mek-task-ledger" : ""}`, "aria-label": label("Team tasks", "团队任务") }, !all && tasks.length > 0 && /* @__PURE__ */ import_react54.default.createElement("button", { type: "button", className: "mek-task-toggle", "aria-expanded": expanded, "aria-label": expanded ? label("Collapse tasks", "收起任务") : label("Expand tasks", "展开任务"), onClick: toggleTasks }, /* @__PURE__ */ import_react54.default.createElement("span", null, label("Team tasks", "团队任务"), " · ", tasks.length), /* @__PURE__ */ import_react54.default.createElement("span", null, expanded ? label("Collapse", "收起") : label("Expand", "展开"))), all && /* @__PURE__ */ import_react54.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react54.default.createElement("input", { "aria-label": label("Search tasks", "搜索任务"), placeholder: label("Search tasks", "搜索任务"), value: search, onChange: (event) => setSearch(event.target.value) }), /* @__PURE__ */ import_react54.default.createElement("select", { "aria-label": label("Task status", "任务状态"), value: filter, onChange: (event) => setFilter(event.target.value) }, [["open", "Open tasks", "未完成"], ["completed", "Accepted", "已验收"], ["cancelled", "Cancelled", "已取消"], ["all", "All tasks", "全部任务"]].map(([key, en, zh]) => /* @__PURE__ */ import_react54.default.createElement("option", { key, value: key }, label(en, zh))))), all && !tasks.length && /* @__PURE__ */ import_react54.default.createElement("p", null, label("No matching tasks.", "没有符合条件的任务。")), secrets.map(({ botId, request }) => /* @__PURE__ */ import_react54.default.createElement(SecretCard, { key: request.id, sessionId: request.sessionId, bot: roster.byId[botId], request, roster, actions: team.actions })), approvals.map((approval) => /* @__PURE__ */ import_react54.default.createElement(ApprovalCard, { key: approval.id, approval, bot: roster.byId[approval.botId] ?? { name: "Bot" }, actions: team.actions })), expanded && tasks.slice(0, all ? tasks.length : limit).map((task) => /* @__PURE__ */ import_react54.default.createElement("details", { key: task.id, className: "mek-task", "data-task-state": task.status }, /* @__PURE__ */ import_react54.default.createElement("summary", null, /* @__PURE__ */ import_react54.default.createElement("span", null, label("Team task", "团队任务")), /* @__PURE__ */ import_react54.default.createElement("span", null, taskStatus(task.status)), /* @__PURE__ */ import_react54.default.createElement("span", { className: "mek-task-preview" }, task.summary)), /* @__PURE__ */ import_react54.default.createElement("div", { className: "mek-task-body" }, task.status === "needs_report" && /* @__PURE__ */ import_react54.default.createElement("p", { role: "status" }, label("The result has returned. The owner must request a structured report and verification evidence before accepting it. Missing a report alone does not require cancellation.", "结果已返回，负责人需请求执行者补充结构化报告和验证证据，再进行验收；无需仅因缺报告取消任务。")), task.status === "review" && /* @__PURE__ */ import_react54.default.createElement("p", { role: "status" }, label("The results are ready for the owner to review and accept. The task is not still executing.", "结果已返回，等待负责人检查证据并验收。")), (task.work ?? []).filter((item) => item.status !== "superseded").map((item) => /* @__PURE__ */ import_react54.default.createElement("div", { key: item.id, className: "mek-task-step" }, /* @__PURE__ */ import_react54.default.createElement("strong", null, item.name), /* @__PURE__ */ import_react54.default.createElement("span", null, taskStatus(item.status)), item.report && /* @__PURE__ */ import_react54.default.createElement("p", null, item.report.summary, /* @__PURE__ */ import_react54.default.createElement("br", null), item.report.evidence), !item.report && item.result && /* @__PURE__ */ import_react54.default.createElement("p", null, item.result), item.report?.artifacts?.length > 0 && /* @__PURE__ */ import_react54.default.createElement(Artifacts, { values: item.report.artifacts, sessionId: item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to, ctx }))), (task.decisions ?? []).filter((item) => item.status === "open").map((item) => /* @__PURE__ */ import_react54.default.createElement("p", { key: item.id }, label("Question being handled by the owner: ", "负责人正在处理的问题："), item.question)), task.deliveries?.some((item) => item.status === "uncertain") && /* @__PURE__ */ import_react54.default.createElement("p", { role: "status" }, label("A delivery is being reconciled. The task has not been repeated.", "消息送达情况待核对，未重复执行任务。")), !["completed", "cancelled"].includes(task.status) && /* @__PURE__ */ import_react54.default.createElement("button", { type: "button", disabled: busy === task.id, onClick: () => cancel(task.id) }, label("Cancel task", "取消任务"))))), !all && expanded && tasks.length > limit && /* @__PURE__ */ import_react54.default.createElement("button", { onClick: () => setLimit((value) => value + 8) }, label("Show more tasks", "显示更多任务")), all && cursor && /* @__PURE__ */ import_react54.default.createElement("button", { disabled: loading, onClick: () => void loadEarlier() }, label("Load earlier tasks", "加载更早任务")), all && loading && /* @__PURE__ */ import_react54.default.createElement("p", { role: "status" }, label("Loading tasks…", "正在加载任务…")), failure && /* @__PURE__ */ import_react54.default.createElement("p", { role: "alert" }, failure));
 }
-var TASK_CSS = `.mek-tasks{flex:none;max-height:28vh;overflow:auto;padding:48px 16px 0;font-size:12px}.mek-task{border:1px solid var(--bt-line);border-radius:12px;margin:5px auto;max-width:900px}.mek-task summary{display:flex;gap:10px;align-items:center;padding:8px 12px;cursor:pointer}.mek-task summary>span:first-child{flex:none;white-space:nowrap}.mek-task summary>span:nth-child(2){opacity:.7;white-space:nowrap}.mek-task-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.6;min-width:0}.mek-task-body{padding:0 12px 10px}.mek-task-step{display:flex;flex-wrap:wrap;gap:10px;padding:6px 0}.mek-task-step p{flex-basis:100%;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:130px;overflow:auto}.mek-task-body button{padding:5px 10px;border:1px solid var(--bt-line);border-radius:8px;background:transparent;cursor:pointer;color:inherit}`;
+var TASK_CSS = `.mek-tasks{flex:none;max-height:28vh;overflow:auto;padding:48px 16px 0;font-size:12px}.mek-task{border:1px solid var(--bt-line);border-radius:12px;margin:5px auto;max-width:900px}.mek-task-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;max-width:900px;margin:0 auto;padding:6px 0;border:0;background:transparent;color:var(--bt-ink);font:inherit;cursor:pointer}.mek-task-toggle>span:last-child{color:var(--bt-ink-2)}.mek-task-toggle:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-task summary{display:flex;gap:10px;align-items:center;padding:8px 12px;cursor:pointer}.mek-task summary>span:first-child{flex:none;white-space:nowrap}.mek-task summary>span:nth-child(2){opacity:.7;white-space:nowrap}.mek-task-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.6;min-width:0}.mek-task-body{padding:0 12px 10px}.mek-task-step{display:flex;flex-wrap:wrap;gap:10px;padding:6px 0}.mek-task-step p{flex-basis:100%;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:130px;overflow:auto}.mek-task-body button{padding:5px 10px;border:1px solid var(--bt-line);border-radius:8px;background:transparent;cursor:pointer;color:inherit}`;
 var LEDGER_CSS = `.mek-tasks.mek-task-ledger{max-height:none;padding:0;overflow:visible}.mek-task-ledger .mek-task{max-width:none}.mek-task-step .mek-artifacts{width:100%}`;
 
 // src/client/mek/browser.jsx
@@ -20462,17 +20519,38 @@ function GroupChat({ sessionId, team }) {
   }, actions, useUi: hooks.useUi, useRoster: hooks.useRoster })));
 }
 
-// src/client/mek/view.jsx
+// src/client/mek/native-question.jsx
 var import_react59 = __toESM(require("react"), 1);
+var empty = /* @__PURE__ */ new Map();
+var absent = { subscribe: () => () => {
+}, getSnapshot: () => empty };
+var noCard = { subscribe: () => () => {
+}, getSnapshot: () => null };
+function NativeQuestionCard({ pending }) {
+  const snapshot = (0, import_react59.useSyncExternalStore)(pending.subscribe ?? noCard.subscribe, pending.getSnapshot ?? noCard.getSnapshot);
+  if (snapshot?.closed) return null;
+  if (Array.isArray(pending.review)) return pending.questions.map((question) => /* @__PURE__ */ import_react59.default.createElement(SettledQuestion, { key: question.id, question, answer: pending.review.find((answer) => answer.id === question.id) ?? { selected: [] } }));
+  return /* @__PURE__ */ import_react59.default.createElement(QuestionCard, { matched: pending });
+}
+function NativeQuestion({ ctx, sessionId }) {
+  const source = ctx.get?.("uiSession")?.sessionStatus ?? absent;
+  const statuses = (0, import_react59.useSyncExternalStore)(source.subscribe, source.getSnapshot);
+  const pending = statuses.get(sessionId)?.pendingInteraction;
+  if (!pending || !["question", "plan-review"].includes(pending.kind) || !Array.isArray(pending.questions)) return null;
+  return /* @__PURE__ */ import_react59.default.createElement(NativeQuestionCard, { key: `${sessionId}:${pending.key}`, pending });
+}
+
+// src/client/mek/view.jsx
+var import_react60 = __toESM(require("react"), 1);
 var STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS2 + HANDOFF_CSS + SIDE_CSS + app_default;
 function TeamView({ ctx, requests, viewport }) {
-  const team = (0, import_react59.useMemo)(() => {
+  const team = (0, import_react60.useMemo)(() => {
     const value = createTeam();
     value.actions.schedules = void 0;
     attachAgentActions(value, ctx);
     return value;
   }, [ctx]);
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     const stopWatching = watchDeletedSubjects(team);
     const stopRemembering = rememberConversation(team);
     const stop = team.start();
@@ -20486,7 +20564,7 @@ function TeamView({ ctx, requests, viewport }) {
   const shown = hooks.useShown((value) => value);
   const roster = hooks.useRoster((value) => value);
   const prefs = roster.prefs;
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     const root = sceneRoot();
     if (!root) return;
     root.dataset.btMotion = prefs?.motion ?? "normal";
@@ -20494,7 +20572,7 @@ function TeamView({ ctx, requests, viewport }) {
     root.style.setProperty("--bt-msg-w", String(widthOf(prefs) / 100));
     root.style.setProperty("--bt-flat-w", String(flatWidthOf(prefs) / 100));
   }, [prefs]);
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     if (!requests) return;
     const show2 = () => {
       const id = requests.getSnapshot();
@@ -20505,8 +20583,8 @@ function TeamView({ ctx, requests, viewport }) {
     show2();
     return requests.subscribe(show2);
   }, [team, requests]);
-  const OverviewPage = (0, import_react59.useMemo)(() => function OverviewPage2() {
-    return /* @__PURE__ */ import_react59.default.createElement(TeamOverview, { team, ctx, embedded: true });
+  const OverviewPage = (0, import_react60.useMemo)(() => function OverviewPage2() {
+    return /* @__PURE__ */ import_react60.default.createElement(TeamOverview, { team, ctx, embedded: true });
   }, [team, ctx]);
   const views = {
     ...hooks,
@@ -20514,18 +20592,18 @@ function TeamView({ ctx, requests, viewport }) {
     TeamOverview: OverviewPage,
     useFrame: (selector) => selector({ viewport, sidebarWidth: 0, collapsedWidth: 0 }),
     useSessions: (selector) => {
-      const host = (0, import_react59.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
+      const host = (0, import_react60.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
       return hooks.useSessions((own) => selector({ ...own, byId: Object.fromEntries([.../* @__PURE__ */ new Set([...Object.keys(host.byId), ...Object.keys(own.byId)])].map((id) => [id, { ...host.byId[id], retainedBy: {}, ...own.byId[id] }])) }));
     }
   };
   const themed = themeCss(allThemes()[prefs?.theme] ?? allThemes().deepseek, prefs?.accent);
-  return /* @__PURE__ */ import_react59.default.createElement(import_react59.default.Fragment, null, /* @__PURE__ */ import_react59.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react59.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react59.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react59.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react59.default.createElement(import_react59.default.Fragment, { key: shown }, /* @__PURE__ */ import_react59.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react59.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react59.default.createElement(TaskProgress, { team, ctx, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react59.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react59.default.createElement(Chat, { sessionId: shown, team }))), /* @__PURE__ */ import_react59.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react59.default.createElement(ErrorToast, { ...views })));
+  return /* @__PURE__ */ import_react60.default.createElement(import_react60.default.Fragment, null, /* @__PURE__ */ import_react60.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react60.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react60.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react60.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react60.default.createElement(import_react60.default.Fragment, { key: shown }, /* @__PURE__ */ import_react60.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react60.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react60.default.createElement(TaskProgress, { team, ctx, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react60.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react60.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react60.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react60.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react60.default.createElement(ErrorToast, { ...views })));
 }
 function NativeBot({ ctx, requests }) {
-  const root = (0, import_react59.useRef)(null);
-  const [ready, setReady] = (0, import_react59.useState)(false);
-  const [viewport, setViewport] = (0, import_react59.useState)(0);
-  (0, import_react59.useLayoutEffect)(() => {
+  const root = (0, import_react60.useRef)(null);
+  const [ready, setReady] = (0, import_react60.useState)(false);
+  const [viewport, setViewport] = (0, import_react60.useState)(0);
+  (0, import_react60.useLayoutEffect)(() => {
     const release = mountScene(root.current);
     const measure = () => setViewport(root.current?.clientWidth ?? 0);
     const observer = new ResizeObserver(measure);
@@ -20544,7 +20622,7 @@ function NativeBot({ ctx, requests }) {
       release();
     };
   }, []);
-  return /* @__PURE__ */ import_react59.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react59.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS)), ready && /* @__PURE__ */ import_react59.default.createElement(TeamView, { ctx, requests, viewport }));
+  return /* @__PURE__ */ import_react60.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react60.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS)), ready && /* @__PURE__ */ import_react60.default.createElement(TeamView, { ctx, requests, viewport }));
 }
 
 // src/client/approval-notices.js
@@ -20654,7 +20732,7 @@ function startNativeNotices({ show: show2, shownSession = () => null }) {
 }
 
 // src/client/mek/index.jsx
-var import_react60 = __toESM(require("react"), 1);
+var import_react61 = __toESM(require("react"), 1);
 var inject = ["slots", "layout", "sessions", "uiWorkspace"];
 var PANEL = "mek-bot";
 function apply(ctx) {
@@ -20666,9 +20744,9 @@ function apply(ctx) {
     },
     shownSession: () => sceneRoot()?.querySelector("[data-mek-session]")?.dataset.mekSession ?? null
   }));
-  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react60.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react60.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react60.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
+  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react61.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react61.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react61.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
   ctx.slots.inject("main", () => {
-    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react60.default.createElement(NativeBot, { ctx, requests }));
+    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react61.default.createElement(NativeBot, { ctx, requests }));
     ctx.effect(() => rememberPanel(ctx.layout, PANEL));
   });
   ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));

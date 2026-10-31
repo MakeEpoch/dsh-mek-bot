@@ -364,14 +364,21 @@ test('structured evidence and explicit criteria are required for acceptance', as
   h.end('a')
   h.take('b'); h.end('b', 'Looks good')
   await settled(() => h.agentOf('a').calls.length > 0)
+  assert.equal(task(h).status, 'needs_report')
+  assert.equal(task(h).work[0].status, 'needs_report')
+  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /revise_bot_task/)
+  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /Do not repeat completed external actions or cancel solely/)
   h.take('a')
   await assert.rejects(h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Done' }), /structured completed result/)
   const work = task(h).work[0]
+  await assert.rejects(h.tool('c', 'revise_bot_task', { task_id: work.id, feedback: 'Steal this review' }), /Only the delegating/)
   await h.tool('a', 'revise_bot_task', { task_id: work.id, feedback: 'Return a verified structured report' })
   h.end('a'); h.take('b')
   await h.tool('b', 'report_bot_task', { status: 'completed', summary: 'Verified', evidence: 'Regression test passed' })
   h.end('b', 'Verified')
   await settled(() => h.agentOf('a').calls.length > 1)
+  assert.equal(task(h).status, 'review')
+  assert.equal(task(h).work.find(item => item.previous === work.id).status, 'review')
   h.take('a')
   await assert.rejects(h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Done' }), /criterion/)
   await h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Verified result delivered', checks: [{ criterion: 'Regression checked', evidence: 'Regression test passed', passed: true }] })
@@ -379,11 +386,115 @@ test('structured evidence and explicit criteria are required for acceptance', as
   assert.equal(task(h).checks.length, 1)
 })
 
+test('returned work remains distinct from active execution, failure and malformed reports', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  h.end('b', 'The change is ready')
+  await settled(() => h.agentOf('a').calls.length === 1)
+  const returned = h.rt.state.mekTasks.works[root.work[0].id]
+  const storedRoot = h.rt.state.mekTasks.roots[root.id]
+  assert.equal(storedRoot.status, 'running', 'the view must not rewrite durable legacy state')
+  assert.equal(task(h).status, 'needs_report')
+  returned.report = { status: 'completed', summary: 'Done', evidence: '   ' }
+  assert.equal(task(h).status, 'needs_report')
+  const resultReceipt = h.rt.state.mekTasks.outbox[returned.resultExchangeId]
+  const delivered = resultReceipt.status
+  resultReceipt.status = 'uncertain'
+  assert.equal(task(h).status, 'unknown', 'uncertain result delivery is not ready for review')
+  resultReceipt.status = delivered
+  h.take('a')
+  await assert.rejects(h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Accept empty evidence' }), /structured completed result/)
+  await h.tool('a', 'message_bot', { to: 'Tester', message: 'Verify the existing change' })
+  assert.equal(task(h).status, 'running', 'another worker is still executing')
+  assert.equal(task(h).work.find(item => item.to === 'b').status, 'needs_report')
+  h.end('a'); h.take('c')
+  await h.tool('c', 'report_bot_task', { status: 'blocked', summary: 'Cannot verify', evidence: 'The test dependency is missing' })
+  h.end('c', 'Verification blocked')
+  await settled(() => h.agentOf('a').calls.length === 2)
+  assert.equal(task(h).status, 'blocked', 'an unresolved failure must not look ready for acceptance')
+  assert.match(contentOf(h.agentOf('a').calls.at(-1)), new RegExp(returned.id))
+  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /Do not revise an unrelated worker/)
+})
+
+test('legacy returned work gets one durable owner reminder without replaying worker actions', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  h.end('b', 'Existing result and artifacts')
+  await settled(() => h.agentOf('a').calls.length === 1)
+  const snapshot = await h.snapshot()
+  delete snapshot.mekTasks.works[root.work[0].id].reviewNoticeId
+  await h.stop()
+  const restored = await host(t, undefined, snapshot)
+  assert.equal(task(restored).status, 'needs_report')
+  await restored.rt.mekRecoverTasks()
+  assert.equal(restored.agentOf('b').calls.length, 0, 'recovery does not re-execute the assignment')
+  assert.equal(restored.agentOf('a').calls.length, 1)
+  assert.match(contentOf(restored.agentOf('a').calls[0]), /previously returned task/)
+  assert.match(contentOf(restored.agentOf('a').calls[0]), /revise_bot_task/)
+  await restored.rt.mekRecoverTasks()
+  assert.equal(restored.agentOf('a').calls.length, 1, 'a recovery tick must not spam the owner')
+  const saved = await restored.snapshot()
+  const record = saved.mekTasks.works[root.work[0].id]
+  assert.ok(saved.mekTasks.outbox[record.reviewNoticeId], 'notice identity and delivery must persist together')
+  assert.equal(record.result, 'Existing result and artifacts')
+  assert.equal(record.report, undefined, 'recovery cannot invent verification evidence')
+  await restored.stop()
+  const again = await host(t, undefined, saved)
+  await again.rt.mekRecoverTasks()
+  assert.equal(again.agentOf('a').calls.length, 0, 'a restart keeps the reminder receipt')
+  assert.equal(again.agentOf('b').calls.length, 0)
+})
+
+test('current replies already carry review guidance and recovery leaves final tasks unchanged', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  await h.tool('b', 'report_bot_task', { status: 'completed', summary: 'Verified', evidence: 'Existing regression checks passed' })
+  h.end('b', 'Verified result')
+  await settled(() => h.agentOf('a').calls.length === 1)
+  assert.equal(task(h).status, 'review')
+  assert.match(contentOf(h.agentOf('a').calls[0]), /finish_bot_task/)
+  await h.rt.mekRecoverTasks()
+  assert.equal(h.agentOf('a').calls.length, 1, 'the original result already includes the reminder')
+  h.take('a')
+  await h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Reviewed the recorded checks' })
+  const snapshot = await h.snapshot()
+  delete snapshot.mekTasks.works[root.work[0].id].reviewNoticeId
+  await h.stop()
+  const restored = await host(t, undefined, snapshot)
+  await restored.rt.mekRecoverTasks()
+  assert.equal(task(restored).status, 'completed')
+  assert.equal(restored.agentOf('a').calls.length, 0)
+})
+
 const groupTeam = () => {
   const team = seed()
   team.rooms.r = { id: 'r', name: 'Review group', named: true, members: ['a', 'b', 'c'], admin: 'b', mode: 'admin', sessions: { b: 'gb', c: 'gc' }, segments: {}, log: [], seq: 0, seen: {} }
   return team
 }
+
+test('a returned group with missing member evidence can be repaired instead of cancelled', async t => {
+  const h = await host(t, undefined, groupTeam())
+  h.begin('a')
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review existing results' })
+  h.end('a'); h.take('gb'); h.end('gb', 'Plain-text group result')
+  await settled(() => h.agentOf('a').calls.length > 0)
+  const root = task(h)
+  assert.equal(root.status, 'needs_report')
+  const group = root.work.find(work => !work.to)
+  assert.equal(group.report.status, 'needs_report', 'an aggregate cannot invent member evidence')
+  assert.match(contentOf(h.agentOf('a').calls.at(-1)), new RegExp(group.id))
+  h.take('a')
+  await assert.rejects(h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Accept plain group output' }), /structured completed result/)
+  await h.tool('a', 'revise_bot_task', { task_id: group.id, feedback: '@Writer Return evidence from existing results without repeating external actions' })
+  h.end('a'); h.take('gb')
+  await h.tool('gb', 'report_bot_task', { status: 'completed', summary: 'Existing result checked', evidence: 'Verified the retained artifact' })
+  h.end('gb', 'Report supplied')
+  await settled(() => h.agentOf('a').calls.length > 1)
+  assert.equal(task(h).status, 'review')
+  h.take('a')
+  await h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Checked the group report and artifact' })
+  assert.equal(task(h).status, 'completed')
+})
 
 test('nested group questions, approvals and results use the original owner and native sessions', async t => {
   const h = await host(t, undefined, groupTeam())

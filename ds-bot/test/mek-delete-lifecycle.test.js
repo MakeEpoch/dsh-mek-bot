@@ -34,15 +34,29 @@ let deleted=false
 let revision=1
 const sends=[]
 let refuseSend=true
-const roster = () => ({revision,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:[],agents:[],tasks:[{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]}],exchangeTurns:{},questions:{},views:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},work:{bots:{},rooms:{},approvals:[]}})
+let pendingPanel=null
+let doing=null
+let refusePanel=true
+const panelReplies=[]
+const feedControllers=new Set()
+let nativeStatuses=new Map()
+const nativeListeners=new Set()
+const sessionStatus={getSnapshot:()=>nativeStatuses,subscribe:listener=>{nativeListeners.add(listener);return()=>nativeListeners.delete(listener)}}
+const roster = () => ({revision,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:[],agents:[],tasks:[{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]}],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}}]}})
 const fetch = async (url,options={}) => {
- if(url.endsWith('/feed')) return new Response(new ReadableStream({ start(controller) { options.signal?.addEventListener('abort',()=>controller.close(),{once:true}) } }))
+ if(url.endsWith('/feed')) return new Response(new ReadableStream({ start(controller) { feedControllers.add(controller);options.signal?.addEventListener('abort',()=>{feedControllers.delete(controller);controller.close()},{once:true}) } }))
  const {endpoint,payload} = JSON.parse(options.body)
  let value=null
  if(endpoint==='state') value=roster()
  else if(endpoint==='mek-task-list') value={tasks:roster().tasks,nextCursor:null}
  else if(endpoint==='chat') value={sessionId:payload.botId,items:[],cursor:null}
  else if(endpoint==='send') {sends.push(payload);if(refuseSend)return new Response(JSON.stringify({ok:false,error:{code:'bot/refused',message:'Mock send refused'}}))}
+ else if(endpoint==='view-reply') {
+  panelReplies.push(payload)
+  if(refusePanel)return new Response(JSON.stringify({ok:false,error:{code:'mock/refused',message:'Panel temporarily unavailable'}}))
+  pendingPanel=null;revision++
+ }
+ else if(endpoint==='dismiss-view') {pendingPanel=null;revision++}
  else if(endpoint==='delete-bot') {deleted=true;revision++;value=roster()}
  return new Response(JSON.stringify({ok:true,value}))
 }
@@ -55,11 +69,17 @@ const exports=win.moduleEntry.factory(name=>platform[name])
 const registrations=[]
 const effects=[]
 const hostSnapshot={byId:{},ids:[]};const list={getSnapshot:()=>hostSnapshot,subscribe:()=>()=>{}}
-exports.apply({effect: create => effects.push(create()),slots:{inject:(_,work)=>work(),register:(seat,component)=>registrations.push({seat,component})},sessions:{list,refresh(){}},layout:{selectPanel(){}},uiWorkspace:{openSession(){}}})
+exports.apply({get:name=>name==='uiSession'?{sessionStatus}:undefined,effect: create => effects.push(create()),slots:{inject:(_,work)=>work(),register:(seat,component)=>registrations.push({seat,component})},sessions:{list,refresh(){}},layout:{selectPanel(){}},uiWorkspace:{openSession(){}}})
 const main=registrations.find(row=>row.seat.name==='main')
 const root=createRoot(document.querySelector('#host'))
 const originalError=console.error;console.error=logger.error
 const pause=()=>new Promise(resolve=>setTimeout(resolve,15))
+async function refresh() {
+ await act(async()=>{revision++;for(const controller of feedControllers)controller.enqueue(new TextEncoder().encode('event: live\ndata: {}\n\n'));await pause();await pause()})
+}
+async function publish(pending, sessionId='main') {
+ await act(async()=>{nativeStatuses=new Map(pending?[[sessionId,{pendingInteraction:pending}]]:[]);for(const listener of nativeListeners)listener();await pause()})
+}
 async function click(selector) {const node=document.querySelector(selector);if(!node) throw new Error(`Missing ${selector}`);await act(async()=>{node.focus();node.click();await pause()})}
 try {
  await act(async()=>{root.render(React.createElement(main.component));await pause()})
@@ -68,6 +88,88 @@ try {
  assert.equal(document.querySelector('[data-bt-collapsing]'),null)
  // A navigation-only mount must not create either conversation-margin rule.
  assert.equal(document.querySelector('style[data-dsh-bot="chat-room"]'),null)
+ await click('[data-bot-id="main"]')
+ // The generated native bundle must keep transient activity in the chat outlet.
+ doing={since:Date.now()};await refresh()
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,70))})
+ assert.equal(document.querySelectorAll('.bt-typing').length,1)
+ assert.ok(document.querySelector('[data-chat-running] > .bt-typing'))
+ assert.equal(document.querySelector('[data-chat-flow]').lastElementChild,document.querySelector('[data-chat-running]'))
+ doing={since:doing.since,tool:'read_file',note:'Inspecting fixture file'};await refresh()
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,850))})
+ assert.match(document.querySelector('.bt-typing').textContent,/Inspecting fixture file/)
+ await click('[data-bot-id="keep"]')
+ assert.equal(document.querySelector('.bt-typing'),null,'idle Bot must not inherit another Bot activity')
+ await click('[data-bot-id="main"]')
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,70))})
+ assert.ok(document.querySelector('[data-chat-running] > .bt-typing'))
+ doing=null;await refresh()
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,200))})
+ assert.equal(document.querySelector('.bt-typing'),null)
+ assert.equal(sends.length,0,'activity updates must never send chat messages')
+ // Interactive show_view is absent from chat history and needs its pending outlet.
+ pendingPanel={id:'panel-fixture',title:'Choose a panel',view:{type:'options',id:'pick',options:[{label:'Panel A'},{label:'Panel B'}]}}
+ await refresh()
+ assert.match(document.querySelector('[data-chat-flow]').textContent,/Choose a panel/)
+ assert.equal(document.querySelectorAll('.dv-q').length,1)
+ await click('[aria-label="Collapse tasks"]')
+ assert.ok(document.querySelector('.dv-q'),'task folding leaves the pending panel visible')
+ await click('[aria-label="Expand tasks"]')
+ await click('.dv-q button.dv-q-opt:nth-child(2)')
+ assert.equal(panelReplies.length,1)
+ assert.equal(panelReplies[0].viewId,'panel-fixture')
+ assert.equal(panelReplies[0].action,'pick')
+ assert.deepEqual(panelReplies[0].values,{selected:['Panel B']})
+ assert.ok(document.querySelector('.bt-q-inline').style.display!=='none','failed answer restores the pending card')
+ refusePanel=false
+ await click('.dv-q button.dv-q-opt:nth-child(2)')
+ assert.equal(panelReplies.length,2)
+ assert.equal(document.querySelector('.dv-q'),null)
+ pendingPanel={id:'dismiss-fixture',title:'Dismissable panel',view:{type:'options',id:'pick',options:[{label:'Keep'}]}};await refresh()
+ await click('.dv-q [aria-label="Dismiss view"]')
+ assert.equal(pendingPanel,null)
+ // Native DSH carriers use their own callbacks, not Bot view/question endpoints.
+ let refuseNative=true
+ const nativeAnswers=[]
+ let finishAnswer
+ const pending={kind:'question',key:'native-fixture',questions:[{id:'first',question:'Native first?',options:[{label:'Original option'}]},{id:'second',question:'Native second?',multiSelect:true,options:[{label:'Exact second option'}]}],answer:async answer=>{nativeAnswers.push(answer);if(refuseNative)throw new Error('Native answer failed');await new Promise(resolve=>{finishAnswer=resolve})},dismiss:async()=>{}}
+ await publish(pending,'keep')
+ assert.equal(document.querySelector('.bt-native-question'),null,'pending interactions are scoped to their Session')
+ await publish(pending)
+ await click('.bt-native-question button.bt-q-opt')
+ assert.match(document.querySelector('.bt-native-question').textContent,/Native second/)
+ await click('.bt-native-question button.bt-q-opt')
+ await click('.bt-native-question .bt-q-submit')
+ assert.match(document.querySelector('.bt-native-question [role="alert"]').textContent,/Native answer failed/)
+ assert.equal(document.querySelector('.bt-native-question button.bt-q-opt').getAttribute('aria-pressed'),'true','failed submission retains the selected option')
+ refuseNative=false
+ await click('.bt-native-question .bt-q-submit')
+ assert.equal(document.querySelector('.bt-native-question .bt-q-submit').disabled,true)
+ await click('.bt-native-question .bt-q-submit')
+ assert.equal(nativeAnswers.length,2,'pending submission cannot be duplicated')
+ assert.equal(JSON.stringify(nativeAnswers[1]),JSON.stringify({answers:[{id:'first',selected:['Original option']},{id:'second',selected:['Exact second option']}]}))
+ await act(async()=>{finishAnswer();await pause()})
+ assert.equal(document.querySelector('.bt-native-question'),null)
+ let dismissed=0
+ await publish({...pending,kind:'plan-review',key:'plan-fixture',questions:[{id:'plan',question:'Review the plan',detail:'Original plan detail',options:[{label:'Accept plan'}]}],dismiss:async()=>{dismissed++}})
+ assert.match(document.querySelector('.bt-native-question').textContent,/Original plan detail/)
+ await click('.bt-native-question [aria-label="Dismiss question"]')
+ assert.equal(dismissed,1)
+ assert.equal(document.querySelector('.bt-native-question'),null)
+ await publish({...pending,key:'readonly-fixture',review:[{id:'first',selected:['Original option']} ]})
+ assert.ok(document.querySelector('.bt-q-settled'))
+ assert.equal(document.querySelector('.bt-q-settled button'),null)
+ let cardSnapshot={closed:false}
+ const cardListeners=new Set()
+ await publish({...pending,key:'closing-fixture',getSnapshot:()=>cardSnapshot,subscribe:listener=>{cardListeners.add(listener);return()=>cardListeners.delete(listener)}})
+ assert.ok(document.querySelector('.bt-native-question'))
+ await act(async()=>{cardSnapshot={closed:true};for(const listener of cardListeners)listener();await pause()})
+ assert.equal(document.querySelector('.bt-native-question'),null,'a host-closed carrier must not remain answerable')
+ await publish({...pending,key:'unsupported-fixture',kind:'other-panel'})
+ assert.equal(document.querySelector('.bt-native-question'),null)
+ await publish(null)
+ assert.equal(sends.length,0)
+
  await click('[data-bot-id="keep"]')
  await click('[data-bot-id="keep"]')
  for (const width of [900,700,390,0,1200]) {
@@ -111,8 +213,26 @@ try {
  assert.equal(document.querySelector('.dsb-composer-images'),null)
  assert.equal(document.querySelector('.dsb-send').disabled,true)
  assert.equal(document.querySelector('.mek-task').dataset.taskState, 'needs_decision')
+ await click('[aria-label="Collapse tasks"]')
+ assert.equal(document.querySelector('.mek-task'),null)
+ assert.ok(document.querySelector('.mek-tasks .bt-mw-card'),'approvals remain visible while tasks are folded')
+ assert.ok(document.querySelector('.mek-tasks .bt-secret'),'secure credential cards remain visible while tasks are folded')
+ assert.equal(document.querySelector('[aria-label="Expand tasks"]').getAttribute('aria-expanded'),'false')
+ assert.match(document.querySelector('[aria-label="Expand tasks"]').textContent,/3/)
+ await click('[data-bot-id="keep"]')
+ await click('[data-bot-id="main"]')
+ assert.ok(document.querySelector('[aria-label="Expand tasks"]'),'folding belongs to this Bot and survives a conversation switch')
+ await click('[aria-label="Expand tasks"]')
+ assert.equal(document.querySelectorAll('.mek-task').length,3)
  await click('.mek-task summary')
  assert.match(document.querySelector('.mek-task-body').textContent, /Which project convention/)
+ await click('.mek-task[data-task-state="needs_report"] summary')
+ assert.match(document.querySelector('.mek-task[data-task-state="needs_report"]').textContent, /Report required/)
+ assert.match(document.querySelector('.mek-task[data-task-state="needs_report"] [role="status"]').textContent, /Missing a report alone does not require cancellation/)
+ assert.match(document.querySelector('.mek-task[data-task-state="needs_report"]').textContent, /Existing result retained/)
+ await click('.mek-task[data-task-state="review"] summary')
+ assert.match(document.querySelector('.mek-task[data-task-state="review"] [role="status"]').textContent, /ready for the owner to review and accept/)
+ assert.match(document.querySelector('.mek-task[data-task-state="review"]').textContent, /Regression passed/)
  await click('[data-bot-id="delete"]')
  await click('[data-bot-id="delete"]')
  const panel = document.querySelector('.bt-panel')
@@ -173,6 +293,12 @@ try {
  await act(async()=>{root.render(React.createElement(main.component));await pause()})
  assert.equal(document.querySelector('textarea').getAttribute('aria-label'), 'Message Keeper')
  assert.equal(document.querySelector('[data-bot-id="keep"]').getAttribute('aria-current'), 'page')
+ await click('[data-bot-id="main"]')
+ await click('[aria-label="Collapse tasks"]')
+ await act(async()=>{root.render(null);await pause()})
+ await act(async()=>{root.render(React.createElement(main.component));await pause()})
+ assert.ok(document.querySelector('[aria-label="Expand tasks"]'),'tab-local folding survives remount')
+ assert.equal(document.querySelector('.mek-task'),null)
  assert.deepEqual(errors, [])
 } finally {for(const stop of effects) stop?.(); await act(async()=>root.unmount());console.error=originalError;dom.window.close();for(const [key,descriptor] of saved) {if(descriptor) Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key]}}
 })

@@ -17,3 +17,15 @@ A reply is durably recorded before its upstream work closes. Delivery states dis
 ## Validation
 
 Cover repeated questions and a user escalation, nested delegation, direct conversations while delegated work waits, revisions, rejected premature completion, restart with a pending question, delivery failure with unreadable history, cancellation, real user approval routing, secure credentials and group report-back. Exercise native rendering with the actual React bundle and run the host against a local scripted model. Never send test prompts to the user's running DSH or real model.
+
+## Returned-result recovery and display (2026-10-31)
+
+A plain-text reply is retained, but is not a structured completed report. The read model derives `needs_report` for returned work missing a nonempty completed summary/evidence and `review` when returned work is ready for acceptance. Active execution, decisions, failures and uncertain outcomes remain distinct; historical completed/cancelled roots are unchanged. Durable work retains its existing schema and outcome, so old records do not need a destructive migration.
+
+Every new durable result carries explicit owner-review instructions, with work/root identities and the existing `revise_bot_task` repair route. Request missing documentation from the existing result; do not repeat completed external actions or cancel solely because evidence is missing. Acceptance still requires valid structured reports and criterion evidence. Group aggregates cannot describe missing member reports as completed.
+
+Recovery sends one durable reminder to the original delegator for legacy returned work. Reminder identity and outgoing intent share a snapshot, delivery uses the existing outbox/reconciliation, and uncertain original results are reconciled first. Group member results are reviewed through their aggregate. No worker request, automatic acceptance/cancellation or fabricated report is created by recovery. Existing execution limits and approvals apply to any subsequently requested revision.
+
+In chat, a task-list disclosure keeps the count visible and remembers folding per Bot in tab-local session storage. It folds task rows only; approvals/secure credential requests remain visible. The complete team ledger remains expanded and separate.
+
+Regression checks include missing/malformed evidence, mixed active/returned/failed work, owner-only repair and acceptance, legacy reminders across repeated recovery/restarts, unchanged final results, and UI folding with conversation switching/remount.

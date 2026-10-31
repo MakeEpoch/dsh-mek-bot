@@ -34,6 +34,7 @@ import { ARTIFACT_CSS } from './artifacts.jsx'
 import { BROWSER_WORKSPACE_CSS } from './browser.jsx'
 import { TeamHeader, TEAM_HEADER_CSS } from './header.jsx'
 import { GroupChat } from './group-chat.jsx'
+import { NativeQuestion } from './native-question.jsx'
 import { mountScene, sceneRoot, scopeCss } from './dom.js'
 
 const STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS + HANDOFF_CSS + SIDE_CSS + appCss
@@ -80,7 +81,7 @@ function TeamView({ ctx, requests, viewport }) {
     <div className="dsb-frame mek-team-frame">
       <TeamHeader team={team} views={views} />
       <main className="dsb-main dsb_centerCol" data-mek-session={shown}>
-        {shown && <React.Fragment key={shown}><div className="dsb-head"><HeaderPill {...views} showTitle={false} sessionId={shown} useSession={team.sessionHook(shown)} /></div><TaskProgress team={team} ctx={ctx} sessionId={shown} />{roster.roomsById[shown] ? <GroupChat sessionId={shown} team={team} /> : <Chat sessionId={shown} team={team} />}</React.Fragment>}
+        {shown && <React.Fragment key={shown}><div className="dsb-head"><HeaderPill {...views} showTitle={false} sessionId={shown} useSession={team.sessionHook(shown)} /></div><TaskProgress team={team} ctx={ctx} sessionId={shown} />{roster.roomsById[shown] ? <GroupChat sessionId={shown} team={team} /> : <Chat sessionId={shown} team={team}><NativeQuestion ctx={ctx} sessionId={shown} /></Chat>}</React.Fragment>}
       </main>
       <Overlays {...views} embedded /><ErrorToast {...views} />
     </div>
