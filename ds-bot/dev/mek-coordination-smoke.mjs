@@ -30,12 +30,11 @@ const writer = initial.bots.find(bot => bot.name === 'Writer') ?? await api('cre
 await api('send', { sessionId: chief.id, text: '协作闭环验证' })
 const questionState = await until(value => value.questions[chief.sessionId], 'the necessary user question at Chief')
 assert.equal(questionState.questions[writer.sessionId], undefined)
-const root = questionState.tasks.find(item => item.owner === chief.id && item.work.some(work => work.instruction?.includes('MEK_COORDINATION_WORK')))
+const root = questionState.tasks.find(item => item.owner === (chief.sessionId ?? chief.id) && item.work.some(work => work.instruction?.includes('MEK_COORDINATION_WORK')))
 assert.ok(root)
 assert.equal(root.decisions.filter(item => item.status === 'answered').length, 1, 'Chief decides the routine question')
 assert.equal(root.decisions.filter(item => item.status === 'open').length, 1)
 assert.equal(root.work[0].status, 'waiting_decision')
-writeFileSync(join(home, 'browser-launch.txt'), launch, { mode: 0o600 })
 writeFileSync(join(home, 'smoke-state.json'), JSON.stringify({ chief: chief.id, writer: writer.id, root: root.id }))
 if (process.env.MEK_SMOKE_WAIT_USER === '1') {
   console.log('PASS: routine decision handled by Chief; one necessary question is waiting in Chief, with no question in Writer. Browser verification may continue.')

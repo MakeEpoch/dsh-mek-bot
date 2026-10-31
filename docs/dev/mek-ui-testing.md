@@ -116,6 +116,8 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 
 上游 `dev/bench.sh` 仍按 `ds-bot` bundle 与 `id: bot` 配置。未经下游适配及入口核对，不得将它的一次成功启动写成原生插件验收。`dev/mek-smoke.mjs`、`mek-coordination-smoke.mjs`、`mek-team-smoke.mjs`、`mek-workflow-smoke.mjs` 提供业务检查，但不负责创建这个原生 UI 环境；使用前读取各脚本参数和所需场景，不能把 API 冒烟当成点击验收。
 
+任务 owner 使用运行会话标识；冒烟断言应使用 Bot 的 `sessionId`（没有时回退 `id`），不能将 Bot 身份 ID 与会话 ID 混用。不要额外保存带 token 的浏览器启动 URL；测试认证只使用隔离环境正常提供的入口，日志留在本地。
+
 ## 4. 宽度和状态矩阵
 
 测量的是 `.mek-bot-scene` 的可用宽度，不能只记录浏览器窗口宽度。
