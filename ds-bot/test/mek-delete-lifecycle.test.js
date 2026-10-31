@@ -16,8 +16,18 @@ Object.defineProperty(globalThis,'navigator',{value:win.navigator,configurable:t
 win.matchMedia = () => ({matches:false,addEventListener(){},removeEventListener(){}})
 win.Element.prototype.getAnimations = () => []
 win.Element.prototype.animate = () => ({finished:Promise.resolve(),cancel(){}})
-class ResizeObserver { observe(){} disconnect(){} unobserve(){} }
+const observers = new Set()
+class ResizeObserver {
+ constructor(callback) { this.callback=callback; this.targets=new Set(); observers.add(this) }
+ observe(target) { this.targets.add(target) }
+ disconnect() { this.targets.clear(); observers.delete(this) }
+ unobserve(target) { this.targets.delete(target) }
+}
 Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true,ResizeObserver,requestAnimationFrame:win.requestAnimationFrame.bind(win),cancelAnimationFrame:win.cancelAnimationFrame.bind(win)})
+// jsdom has no layout; drive the native pane's size independently of the window.
+let sceneWidth=1200
+Object.defineProperty(win.Element.prototype,'clientWidth',{configurable:true,get(){return this.classList?.contains('mek-bot-scene')?sceneWidth:0}})
+Object.defineProperty(win.Element.prototype,'clientHeight',{configurable:true,get(){return this.classList?.contains('mek-bot-scene')?800:0}})
 const React = require('react'); const { createRoot } = require('react-dom/client'); const ReactDOM = require('react-dom')
 const { act } = React
 let deleted=false
@@ -53,6 +63,27 @@ const pause=()=>new Promise(resolve=>setTimeout(resolve,15))
 async function click(selector) {const node=document.querySelector(selector);if(!node) throw new Error(`Missing ${selector}`);await act(async()=>{node.focus();node.click();await pause()})}
 try {
  await act(async()=>{root.render(React.createElement(main.component));await pause()})
+ assert.ok(document.querySelector('.mek-team-header [data-bot-id="main"]'))
+ assert.equal(document.querySelector('.bt-leftcol,.bt-leftcol-foot,.bt-title-toggle'),null)
+ assert.equal(document.querySelector('[data-bt-collapsing]'),null)
+ // A navigation-only mount must not create either conversation-margin rule.
+ assert.equal(document.querySelector('style[data-dsh-bot="chat-room"]'),null)
+ await click('[data-bot-id="keep"]')
+ await click('[data-bot-id="keep"]')
+ for (const width of [900,700,390,0,1200]) {
+  await act(async()=>{
+   sceneWidth=width
+   for (const observer of observers) if ([...observer.targets].some(target=>target.classList?.contains('mek-bot-scene'))) observer.callback()
+   await pause()
+  })
+  assert.equal(document.querySelector('[data-bot-id="keep"]').getAttribute('aria-expanded'),'true')
+  const details=document.querySelector('.bt-panel:not([data-leaving])')
+  assert.ok(details,`details remain shown at ${width}px`)
+  assert.equal(details.hasAttribute('data-overlay'),width<740)
+  assert.ok(document.querySelector('.mek-team-header [data-bot-id="main"]'))
+ }
+ await click('[aria-label="Close details"]')
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,350))})
  await click('[data-bot-id="main"]')
  await click('.dsb-composer .bt-plus')
  assert.equal(document.querySelector('.bt-plus-menu [role="menuitem"]').textContent, 'Add images')
@@ -105,7 +136,7 @@ try {
  assert.equal(document.querySelector('textarea').getAttribute('aria-label'), 'Message Keeper')
  assert.equal(document.querySelector('.dsb-side'), null)
  assert.ok(document.querySelector('.mek-team-header [data-bot-id="main"]'))
- assert.equal(document.querySelector('.mek-team-header .bt-brand'), null)
+ assert.equal(document.querySelector('.mek-team-header .bt-brand,.bt-leftcol,.bt-leftcol-foot'), null)
  assert.ok(document.querySelector('.mek-team-tools [aria-label="Search"]'))
  assert.ok(document.querySelector('[data-bot-id="keep"] .bt-pill-go svg'))
  assert.equal(document.querySelector('[data-bot-id="main"] .bt-pill-go'), null)

@@ -8,7 +8,7 @@ MakeEpoch's DS-Bot integration for DeepSeek Harness. One **Bot** sidebar entry o
 
 ## Use
 
-The Bot sidebar keeps upstream's **New**, existing Bots, groups and optional **DSH Agent** row, with collapse and expand controls. Deleting the current Bot or group returns to an available conversation and closes obsolete overlays. Click the conversation title to open its details. The bottom menu contains Usage, Connectors and Bot settings. Logout, scheduled-task controls and the Agent-mode switch are omitted from this Bot surface; DSH's own interface remains available.
+The top navigation lists Bots, groups and the optional **DSH Agent**. Select a conversation to open it; select it again to toggle its details. The top-right menu contains New, Usage, Connectors and Bot settings. Details appear beside the chat when space permits and cover it inside the Bot pane on narrow layouts. DSH's own sidebar keeps its normal collapse and expand controls. Deleting the current Bot or group returns to an available conversation and closes obsolete overlays. Logout, scheduled-task controls and the Agent-mode switch are omitted from this Bot surface; DSH's own interface remains available.
 
 Bots have persistent identities, roles, models and memory, and can delegate work or discuss it in groups. The Agent row opens ordinary conversations using DSH's existing workspace navigation. Models, keys and permissions come from your DSH configuration. New Bots do not automatically send a greeting: pick a model and send a message yourself.
 
@@ -22,7 +22,7 @@ The adapter persists task ownership, questions and outgoing results in `mek-bot/
 
 ## Team operations
 
-The **Team** surface brings task history, important activity, policies, project facts and reusable workflows together.
+**Bot settings → Team overview** brings task history, important activity, policies, project facts and reusable workflows together.
 
 - **Supervisor awareness:** choose a supervisor and per-Bot summary sharing. Explicit task summaries are shared by default; routine progress is recorded without a supervisor call, while blockers, failures and essential decisions receive deduplicated notices. Direct department work retains its owner. Private transcripts are not harvested. Notifications and sharing are separate controls; already-delivered history cannot be revoked.
 - **Reliable delivery:** state transitions and outgoing messages persist together. Delegated groups track each member through questions, approvals, delayed results and revisions. Failed, cancelled or uncertain work cannot pass as success. Declared criteria require individual evidence before acceptance. Task artifacts open from their producing session.
@@ -43,7 +43,7 @@ cd ds-bot
 npm ci
 npm run build
 npm pack --ignore-scripts
-dsh plugin --profile web add -w ./dsh-mek-bot-0.2.1.tgz
+dsh plugin --profile web add -w ./dsh-mek-bot-0.2.4.tgz
 ```
 
 Enable the bundle and restart DSH. Do not enable the original `ds-bot` bundle alongside it. Use a package archive for production, never a source link. Keep `autoInstallPeers: false` in the profile; the DSH loader supplies the optional host API peers. Do not install duplicate Cordis, scope, tools or LLM cores.
@@ -80,7 +80,7 @@ node scripts/build-client.mjs --check
 npm run lint
 ```
 
-See [integration boundaries and merge procedure](docs/makeepoch-integration.md). The retained desktop/Docker code is upstream reference material, not this plugin's release entry. Original documentation remains in [README.upstream.md](README.upstream.md).
+See [fork characteristics, upstream differences and documentation requirements](docs/fork-vs-upstream.md), [integration boundaries and merge procedure](docs/makeepoch-integration.md), and the [UI test plan](docs/dev/mek-ui-testing.md). New features and changed flows must update their documentation in the same change. The retained desktop/Docker code is upstream reference material, not this plugin's release entry. Original documentation remains in [README.upstream.md](README.upstream.md).
 
 ## License
 

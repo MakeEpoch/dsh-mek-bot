@@ -38,7 +38,7 @@ test('the parent DSH gets one native Bot launcher and no outer Agent shortcut', 
   window.parent = window
   runInNewContext(readFileSync(new URL('../client.js', import.meta.url), 'utf8'), { window, URL, URLSearchParams })
   const platform = {
-    react: { createElement: (type, props) => ({ type, props }), Component: class {}, Fragment: Symbol('Fragment'), useState: value => [value, () => {}], useEffect: () => {}, useMemo: work => work(), useRef: current => ({ current }) },
+    react: { createElement: (type, props) => ({ type, props }), createContext: initial => ({ Provider: ({ children }) => children, value: initial }), useContext: context => context.value, useCallback: fn => fn, useSyncExternalStore: (subscribe, snapshot) => snapshot(), useId: () => 'id', Component: class {}, Fragment: Symbol('Fragment'), useState: value => [value, () => {}], useEffect: () => {}, useLayoutEffect: () => {}, useMemo: work => work(), useRef: current => ({ current }) },
     'react-dom': { createPortal: node => node },
     '@deepseek-ai/dsh-client-ui-primitives': { MarkdownText: () => null },
   }

@@ -4,6 +4,14 @@ English | [中文](CONTRIBUTING.zh.md)
 
 Thank you for helping. This file explains how the team works, how to set up the plugin, how to test a change and which rules a change must follow. For what the plugin does and how users install it, see [README.md](README.md).
 
+## MakeEpoch downstream scope
+
+This repository ships the `dsh-mek-bot` native DSH plugin. Read [fork differences and documentation rules](docs/fork-vs-upstream.md), [integration boundaries](docs/makeepoch-integration.md) and [UI testing](docs/dev/mek-ui-testing.md) first. The inherited instructions below also describe upstream desktop/mobile workflows; they do not change this fork's release target or native navigation.
+
+New features, changed flows, capability restrictions and upstream adaptations must update the relevant documents in the same PR: the fork inventory, affected integration/design notes, both READMEs for usage changes, and the UI test matrix for visible changes. Remove stale instructions and state verification gaps explicitly. Documentation is part of completion, not a later follow-up. Documentation-only edits need link/source/translation review rather than model or browser test runs.
+
+UI changes need the applicable automated checks and browser evidence from the test plan. An upstream merge additionally needs an isolated DSH integration pass. Label component tests, browser fixtures, DSH integration and installed-package validation separately; attach their versions, cases and evidence. Existing CI does not run the full browser/DSH matrix.
+
 ## Who can open pull requests
 
 Collaborators of this repository push branches here and open pull requests into `dev` (see [How we work](#how-we-work)). For now, only collaborators can open pull requests. If you are not a collaborator, please open an issue for a bug (see [Report a problem](#report-a-problem)) or use [Discussions](https://github.com/Fei2411/DS-Bot/discussions) for a question or an idea.
@@ -99,7 +107,7 @@ For the test bench, add the DeepSeek Harness checkout next to the plugin folder 
 ```sh
 cd ..
 git clone https://github.com/deepseek-ai/deepseek-harness.git
-git -C deepseek-harness checkout dsh-v0.2.1-rc.2
+git -C deepseek-harness checkout dsh-v0.2.1-rc.3
 (cd deepseek-harness && pnpm install)
 ```
 

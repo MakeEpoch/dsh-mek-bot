@@ -9,6 +9,7 @@ import { BotSettingsForm, Switch } from './bot-settings.js'
 import { Segmented, useGlide } from './motion.js'
 import { GroupSettingsForm, NewGroupForm } from './group-settings.js'
 import { CreateBot } from './create-bot.js'
+import { KeptPrivateSection } from './kept-private.js'
 import { KeyIcon, SecretsPage } from './secret-card.js'
 import { UsagePage } from './usage-page.js'
 import { ConnectorsPage } from './connectors.js'
@@ -154,7 +155,7 @@ function MainBotsSection({ roster, actions, run }) {
   return h(SetSection, { title: t('Main Bot') },
     h(SetRow, {
       label: t('Main Bot'),
-      hint: first ? t('First in the sidebar. Pick another Bot to hand it the role; {name} then stops being a Main Bot.', { name: first.name }) : undefined,
+      hint: first ? t('First in the Bot list. Pick another Bot to hand it the role; {name} then stops being a Main Bot.', { name: first.name }) : undefined,
     },
     h('select', {
       className: 'bt-select', 'aria-label': t('Main Bot'), value: first?.id ?? '',
@@ -199,6 +200,7 @@ function BotsPage({ roster, actions, run }) {
           isMainOf(roster, bot.id) ? h('span', { className: 'bt-tag' }, t('Main Bot')) : null,
           bot.hidden && !isMainOf(roster, bot.id) ? h('span', { className: 'bt-tag' }, t('Hidden')) : null),
         h('span', { className: 'bt-chevron' }, h(ChevronRightIcon))))),
+    h(KeptPrivateSection, { key: 'kept', roster, actions, run, Section: SetSection, Row: SetRow }),
   ]
 }
 

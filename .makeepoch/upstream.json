@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/Fei2411/DS-Bot",
   "ref": "main",
-  "commit": "4a7b55069ad300eae8be42a74f31bc170b40ead7",
+  "commit": "f823773b07ec6ca29d60b31c31af30218a68000d",
   "adapterVersion": "0.2.1",
   "verifiedDsh": "0.2.2-alpha.2",
   "sourceDirectory": "ds-bot",

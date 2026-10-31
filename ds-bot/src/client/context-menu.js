@@ -45,7 +45,7 @@ export function ContextMenu({ menu, roster, actions, leaving = false }) {
     ],
     [[t('Copy conversation ID'), CopyIcon, () => navigator.clipboard?.writeText(bot ? currentPart(bot) : menu.id)]],
     [
-      isMainBot ? null : [t('Hide from sidebar'), HideIcon, () => actions.setFlags(menu.id, { hidden: true })],
+      isMainBot ? null : [t('Hide from the Bot list'), HideIcon, () => actions.setFlags(menu.id, { hidden: true })],
       isMainBot ? null : [room ? t('Delete group') : t('Delete'), TrashIcon, () => (bot ? actions.deleteBot(bot.id) : actions.deleteRoom(menu.id)), true],
     ],
   ].map(group => group.filter(Boolean)).filter(group => group.length > 0)

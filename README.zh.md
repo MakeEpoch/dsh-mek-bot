@@ -8,7 +8,7 @@ MakeEpoch 的 DS-Bot 集成插件。DSH 侧边栏只增加一个 **Bot** 入口�
 
 ## 使用
 
-Bot 内部保留原有的**新建、已有 Bot、群聊、可选的 DSH Agent**，支持侧栏折叠和展开。删除当前 Bot 或群聊后自动回到可用对话，关闭相应详情与过期弹层。点击对话顶部的名称可以打开详情，调整职责、模型、权限或记忆。底部菜单只保留用量、连接器、Bot 设置；移除 Bot 界面的退出、定时任务和 Agent 模式切换。DSH 原有的会话、插件和自动化界面仍可正常使用。
+顶部导航列出 **Bot、群聊和可选的 DSH Agent**。点击切换对话，再次点击当前对话可展开或关闭详情；右上角菜单提供新建、用量、连接器和 Bot 设置。空间充足时详情与聊天并排，窄屏时在 Bot 区域内覆盖聊天区。DSH 自身侧栏保留原有的折叠和展开行为。删除当前 Bot 或群聊后自动回到可用对话，关闭相应详情与过期弹层。Bot 界面不提供退出、定时任务和 Agent 模式切换；DSH 原有的会话、插件和自动化界面仍可正常使用。
 
 Bot 是有独立身份、职责、模型与记忆的长期助手，可以相互委派工作、建立群聊。Bot 内的 DSH Agent 入口通过 DSH 原有的工作区导航打开普通会话，不在外层增加另一个 Agent 菜单。
 
@@ -24,7 +24,7 @@ Bot 是有独立身份、职责、模型与记忆的长期助手，可以相互�
 
 ## 团队协作与复用
 
-“团队”入口集中查看任务历史、重要动态、执行策略、项目事实和复用流程。
+在 **Bot 设置 → 团队概况** 中集中查看任务历史、重要动态、执行策略、项目事实和复用流程。
 
 - **主助理知情**：在团队设置中选择主助理，按 Bot 开关摘要共享。默认共享明确登记的任务摘要；普通进展不调用主助理，阻塞、失败或需要用户决定时发送去重通知。部门直聊的负责人不变，不读取其他 Bot 的私聊原文。关闭通知仍可查询摘要；关闭共享后主助理不能继续查询该 Bot 的摘要，已经送达的历史无法撤回。
 - **可靠交付**：状态和待发送消息一起持久化。群聊委派持续跟踪每个成员，追问、授权、延迟结果和返工回到原负责人；失败、取消和不确定状态不能被当作成功验收。带验收标准的任务需要逐项通过并提供证据，任务面板可查看来源会话中的文本、图片和文件。
@@ -45,7 +45,7 @@ cd ds-bot
 npm ci
 npm run build
 npm pack --ignore-scripts
-dsh plugin --profile web add -w ./dsh-mek-bot-0.2.1.tgz
+dsh plugin --profile web add -w ./dsh-mek-bot-0.2.4.tgz
 ```
 
 启用 bundle 后重启 DSH，不要同时启用原 `ds-bot` bundle。生产安装必须使用打包文件，禁止 `link:`、符号链接或直连开发源码。profile 保持 `autoInstallPeers: false`；宿主 API 由 DSH 加载器提供，不能安装第二份 Cordis、scope、tools 或 LLM 核心。
@@ -89,7 +89,7 @@ node scripts/build-client.mjs --check
 npm run lint
 ```
 
-详见 [集成边界与合并流程](docs/makeepoch-integration.md)。开发依赖独立安装在 `ds-bot/dev/harness`。保留的桌面、Docker 代码是上游参考资料，不是本插件的发布入口；原文见 [README.upstream.md](README.upstream.md)。
+详见[项目特点、上下游差异与文档维护要求](docs/fork-vs-upstream.md)、[集成边界与合并流程](docs/makeepoch-integration.md)和 [UI 测试方案](docs/dev/mek-ui-testing.md)。新增功能或改变使用流程时，必须在同一改动中同步更新文档。开发依赖独立安装在 `ds-bot/dev/harness`。保留的桌面、Docker 代码是上游参考资料，不是本插件的发布入口；原文见 [README.upstream.md](README.upstream.md)。
 
 ## 许可证
 

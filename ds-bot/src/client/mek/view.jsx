@@ -38,7 +38,7 @@ import { mountScene, sceneRoot, scopeCss } from './dom.js'
 
 const STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS + HANDOFF_CSS + SIDE_CSS + appCss
 
-function TeamView({ ctx, requests }) {
+function TeamView({ ctx, requests, viewport }) {
   const team = useMemo(() => { const value = createTeam(); value.actions.schedules = undefined; attachAgentActions(value, ctx); return value }, [ctx])
   useEffect(() => {
     const stopWatching = watchDeletedSubjects(team)
@@ -68,7 +68,9 @@ function TeamView({ ctx, requests }) {
     show(); return requests.subscribe(show)
   }, [team, requests])
   const OverviewPage = useMemo(() => function OverviewPage() { return <TeamOverview team={team} ctx={ctx} embedded /> }, [team, ctx])
-  const views = { ...hooks, actions, TeamOverview: OverviewPage, useSessions: selector => {
+  const views = { ...hooks, actions, TeamOverview: OverviewPage,
+    useFrame: selector => selector({ viewport, sidebarWidth: 0, collapsedWidth: 0 }),
+    useSessions: selector => {
     const host = useSyncExternalStore(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot)
     return hooks.useSessions(own => selector({ ...own, byId: Object.fromEntries([...new Set([...Object.keys(host.byId), ...Object.keys(own.byId)])].map(id => [id, { ...host.byId[id], retainedBy: {}, ...own.byId[id] }])) }))
   } }
@@ -80,7 +82,7 @@ function TeamView({ ctx, requests }) {
       <main className="dsb-main dsb_centerCol" data-mek-session={shown}>
         {shown && <React.Fragment key={shown}><div className="dsb-head"><HeaderPill {...views} showTitle={false} sessionId={shown} useSession={team.sessionHook(shown)} /></div><TaskProgress team={team} ctx={ctx} sessionId={shown} />{roster.roomsById[shown] ? <GroupChat sessionId={shown} team={team} /> : <Chat sessionId={shown} team={team} />}</React.Fragment>}
       </main>
-      <Overlays {...views} /><ErrorToast {...views} />
+      <Overlays {...views} embedded /><ErrorToast {...views} />
     </div>
   </>
 }
@@ -88,16 +90,22 @@ function TeamView({ ctx, requests }) {
 export function NativeBot({ ctx, requests }) {
   const root = useRef(null)
   const [ready, setReady] = useState(false)
+  const [viewport, setViewport] = useState(0)
   useLayoutEffect(() => {
     const release = mountScene(root.current)
+    // DSH can resize this pane without a window resize (sidebar or other panels).
+    const measure = () => setViewport(root.current?.clientWidth ?? 0)
+    const observer = new ResizeObserver(measure)
+    observer.observe(root.current)
+    measure()
     const locale = installLocale(createLocale(navigator.language))
     const dark = matchMedia('(prefers-color-scheme: dark)')
     const paint = () => root.current?.toggleAttribute('data-ds-dark-theme', dark.matches)
     paint(); dark.addEventListener('change', paint); setReady(true)
-    return () => { dark.removeEventListener('change', paint); locale(); release() }
+    return () => { observer.disconnect(); dark.removeEventListener('change', paint); locale(); release() }
   }, [])
   return <div ref={root} className="mek-bot-scene" style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0, position: 'relative', contain: 'layout paint', isolation: 'isolate', overflow: 'hidden' }}>
     <style>{scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS)}</style>
-    {ready && <TeamView ctx={ctx} requests={requests} />}
+    {ready && <TeamView ctx={ctx} requests={requests} viewport={viewport} />}
   </div>
 }
