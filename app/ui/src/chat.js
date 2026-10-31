@@ -7,6 +7,7 @@ import { ArrowUpIcon, CloseIcon } from '../../../ds-bot/src/client/icons.js'
 import { imageFiles, readImages, requestId } from './image-input.js'
 import { ModelChoiceDock } from '../../../ds-bot/src/client/model-menu.js'
 import { PendingQuestion } from '../../../ds-bot/src/client/questions.js'
+import { PendingView } from '../../../ds-bot/src/client/widget-cell.js'
 
 // The chat follows its end while the user is this close to it.
 const FOLLOW_PX = 80
@@ -195,7 +196,7 @@ export function Composer({ sessionId, placeholder, disabled, onSend, actions, us
 }
 
 // One conversation in the main view, drawn with the Bot views' own rows, cards and docks.
-export function Chat({ sessionId, team }) {
+export function Chat({ sessionId, team, children }) {
   const { actions, hooks, chat: feed } = team
   const roster = hooks.useRoster(value => value)
   const bot = roster.byId[sessionId]
@@ -204,6 +205,7 @@ export function Chat({ sessionId, team }) {
   const scroller = useRef(null)
   const follow = useRef(true)
   const question = roster.questions?.[sessionId]
+  const pendingView = roster.views?.[sessionId]
   const running = hooks.useSessionStatus(map => map.get(sessionId)?.running === true)
 
   useLayoutEffect(() => {
@@ -212,7 +214,16 @@ export function Chat({ sessionId, team }) {
       node.scrollTop = node.scrollHeight - keep.current
       keep.current = null
     } else if (follow.current) node.scrollTop = node.scrollHeight
-  }, [view.items, stream, pending, running, question])
+  }, [view.items, stream, pending, running, question, pendingView, children])
+  useEffect(() => {
+    const node = scroller.current
+    const flow = node.querySelector('[data-chat-flow]')
+    const observer = new MutationObserver(() => {
+      if (follow.current && keep.current === null) node.scrollTop = node.scrollHeight
+    })
+    observer.observe(flow, { childList: true, subtree: true, characterData: true })
+    return () => observer.disconnect()
+  }, [sessionId])
 
   const onScroll = () => {
     const node = scroller.current
@@ -231,9 +242,11 @@ export function Chat({ sessionId, team }) {
           h(ChatRows, { items: view.items, sessionId, roster, actions, useUi: hooks.useUi, clock: true }),
           pending.length ? h('div', { className: 'dsb-pending' }, h(ChatRows, { items: pending, sessionId, roster, actions })) : null,
           stream?.text ? h(Bubbles, { texts: [stream.text], roster, selfId: bot?.id, actions, streaming: true, sessionId }) : null,
-          // The Bot views' activity row (from the header pill) draws itself in here.
-          h('div', { 'data-chat-running': '' }),
-          question ? h(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true }) : null))),
+          question ? h(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true }) : null,
+          pendingView ? h(PendingView, { key: JSON.stringify([sessionId, pendingView.id]), sessionId, view: pendingView, actions, inline: true }) : null,
+          children,
+          // This is transient presentation, never a row in the Session history.
+          h('div', { 'data-chat-running': '' })))),
     h('div', { className: 'dsb-composer-root' },
       h(ModelChoiceDock, { sessionId, useRoster: hooks.useRoster, actions }),
       h(Composer, {

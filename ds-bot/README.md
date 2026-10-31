@@ -32,7 +32,10 @@ MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多
 | 宿主共存 | 上游客户端入口管理全局 Bot 界面 | 原生 React 组件接入公开 slots，CSS、弹窗和坐标限定在 Bot 面板内；无 iframe、无第二套 DSH |
 | Agent 与设置 | 提供 Bot/Agent 模式切换及账户、计划任务入口 | Agent 从顶部列表打开 DSH 普通会话；不增加外层 Agent 菜单，Bot 内隐藏登出、模式切换及计划任务控件，自动化由 DSH 管理 |
 | 任务可见性 | 已有运行及委派进度 | 负责人对话内增加任务摘要、待决问题、结果、取消及真实授权/凭据卡；团队概况集中查看历史和产物 |
+| 运行状态与交互请求 | 已有工作状态、提问及 `show_view` | 当前单聊末尾显示思考/工具执行状态，结束后移除，不写入消息历史；补齐待回答 `show_view`，并按会话消费 DSH 公开的 question/plan-review 请求 |
 | 状态恢复 | 使用上游的会话与界面状态 | 每个标签页恢复 Bot 面板和所选 Bot/群聊；按 Bot 身份找到最新会话段，显式 DSH 会话链接优先；删除对象后清理失效面板并切换到可用对话 |
+
+状态行复用已有执行状态逻辑：只显示当前正在工作的 Bot，纯文本流式回复时沿用原有让位规则；查看较早消息时不强制滚回底部。任务列表可整体收起，选择卡、授权及凭据请求保持可用。DSH 原生选择请求复用宿主的回答/关闭回调，不转成普通聊天消息；尚未公开给当前会话的其他宿主面板请求不在此适配范围。
 
 **当前 Bot 面板未接入 DSH 原生会话右侧栏。** 上表的“详情面板”是 Bot 自己的详情。通过宿主主会话挂载文件/终端侧栏的方案暂不实施。
 
@@ -158,4 +161,4 @@ npm run lint
 
 ## 许可证
 
-继承上游 **Apache-2.0**，保留 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。本项目是独立社区集成，与 DeepSeek 官方无隶属关系。
+继承上游 **Apache-2.0**，保留 [LICENSE](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/LICENSE) 与 [NOTICE](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/NOTICE)。本项目是独立社区集成，与 DeepSeek 官方无隶属关系。

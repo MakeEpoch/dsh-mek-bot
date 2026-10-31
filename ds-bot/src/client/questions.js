@@ -164,18 +164,33 @@ export function QuestionCard({ matched }) {
   const questions = pending.questions ?? []
   const [index, setIndex] = useState(0)
   const [answers, setAnswers] = useState([])
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState('')
+  const [settled, setSettled] = useState(false)
+  const locked = useRef(false)
   const question = questions[index]
-  if (question === undefined) return null
+  if (question === undefined || settled) return null
+  const submit = make => {
+    if (locked.current) return
+    locked.current = true
+    setBusy(true); setFailure('')
+    void Promise.resolve().then(make).then(() => setSettled(true), error => setFailure(error?.message ?? String(error))).finally(() => {
+      locked.current = false; setBusy(false)
+    })
+  }
   const onAnswer = (answer) => {
+    if (locked.current) return
     const next = [...answers, { id: question.id, ...answer }]
     if (index + 1 < questions.length) {
       setAnswers(next)
       setIndex(index + 1)
       return
     }
-    pending.answer({ answers: next })
+    submit(() => pending.answer({ answers: next }))
   }
-  return h(QuestionView, { key: index, question, onAnswer, onDismiss: () => pending.dismiss(), ownAnswer: true, raised: true })
+  return h('div', { className: 'bt-native-question' },
+    h(QuestionView, { key: index, question, onAnswer, onDismiss: () => submit(() => pending.dismiss()), onInteract: () => pending.engage?.(), busy, ownAnswer: true, raised: true }),
+    failure ? h('p', { role: 'alert' }, failure) : null)
 }
 
 export function PendingQuestion({ sessionId, question, actions, inline }) {

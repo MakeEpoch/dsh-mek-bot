@@ -1485,9 +1485,11 @@ var call = async (endpoint, payload, signal) => {
 
 // src/client/mek/portal.js
 var import_react_dom = require("react-dom");
-var createPortal = (children, _target, key) => {
+var createPortal = (children, target, key) => {
   const root = sceneRoot();
-  return root ? (0, import_react_dom.createPortal)(children, root, key) : null;
+  if (!root) return null;
+  const local = target && (root.contains(target) || target.host && root.contains(target.host));
+  return (0, import_react_dom.createPortal)(children, local ? target : root, key);
 };
 
 // src/client/dsh-primitives.js
@@ -2460,18 +2462,38 @@ function QuestionCard({ matched }) {
   const questions = pending.questions ?? [];
   const [index, setIndex] = (0, import_react4.useState)(0);
   const [answers, setAnswers] = (0, import_react4.useState)([]);
+  const [busy, setBusy] = (0, import_react4.useState)(false);
+  const [failure, setFailure] = (0, import_react4.useState)("");
+  const [settled, setSettled] = (0, import_react4.useState)(false);
+  const locked = (0, import_react4.useRef)(false);
   const question = questions[index];
-  if (question === void 0) return null;
+  if (question === void 0 || settled) return null;
+  const submit = (make) => {
+    if (locked.current) return;
+    locked.current = true;
+    setBusy(true);
+    setFailure("");
+    void Promise.resolve().then(make).then(() => setSettled(true), (error) => setFailure(error?.message ?? String(error))).finally(() => {
+      locked.current = false;
+      setBusy(false);
+    });
+  };
   const onAnswer = (answer) => {
+    if (locked.current) return;
     const next = [...answers, { id: question.id, ...answer }];
     if (index + 1 < questions.length) {
       setAnswers(next);
       setIndex(index + 1);
       return;
     }
-    pending.answer({ answers: next });
+    submit(() => pending.answer({ answers: next }));
   };
-  return (0, import_react4.createElement)(QuestionView, { key: index, question, onAnswer, onDismiss: () => pending.dismiss(), ownAnswer: true, raised: true });
+  return (0, import_react4.createElement)(
+    "div",
+    { className: "bt-native-question" },
+    (0, import_react4.createElement)(QuestionView, { key: index, question, onAnswer, onDismiss: () => submit(() => pending.dismiss()), onInteract: () => pending.engage?.(), busy, ownAnswer: true, raised: true }),
+    failure ? (0, import_react4.createElement)("p", { role: "alert" }, failure) : null
+  );
 }
 function PendingQuestion({ sessionId, question, actions, inline }) {
   const [answered, setAnswered] = (0, import_react4.useState)(null);
@@ -9027,7 +9049,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
     )
   );
 }
-function Chat({ sessionId, team }) {
+function Chat({ sessionId, team, children }) {
   const { actions, hooks, chat: feed } = team;
   const roster = hooks.useRoster((value) => value);
   const bot = roster.byId[sessionId];
@@ -9036,6 +9058,7 @@ function Chat({ sessionId, team }) {
   const scroller = (0, import_react20.useRef)(null);
   const follow = (0, import_react20.useRef)(true);
   const question = roster.questions?.[sessionId];
+  const pendingView = roster.views?.[sessionId];
   const running = hooks.useSessionStatus((map) => map.get(sessionId)?.running === true);
   (0, import_react20.useLayoutEffect)(() => {
     const node = scroller.current;
@@ -9043,7 +9066,16 @@ function Chat({ sessionId, team }) {
       node.scrollTop = node.scrollHeight - keep.current;
       keep.current = null;
     } else if (follow.current) node.scrollTop = node.scrollHeight;
-  }, [view.items, stream, pending, running, question]);
+  }, [view.items, stream, pending, running, question, pendingView, children]);
+  (0, import_react20.useEffect)(() => {
+    const node = scroller.current;
+    const flow = node.querySelector("[data-chat-flow]");
+    const observer = new MutationObserver(() => {
+      if (follow.current && keep.current === null) node.scrollTop = node.scrollHeight;
+    });
+    observer.observe(flow, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, [sessionId]);
   const onScroll = () => {
     const node = scroller.current;
     follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < FOLLOW_PX;
@@ -9066,9 +9098,11 @@ function Chat({ sessionId, team }) {
           (0, import_react20.createElement)(ChatRows, { items: view.items, sessionId, roster, actions, useUi: hooks.useUi, clock: true }),
           pending.length ? (0, import_react20.createElement)("div", { className: "dsb-pending" }, (0, import_react20.createElement)(ChatRows, { items: pending, sessionId, roster, actions })) : null,
           stream?.text ? (0, import_react20.createElement)(Bubbles, { texts: [stream.text], roster, selfId: bot?.id, actions, streaming: true, sessionId }) : null,
-          // The Bot views' activity row (from the header pill) draws itself in here.
-          (0, import_react20.createElement)("div", { "data-chat-running": "" }),
-          question ? (0, import_react20.createElement)(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true }) : null
+          question ? (0, import_react20.createElement)(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true }) : null,
+          pendingView ? (0, import_react20.createElement)(PendingView, { key: JSON.stringify([sessionId, pendingView.id]), sessionId, view: pendingView, actions, inline: true }) : null,
+          children,
+          // This is transient presentation, never a row in the Session history.
+          (0, import_react20.createElement)("div", { "data-chat-running": "" })
         )
       )
     ),
@@ -20485,17 +20519,38 @@ function GroupChat({ sessionId, team }) {
   }, actions, useUi: hooks.useUi, useRoster: hooks.useRoster })));
 }
 
-// src/client/mek/view.jsx
+// src/client/mek/native-question.jsx
 var import_react59 = __toESM(require("react"), 1);
+var empty = /* @__PURE__ */ new Map();
+var absent = { subscribe: () => () => {
+}, getSnapshot: () => empty };
+var noCard = { subscribe: () => () => {
+}, getSnapshot: () => null };
+function NativeQuestionCard({ pending }) {
+  const snapshot = (0, import_react59.useSyncExternalStore)(pending.subscribe ?? noCard.subscribe, pending.getSnapshot ?? noCard.getSnapshot);
+  if (snapshot?.closed) return null;
+  if (Array.isArray(pending.review)) return pending.questions.map((question) => /* @__PURE__ */ import_react59.default.createElement(SettledQuestion, { key: question.id, question, answer: pending.review.find((answer) => answer.id === question.id) ?? { selected: [] } }));
+  return /* @__PURE__ */ import_react59.default.createElement(QuestionCard, { matched: pending });
+}
+function NativeQuestion({ ctx, sessionId }) {
+  const source = ctx.get?.("uiSession")?.sessionStatus ?? absent;
+  const statuses = (0, import_react59.useSyncExternalStore)(source.subscribe, source.getSnapshot);
+  const pending = statuses.get(sessionId)?.pendingInteraction;
+  if (!pending || !["question", "plan-review"].includes(pending.kind) || !Array.isArray(pending.questions)) return null;
+  return /* @__PURE__ */ import_react59.default.createElement(NativeQuestionCard, { key: `${sessionId}:${pending.key}`, pending });
+}
+
+// src/client/mek/view.jsx
+var import_react60 = __toESM(require("react"), 1);
 var STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS2 + HANDOFF_CSS + SIDE_CSS + app_default;
 function TeamView({ ctx, requests, viewport }) {
-  const team = (0, import_react59.useMemo)(() => {
+  const team = (0, import_react60.useMemo)(() => {
     const value = createTeam();
     value.actions.schedules = void 0;
     attachAgentActions(value, ctx);
     return value;
   }, [ctx]);
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     const stopWatching = watchDeletedSubjects(team);
     const stopRemembering = rememberConversation(team);
     const stop = team.start();
@@ -20509,7 +20564,7 @@ function TeamView({ ctx, requests, viewport }) {
   const shown = hooks.useShown((value) => value);
   const roster = hooks.useRoster((value) => value);
   const prefs = roster.prefs;
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     const root = sceneRoot();
     if (!root) return;
     root.dataset.btMotion = prefs?.motion ?? "normal";
@@ -20517,7 +20572,7 @@ function TeamView({ ctx, requests, viewport }) {
     root.style.setProperty("--bt-msg-w", String(widthOf(prefs) / 100));
     root.style.setProperty("--bt-flat-w", String(flatWidthOf(prefs) / 100));
   }, [prefs]);
-  (0, import_react59.useEffect)(() => {
+  (0, import_react60.useEffect)(() => {
     if (!requests) return;
     const show2 = () => {
       const id = requests.getSnapshot();
@@ -20528,8 +20583,8 @@ function TeamView({ ctx, requests, viewport }) {
     show2();
     return requests.subscribe(show2);
   }, [team, requests]);
-  const OverviewPage = (0, import_react59.useMemo)(() => function OverviewPage2() {
-    return /* @__PURE__ */ import_react59.default.createElement(TeamOverview, { team, ctx, embedded: true });
+  const OverviewPage = (0, import_react60.useMemo)(() => function OverviewPage2() {
+    return /* @__PURE__ */ import_react60.default.createElement(TeamOverview, { team, ctx, embedded: true });
   }, [team, ctx]);
   const views = {
     ...hooks,
@@ -20537,18 +20592,18 @@ function TeamView({ ctx, requests, viewport }) {
     TeamOverview: OverviewPage,
     useFrame: (selector) => selector({ viewport, sidebarWidth: 0, collapsedWidth: 0 }),
     useSessions: (selector) => {
-      const host = (0, import_react59.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
+      const host = (0, import_react60.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
       return hooks.useSessions((own) => selector({ ...own, byId: Object.fromEntries([.../* @__PURE__ */ new Set([...Object.keys(host.byId), ...Object.keys(own.byId)])].map((id) => [id, { ...host.byId[id], retainedBy: {}, ...own.byId[id] }])) }));
     }
   };
   const themed = themeCss(allThemes()[prefs?.theme] ?? allThemes().deepseek, prefs?.accent);
-  return /* @__PURE__ */ import_react59.default.createElement(import_react59.default.Fragment, null, /* @__PURE__ */ import_react59.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react59.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react59.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react59.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react59.default.createElement(import_react59.default.Fragment, { key: shown }, /* @__PURE__ */ import_react59.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react59.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react59.default.createElement(TaskProgress, { team, ctx, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react59.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react59.default.createElement(Chat, { sessionId: shown, team }))), /* @__PURE__ */ import_react59.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react59.default.createElement(ErrorToast, { ...views })));
+  return /* @__PURE__ */ import_react60.default.createElement(import_react60.default.Fragment, null, /* @__PURE__ */ import_react60.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react60.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react60.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react60.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react60.default.createElement(import_react60.default.Fragment, { key: shown }, /* @__PURE__ */ import_react60.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react60.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react60.default.createElement(TaskProgress, { team, ctx, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react60.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react60.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react60.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react60.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react60.default.createElement(ErrorToast, { ...views })));
 }
 function NativeBot({ ctx, requests }) {
-  const root = (0, import_react59.useRef)(null);
-  const [ready, setReady] = (0, import_react59.useState)(false);
-  const [viewport, setViewport] = (0, import_react59.useState)(0);
-  (0, import_react59.useLayoutEffect)(() => {
+  const root = (0, import_react60.useRef)(null);
+  const [ready, setReady] = (0, import_react60.useState)(false);
+  const [viewport, setViewport] = (0, import_react60.useState)(0);
+  (0, import_react60.useLayoutEffect)(() => {
     const release = mountScene(root.current);
     const measure = () => setViewport(root.current?.clientWidth ?? 0);
     const observer = new ResizeObserver(measure);
@@ -20567,7 +20622,7 @@ function NativeBot({ ctx, requests }) {
       release();
     };
   }, []);
-  return /* @__PURE__ */ import_react59.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react59.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS)), ready && /* @__PURE__ */ import_react59.default.createElement(TeamView, { ctx, requests, viewport }));
+  return /* @__PURE__ */ import_react60.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react60.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS)), ready && /* @__PURE__ */ import_react60.default.createElement(TeamView, { ctx, requests, viewport }));
 }
 
 // src/client/approval-notices.js
@@ -20677,7 +20732,7 @@ function startNativeNotices({ show: show2, shownSession = () => null }) {
 }
 
 // src/client/mek/index.jsx
-var import_react60 = __toESM(require("react"), 1);
+var import_react61 = __toESM(require("react"), 1);
 var inject = ["slots", "layout", "sessions", "uiWorkspace"];
 var PANEL = "mek-bot";
 function apply(ctx) {
@@ -20689,9 +20744,9 @@ function apply(ctx) {
     },
     shownSession: () => sceneRoot()?.querySelector("[data-mek-session]")?.dataset.mekSession ?? null
   }));
-  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react60.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react60.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react60.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
+  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react61.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react61.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react61.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
   ctx.slots.inject("main", () => {
-    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react60.default.createElement(NativeBot, { ctx, requests }));
+    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react61.default.createElement(NativeBot, { ctx, requests }));
     ctx.effect(() => rememberPanel(ctx.layout, PANEL));
   });
   ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));
