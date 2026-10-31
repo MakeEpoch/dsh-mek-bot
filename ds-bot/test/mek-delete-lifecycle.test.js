@@ -18,6 +18,11 @@ win.Element.prototype.getAnimations = () => []
 win.Element.prototype.animate = () => ({finished:Promise.resolve(),cancel(){}})
 class ResizeObserver { observe(){} disconnect(){} unobserve(){} }
 Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true,ResizeObserver,requestAnimationFrame:win.requestAnimationFrame.bind(win),cancelAnimationFrame:win.cancelAnimationFrame.bind(win)})
+// jsdom lays nothing out, so every element measures 0. The Bot scene is a real box in
+// a browser: report the size it would have, or the column's open/rail decision reads a
+// 0-width viewport and folds to the rail, where the main Bot row is not rendered at all.
+Object.defineProperty(win.Element.prototype,'clientWidth',{configurable:true,get(){return this.classList?.contains('mek-bot-scene')?1200:0}})
+Object.defineProperty(win.Element.prototype,'clientHeight',{configurable:true,get(){return this.classList?.contains('mek-bot-scene')?800:0}})
 const React = require('react'); const { createRoot } = require('react-dom/client'); const ReactDOM = require('react-dom')
 const { act } = React
 let deleted=false
@@ -104,8 +109,10 @@ try {
  await click('[data-bot-id="keep"]')
  assert.equal(document.querySelector('textarea').getAttribute('aria-label'), 'Message Keeper')
  assert.equal(document.querySelector('.dsb-side'), null)
- assert.ok(document.querySelector('.mek-team-header [data-bot-id="main"]'))
- assert.equal(document.querySelector('.mek-team-header .bt-brand'), null)
+ // The mek sidebar column renders through createPortal into the scene root, so it
+ // is a sibling of the header, not a child of it.
+ assert.ok(document.querySelector('.mek-bot-scene .bt-side [data-bot-id="main"]'))
+ assert.equal(document.querySelector('.mek-bot-scene .bt-side .bt-brand'), null)
  assert.ok(document.querySelector('.mek-team-tools [aria-label="Search"]'))
  assert.ok(document.querySelector('[data-bot-id="keep"] .bt-pill-go svg'))
  assert.equal(document.querySelector('[data-bot-id="main"] .bt-pill-go'), null)

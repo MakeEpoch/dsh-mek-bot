@@ -6,6 +6,8 @@ MakeEpoch's DS-Bot integration for DeepSeek Harness. One **Bot** sidebar entry o
 
 ![Native Bot interface in DSH; local mock-model example](https://raw.githubusercontent.com/MakeEpoch/dsh-mek-bot/main/docs/images/mek-bot.png)
 
+Tested with dsh `0.2.1-rc.4` (Web) and `0.2.0-rc.2` (Web and Desktop) — that is upstream DS-Bot's own test statement. This fork builds against the DSH packages pinned in `dev/harness/package.json`; its own test results are reported per release, not inferred from upstream.
+
 ## Use
 
 The Bot sidebar keeps upstream's **New**, existing Bots, groups and optional **DSH Agent** row, with collapse and expand controls. Deleting the current Bot or group returns to an available conversation and closes obsolete overlays. Click the conversation title to open its details. The bottom menu contains Usage, Connectors and Bot settings. Logout, scheduled-task controls and the Agent-mode switch are omitted from this Bot surface; DSH's own interface remains available.
