@@ -888,7 +888,7 @@ function scanReplies(text, start, replies) {
   }
 }
 
-export function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi, useWork }) {
+export function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi, useWork, showActivity = true }) {
   const [live, setLive] = useState({ replies: [], speaking: null })
   useEffect(() => {
     if (done) return undefined
@@ -914,7 +914,7 @@ export function GroupReplies({ sessionId, callId, done, content, roster, actions
     broken = parsed.broken
   }
   // Members speak one at a time, so only the current speaker is typing.
-  const pending = done || !live.speaking ? [] : [live.speaking]
+  const pending = !showActivity || done || !live.speaking ? [] : [live.speaking]
   const speakerTool = useWork?.(work => work.bots?.[live.speaking]?.tool) ?? undefined
   const speakerDoing = useWork?.(work => (work.bots?.[live.speaking]?.tool ? workPhrase(work.bots[live.speaking]) : undefined)) ?? undefined
   if (replies.length === 0 && pending.length === 0) {

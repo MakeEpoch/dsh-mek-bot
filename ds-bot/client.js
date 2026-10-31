@@ -7245,7 +7245,7 @@ function scanReplies(text, start, replies) {
     } else if (ch === "]" && depth === 0) break;
   }
 }
-function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi, useWork }) {
+function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi, useWork, showActivity = true }) {
   const [live, setLive] = (0, import_react16.useState)({ replies: [], speaking: null });
   (0, import_react16.useEffect)(() => {
     if (done) return void 0;
@@ -7276,7 +7276,7 @@ function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi
     replies = parsed.replies.length ? parsed.replies : live.replies;
     broken = parsed.broken;
   }
-  const pending = done || !live.speaking ? [] : [live.speaking];
+  const pending = !showActivity || done || !live.speaking ? [] : [live.speaking];
   const speakerTool = useWork?.((work) => work.bots?.[live.speaking]?.tool) ?? void 0;
   const speakerDoing = useWork?.((work) => work.bots?.[live.speaking]?.tool ? workPhrase(work.bots[live.speaking]) : void 0) ?? void 0;
   if (replies.length === 0 && pending.length === 0) {
@@ -20483,6 +20483,13 @@ function GroupChat({ sessionId, team }) {
   const { hooks, actions } = team;
   const roster = hooks.useRoster((value) => value);
   const room2 = roster.roomsById[sessionId];
+  const { entries: entries2 } = useMemberWork(room2, hooks.useWork);
+  const active = entries2.filter((entry) => entry.here && roster.byId[entry.id]).map((entry) => ({
+    ...entry,
+    // A member may simultaneously wait for permission in another conversation.
+    state: entry.approvals.some((approval) => approval.roomId === sessionId) ? "ask" : "work"
+  }));
+  const activityKey = JSON.stringify(active);
   const [view, setView] = (0, import_react58.useState)({ items: [], cursor: null, progress: [], loading: true });
   const [error, setError] = (0, import_react58.useState)(null);
   const scroll = (0, import_react58.useRef)(null);
@@ -20502,9 +20509,9 @@ function GroupChat({ sessionId, team }) {
         const node = scroll.current;
         const beforeHeight = cursor === void 0 ? null : node.scrollHeight;
         setView((old) => {
-          const entries2 = new Map(old.items.map((item) => [`${item.seq}:${item.kind}`, item]));
-          for (const item of page.items) entries2.set(`${item.seq}:${item.kind}`, item);
-          return { items: [...entries2.values()].sort((a, b) => a.seq - b.seq), cursor: cursor !== void 0 || old.loading ? page.cursor : old.cursor, progress: page.progress, loading: false, beforeHeight };
+          const entries3 = new Map(old.items.map((item) => [`${item.seq}:${item.kind}`, item]));
+          for (const item of page.items) entries3.set(`${item.seq}:${item.kind}`, item);
+          return { items: [...entries3.values()].sort((a, b) => a.seq - b.seq), cursor: cursor !== void 0 || old.loading ? page.cursor : old.cursor, progress: page.progress, loading: false, beforeHeight };
         });
       } catch (failure) {
         if (!stopped) setError(failure.message);
@@ -20532,10 +20539,17 @@ function GroupChat({ sessionId, team }) {
     if (view.beforeHeight !== null && view.beforeHeight !== void 0) scroll.current.scrollTop += scroll.current.scrollHeight - view.beforeHeight;
     else if (follow.current) scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [view]);
+  (0, import_react58.useLayoutEffect)(() => {
+    if (follow.current) scroll.current.scrollTop = scroll.current.scrollHeight;
+  }, [activityKey]);
   return /* @__PURE__ */ import_react58.default.createElement("div", { className: "dsb-chat" }, /* @__PURE__ */ import_react58.default.createElement("div", { ref: scroll, className: "dsb-scroll", "data-conversation-scroll": "", onScroll: () => {
     const node = scroll.current;
     follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
-  } }, /* @__PURE__ */ import_react58.default.createElement("div", { className: "dsb-column" }, /* @__PURE__ */ import_react58.default.createElement("div", { className: "dsb-flow", role: "feed", "aria-label": room2?.name, "aria-busy": view.loading }, view.cursor !== null && /* @__PURE__ */ import_react58.default.createElement("button", { className: "bt-soft", onClick: () => refresh.current?.(view.cursor) }, t("Load earlier")), view.items.map((item) => item.kind === "group" ? /* @__PURE__ */ import_react58.default.createElement(GroupReplies, { key: item.seq, sessionId, callId: item.callId, done: true, content: item.content, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork }) : item.kind === "post" ? /* @__PURE__ */ import_react58.default.createElement(GroupMessage, { key: item.seq, bot: roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: "gray" }, text: stripHeader(contentText(item.content)), room: room2, roster, actions, time: item.time }) : /* @__PURE__ */ import_react58.default.createElement(ChatRows, { key: `${item.seq}:${item.kind}`, items: [item], sessionId, roster, actions, useUi: hooks.useUi, clock: true })), view.progress.filter((id) => !view.items.some((item) => item.callId === id)).map((id) => /* @__PURE__ */ import_react58.default.createElement(GroupReplies, { key: id, sessionId, callId: id, done: false, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork })), error && /* @__PURE__ */ import_react58.default.createElement("button", { className: "bt-soft", role: "alert", onClick: () => refresh.current?.() }, error, " · ", t("Try again"))))), /* @__PURE__ */ import_react58.default.createElement("div", { className: "dsb-composer-root" }, /* @__PURE__ */ import_react58.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text, images, id) => {
+  } }, /* @__PURE__ */ import_react58.default.createElement("div", { className: "dsb-column" }, /* @__PURE__ */ import_react58.default.createElement("div", { className: "dsb-flow", role: "feed", "aria-label": room2?.name, "aria-busy": view.loading }, view.cursor !== null && /* @__PURE__ */ import_react58.default.createElement("button", { className: "bt-soft", onClick: () => refresh.current?.(view.cursor) }, t("Load earlier")), view.items.map((item) => item.kind === "group" ? /* @__PURE__ */ import_react58.default.createElement(GroupReplies, { key: item.seq, sessionId, callId: item.callId, done: true, content: item.content, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork, showActivity: false }) : item.kind === "post" ? /* @__PURE__ */ import_react58.default.createElement(GroupMessage, { key: item.seq, bot: roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: "gray" }, text: stripHeader(contentText(item.content)), room: room2, roster, actions, time: item.time }) : /* @__PURE__ */ import_react58.default.createElement(ChatRows, { key: `${item.seq}:${item.kind}`, items: [item], sessionId, roster, actions, useUi: hooks.useUi, clock: true })), view.progress.filter((id) => !view.items.some((item) => item.callId === id)).map((id) => /* @__PURE__ */ import_react58.default.createElement(GroupReplies, { key: id, sessionId, callId: id, done: false, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork, showActivity: false })), error && /* @__PURE__ */ import_react58.default.createElement("button", { className: "bt-soft", role: "alert", onClick: () => refresh.current?.() }, error, " · ", t("Try again")), /* @__PURE__ */ import_react58.default.createElement("div", { "data-group-running": "", hidden: active.length === 0 }, active.map((entry) => {
+    const bot = roster.byId[entry.id];
+    const label2 = entry.state === "ask" ? t("Waiting for your approval") : workPhrase(entry.doing);
+    return /* @__PURE__ */ import_react58.default.createElement("div", { key: entry.id, className: "bt-typing", "data-running-bot": entry.id, role: "status" }, /* @__PURE__ */ import_react58.default.createElement(BotMark, { bot, size: 22, state: entry.state === "ask" ? "alert" : workState(entry.doing) }), /* @__PURE__ */ import_react58.default.createElement("span", { className: "bt-typing-text" }, /* @__PURE__ */ import_react58.default.createElement("span", { className: "bt-typing-label" }, /* @__PURE__ */ import_react58.default.createElement(Shimmer, null, bot.name, " · ", label2, "…")), /* @__PURE__ */ import_react58.default.createElement(Elapsed, { at: entry.doing.since, className: "bt-typing-time" })));
+  }))))), /* @__PURE__ */ import_react58.default.createElement("div", { className: "dsb-composer-root" }, /* @__PURE__ */ import_react58.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text, images, id) => {
     await actions.send(sessionId, text, images, id);
     await refresh.current?.();
   }, actions, useUi: hooks.useUi, useRoster: hooks.useRoster })));

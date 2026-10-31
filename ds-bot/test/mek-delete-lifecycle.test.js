@@ -37,19 +37,26 @@ let refuseSend=true
 let pendingPanel=null
 let doing=null
 let extraTasks=0
+let groupEnabled=false
+let groupWork=[]
+let groupProgress=[]
+let groupSpeaking=null
+let groupApproval=false
 let refusePanel=true
 const panelReplies=[]
 const feedControllers=new Set()
 let nativeStatuses=new Map()
 const nativeListeners=new Set()
 const sessionStatus={getSnapshot:()=>nativeStatuses,subscribe:listener=>{nativeListeners.add(listener);return()=>nativeListeners.delete(listener)}}
-const roster = () => ({revision,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:[],agents:[],tasks:[{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]},...Array.from({length:extraTasks},(_,i)=>({id:`extra-${i}`,owner:'main',status:'completed',summary:`Archived fixture ${i}`,work:[],decisions:[],deliveries:[]}))],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}}]}})
+const roster = () => ({revision,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:groupEnabled?[{id:'group-fixture',name:'Fixture group',members:['main','keep'],admin:'main'},{id:'other-group',name:'Other group',members:['main','keep'],admin:'main'}]:[],agents:[],tasks:[{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]},...Array.from({length:extraTasks},(_,i)=>({id:`extra-${i}`,owner:'main',status:'completed',summary:`Archived fixture ${i}`,work:[],decisions:[],deliveries:[]}))],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:groupWork.length?{'group-fixture':groupWork}:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}},...(groupApproval?[{id:'group-approval',botId:'keep',roomId:'group-fixture',at:Date.now(),tool:'write_file'}]:[])]}})
 const fetch = async (url,options={}) => {
  if(url.endsWith('/feed')) return new Response(new ReadableStream({ start(controller) { feedControllers.add(controller);options.signal?.addEventListener('abort',()=>{feedControllers.delete(controller);controller.close()},{once:true}) } }))
  const {endpoint,payload} = JSON.parse(options.body)
  let value=null
  if(endpoint==='state') value=roster()
  else if(endpoint==='mek-task-list') value={tasks:roster().tasks,nextCursor:null}
+ else if(endpoint==='room-chat') value={items:[],cursor:null,progress:groupProgress}
+ else if(endpoint==='room-progress') value=groupProgress.map(callId=>({callId,replies:[],speaking:groupSpeaking}))
  else if(endpoint==='chat') value={sessionId:payload.botId,items:[],cursor:null}
  else if(endpoint==='send') {sends.push(payload);if(refuseSend)return new Response(JSON.stringify({ok:false,error:{code:'bot/refused',message:'Mock send refused'}}))}
  else if(endpoint==='view-reply') {
@@ -308,6 +315,59 @@ try {
  await click('.mek-task-footer .mek-task-more')
  assert.equal(document.querySelectorAll('.mek-task').length,12)
  assert.equal(document.querySelector('.mek-task-footer'),null,'pagination action disappears once all tasks are shown')
+ // Group work remains visible after the round relinquishes its speaker.
+ groupEnabled=true;await refresh()
+ const groupRow=[...document.querySelectorAll('.mek-team-header .bt-row')].find(node=>node.textContent.includes('Fixture group'))
+ assert.ok(groupRow)
+ await act(async()=>{groupRow.click();await pause();await pause()})
+ assert.ok(document.querySelector('[data-group-running]'))
+ const since=Date.now()-65000
+ groupWork=[{botId:'main',since,tool:'read_file',note:'Reading group fixture'}];await refresh()
+ assert.equal(document.querySelectorAll('[data-group-running] > .bt-typing').length,1)
+ assert.match(document.querySelector('[data-running-bot="main"]').textContent,/Chief · Reading group fixture/)
+ assert.match(document.querySelector('[data-running-bot="main"] .bt-typing-time').textContent,/1m/)
+ assert.equal(document.querySelector('[data-group-running]').parentElement.lastElementChild,document.querySelector('[data-group-running]'))
+ // A room entry wins even when the same Bot is also busy in its own chat.
+ doing={since,tool:'write_file',note:'PRIVATE WORK MUST NOT LEAK'}
+ groupProgress=['live-round'];groupSpeaking='main';await refresh()
+ await act(async()=>{await pause();await pause()})
+ assert.equal(document.querySelectorAll('.bt-typing,.bt-activity').length,1,'no duplicate round speaker')
+ assert.doesNotMatch(document.querySelector('[role="feed"]').textContent,/PRIVATE WORK/)
+ groupWork=[{botId:'main',since,tool:'write_file',note:'Writing group fixture'},{botId:'keep',since,tool:'read_file',note:'Checking group fixture'}]
+ await refresh()
+ assert.equal(document.querySelectorAll('[data-group-running] > .bt-typing').length,2)
+ assert.match(document.querySelector('[data-running-bot="main"]').textContent,/Writing group fixture/)
+ assert.match(document.querySelector('[data-running-bot="keep"]').textContent,/Keeper · Checking group fixture/)
+ groupApproval=true;await refresh()
+ assert.match(document.querySelector('[data-running-bot="keep"]').textContent,/Waiting for your approval/)
+ groupApproval=false;await refresh()
+ const scroller=document.querySelector('[data-conversation-scroll]')
+ let scrollHeight=1500
+ Object.defineProperty(scroller,'scrollHeight',{configurable:true,get:()=>scrollHeight})
+ Object.defineProperty(scroller,'clientHeight',{configurable:true,value:500})
+ scroller.scrollTop=100
+ await act(async()=>scroller.dispatchEvent(new win.Event('scroll',{bubbles:true})))
+ groupWork=[{botId:'keep',since}];await refresh()
+ assert.equal(scroller.scrollTop,100,'preserve a reader above the tail')
+ assert.equal(document.querySelector('[data-running-bot="main"]'),null)
+ assert.match(document.querySelector('[data-running-bot="keep"]').textContent,/Thinking about it/)
+ scroller.scrollTop=1000
+ await act(async()=>scroller.dispatchEvent(new win.Event('scroll',{bubbles:true})))
+ scrollHeight=1540;groupWork=[{botId:'keep',since,tool:'read_file',note:'Another group step'}];await refresh()
+ assert.equal(scroller.scrollTop,1540,'follow the tail while the reader is there')
+ await click('[data-bot-id="keep"]')
+ assert.equal(document.querySelector('[data-group-running]'),null)
+ await act(async()=>{groupRow.click();await pause();await pause()})
+ assert.match(document.querySelector('[data-group-running]').textContent,/Another group step/)
+ const otherGroup=[...document.querySelectorAll('.mek-team-header .bt-row')].find(node=>node.textContent.includes('Other group'))
+ await act(async()=>{otherGroup.click();await pause();await pause()})
+ assert.equal(document.querySelector('[data-group-running]').children.length,0,'another group must not inherit this group work')
+ await act(async()=>{groupRow.click();await pause();await pause()})
+ assert.match(document.querySelector('[data-group-running]').textContent,/Another group step/)
+ groupWork=[];groupProgress=[];await refresh()
+ assert.equal(document.querySelector('[data-group-running]').children.length,0,'exclude idle and privately busy members')
+ doing=null;await refresh()
+ assert.equal(sends.length,2,'activity must never send or persist messages')
  assert.deepEqual(errors, [])
 } finally {for(const stop of effects) stop?.(); await act(async()=>root.unmount());console.error=originalError;dom.window.close();for(const [key,descriptor] of saved) {if(descriptor) Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key]}}
 })
