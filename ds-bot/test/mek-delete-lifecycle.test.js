@@ -36,13 +36,14 @@ const sends=[]
 let refuseSend=true
 let pendingPanel=null
 let doing=null
+let extraTasks=0
 let refusePanel=true
 const panelReplies=[]
 const feedControllers=new Set()
 let nativeStatuses=new Map()
 const nativeListeners=new Set()
 const sessionStatus={getSnapshot:()=>nativeStatuses,subscribe:listener=>{nativeListeners.add(listener);return()=>nativeListeners.delete(listener)}}
-const roster = () => ({revision,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:[],agents:[],tasks:[{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]}],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}}]}})
+const roster = () => ({revision,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:[],agents:[],tasks:[{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]},...Array.from({length:extraTasks},(_,i)=>({id:`extra-${i}`,owner:'main',status:'completed',summary:`Archived fixture ${i}`,work:[],decisions:[],deliveries:[]}))],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}}]}})
 const fetch = async (url,options={}) => {
  if(url.endsWith('/feed')) return new Response(new ReadableStream({ start(controller) { feedControllers.add(controller);options.signal?.addEventListener('abort',()=>{feedControllers.delete(controller);controller.close()},{once:true}) } }))
  const {endpoint,payload} = JSON.parse(options.body)
@@ -299,6 +300,14 @@ try {
  await act(async()=>{root.render(React.createElement(main.component));await pause()})
  assert.ok(document.querySelector('[aria-label="Expand tasks"]'),'tab-local folding survives remount')
  assert.equal(document.querySelector('.mek-task'),null)
+ await click('[aria-label="Expand tasks"]')
+ extraTasks=9;await refresh()
+ assert.equal(document.querySelectorAll('.mek-task').length,8)
+ assert.equal(document.querySelector('.mek-task-footer .mek-task-more-count').textContent,'4')
+ assert.equal(document.querySelector('.mek-task-footer').closest('.mek-tasks'),document.querySelector('.mek-tasks'))
+ await click('.mek-task-footer .mek-task-more')
+ assert.equal(document.querySelectorAll('.mek-task').length,12)
+ assert.equal(document.querySelector('.mek-task-footer'),null,'pagination action disappears once all tasks are shown')
  assert.deepEqual(errors, [])
 } finally {for(const stop of effects) stop?.(); await act(async()=>root.unmount());console.error=originalError;dom.window.close();for(const [key,descriptor] of saved) {if(descriptor) Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key]}}
 })
