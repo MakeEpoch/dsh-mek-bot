@@ -1,6 +1,6 @@
 {
-  "name": "dsh-mek-bot",
-  "version": "0.2.4",
+"name": "dsh-mek-bot",
+  "version": "0.2.6",
   "description": "Native DS-Bot components inside DSH with a collapsible Bot sidebar and team Agent entry",
   "keywords": [
     "dsh-plugin",
@@ -55,6 +55,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
     "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-scope": "*",
     "@deepseek-ai/dsh-tools": "*",
     "@deepseek-ai/dsh-web": "*"
   },

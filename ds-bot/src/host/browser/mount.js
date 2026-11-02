@@ -65,10 +65,11 @@ async function saveShot(ctx, value) {
 
 /**
  * @param {any} ctx
- * @param {{ toolDefs: any[], defineTool: Function, keyOf: (exec: any) => Promise<string|undefined>, profileRoot: string, downloadRoot?: string, downloadRoots?: (botId: string) => Promise<string[]>, uploadRoots?: (botId: string) => Promise<string[]>, headless: boolean, playwrightUrl?: string, executablePath?: string, actionTimeout?: number, authorize?: (exec: any, botId: string, action: any) => Promise<void>, completeFor?: (exec: any) => Function, connect?: (botId: string, downloadRoots?: string[]) => Promise<string>, getHold?: (botId: string) => any, onHold?: (botId: string, hold: any) => void, subscribeHolds?: (listener: (botId: string, hold: any) => void) => (() => void) | undefined, openSession?: typeof openBotBrowser, api?: object }} options
+ * @param {{ toolDefs: any[], defineTool: Function, keyOf: (exec: any) => Promise<string|undefined>, profileRoot: string, downloadRoot?: string, downloadRoots?: (botId: string) => Promise<string[]>, uploadRoots?: (botId: string) => Promise<string[]>, headless: boolean, playwrightUrl?: string, executablePath?: string, actionTimeout?: number, authorize?: (exec: any, botId: string, action: any) => Promise<void>, completeFor?: (exec: any) => Function, connect?: (botId: string, downloadRoots?: string[]) => Promise<string>, getHold?: (botId: string) => any, onHold?: (botId: string, hold: any) => void, subscribeHolds?: (listener: (botId: string, hold: any) => void) => (() => void) | undefined, openSession?: typeof openBotBrowser, api?: object, register?: (tool: any) => void }} options
  */
-export function mountBrowserPlugin(ctx, { toolDefs, defineTool, keyOf, profileRoot, downloadRoot, downloadRoots, uploadRoots, headless, playwrightUrl, executablePath, actionTimeout, authorize, completeFor, connect, getHold, onHold, subscribeHolds, humanControl = false, openSession = openBotBrowser, api, registerTool = definition => ctx.tools.register(definition) }) {
+export function mountBrowserPlugin(ctx, { toolDefs, defineTool, keyOf, profileRoot, downloadRoot, downloadRoots, uploadRoots, headless, playwrightUrl, executablePath, actionTimeout, authorize, completeFor, connect, getHold, onHold, subscribeHolds, openSession = openBotBrowser, api, register }) {
   const sessions = new Map()
+  // One lane per Bot: its own tool calls and the user's controls run one at a time.
   const lanes = new Map()
   const serial = (botId, run) => {
     const prior = lanes.get(botId) ?? Promise.resolve()
@@ -108,7 +109,7 @@ export function mountBrowserPlugin(ctx, { toolDefs, defineTool, keyOf, profileRo
     return next()
   }, { prepend: true })
   const unsubscribeHolds = subscribeHolds?.((botId, hold) => {
-    if (humanControl || hold?.by !== 'user') return
+    if (hold?.by !== 'user') return
     const session = sessions.get(botId)
     if (!session) return
     sessions.delete(botId)
@@ -129,6 +130,7 @@ export function mountBrowserPlugin(ctx, { toolDefs, defineTool, keyOf, profileRo
     await rm(join(profileRoot, botId), { recursive: true, force: true }).catch(() => {})
   }
 
+  const registerTool = register ?? (tool => ctx.tools.register(tool))
   for (const spec of toolDefs) {
     registerTool(defineTool({
       name: spec.name,
@@ -138,8 +140,10 @@ export function mountBrowserPlugin(ctx, { toolDefs, defineTool, keyOf, profileRo
       async execute(args, exec) {
         const botId = await keyOf(exec)
         if (!botId) return 'Only Bots on the team have a browser.'
-        if (getHold?.(botId)?.by === 'user') throw new Error('The user has taken over this browser. Wait for them to give it back.')
+        // A browser the user already holds is never opened for the Bot.
+        if (getHold?.(botId)?.by === 'user' && sessions.get(botId) === undefined) throw new Error('The user has taken over this browser. Wait for them to give it back.')
         let session = sessions.get(botId)
+        const freshOpen = session === undefined && spec.needsBrowser === true
         if (spec.needsBrowser && session === undefined) {
           // Store the opening promise before resolving roots so concurrent calls share the launch.
           const opening = Promise.resolve().then(async () => {
@@ -168,19 +172,33 @@ export function mountBrowserPlugin(ctx, { toolDefs, defineTool, keyOf, profileRo
         }
         session = await session
         const gate = authorize ? action => authorize(exec, botId, action) : undefined
-        const execute = async () => {
-          if (humanControl && getHold?.(botId)?.by === 'user') throw new Error('The user has taken over this browser. Wait for them to give it back.')
+        // One lane per Bot: the Bot's own calls and the user's controls never interleave.
+        const run = async () => {
+          // A takeover that lands while a browser is opening closes that session and
+          // runs nothing; a takeover already in place blocks the Bot's action.
+          if (getHold?.(botId)?.by === 'user') {
+            if (freshOpen) {
+              const opened = sessions.get(botId)
+              sessions.delete(botId)
+              if (opened !== undefined) await Promise.resolve(opened).then(value => value.close?.(), () => {})
+              return 'The user has taken over the browser.'
+            }
+            throw new Error('The user has taken over this browser. Wait for them to give it back.')
+          }
           const value = await gateScope.run(gate, () => spec.execute(args ?? {}, {
-          botId,
-          profileDir: join(profileRoot, botId),
-          session,
-          complete: completeFor?.(exec),
-          origin: { ...(exec.callId !== undefined ? { callId: exec.callId } : {}), ...((exec.agent?.session?.header?.id ?? exec.agent?.id) !== undefined ? { sessionId: exec.agent.session?.header?.id ?? exec.agent.id } : {}) },
+            botId,
+            profileDir: join(profileRoot, botId),
+            session,
+            complete: completeFor?.(exec),
+            // A handoff belongs to the real Session behind the Agent: a group turn's
+            // header part, not the Agent id, tells the round where to answer.
+            origin: { ...(exec.callId !== undefined ? { callId: exec.callId } : {}), ...((exec.agent?.session?.header?.id ?? exec.agent?.id) !== undefined ? { sessionId: exec.agent.session?.header?.id ?? exec.agent.id } : {}) },
           }))
-          if (humanControl && getHold?.(botId)?.by === 'bot') exec.concludeTurn?.()
+          // A handoff the Bot just raised ends its turn so the user can take over.
+          if (getHold?.(botId)?.by === 'bot') exec.concludeTurn?.()
           return saveShot(ctx, value)
         }
-        return humanControl ? serial(botId, execute) : execute()
+        return serial(botId, run)
       },
     }))
   }
@@ -188,25 +206,23 @@ export function mountBrowserPlugin(ctx, { toolDefs, defineTool, keyOf, profileRo
   // An object return would be collected as an effect by cordis, so the api is an out-param.
   if (api) {
     api.drop = drop
-    if (humanControl) {
-      api.openIds = () => [...sessions.keys()]
-      api.observe = botId => serial(botId, async () => {
+    api.openIds = () => [...sessions.keys()]
+    api.observe = botId => serial(botId, async () => {
+      const session = await sessions.get(botId)
+      return session ? session.human.state() : { open: false }
+    })
+    api.control = async (botId, args) => {
+      if (!sessions.has(botId)) throw new Error('No browser is open for this Bot. Ask it to open a page first.')
+      if (args.action === 'take') onHold?.(botId, { reason: 'manual', note: 'The user is controlling this browser.', ...getHold?.(botId), by: 'user' })
+      return serial(botId, async () => {
         const session = await sessions.get(botId)
-        return session ? session.human.state() : { open: false }
+        if (!session) throw new Error('The browser was closed.')
+        if (args.action === 'release') {
+          if (getHold?.(botId)?.by !== 'user') throw new Error('The browser is not held by the user.')
+          session.human.release(); onHold?.(botId, null)
+        } else if (args.action !== 'take') await session.human.act(args)
+        return session.human.state()
       })
-      api.control = async (botId, args) => {
-        if (!sessions.has(botId)) throw new Error('No browser is open for this Bot. Ask it to open a page first.')
-        if (args.action === 'take') onHold?.(botId, { reason: 'manual', note: 'The user is controlling this browser.', ...getHold?.(botId), by: 'user' })
-        return serial(botId, async () => {
-          const session = await sessions.get(botId)
-          if (!session) throw new Error('The browser was closed.')
-          if (args.action === 'release') {
-            if (getHold?.(botId)?.by !== 'user') throw new Error('The browser is not held by the user.')
-            session.human.release(); onHold?.(botId, null)
-          } else if (args.action !== 'take') await session.human.act(args)
-          return session.human.state()
-        })
-      }
     }
   }
 }

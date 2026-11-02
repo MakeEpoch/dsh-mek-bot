@@ -1,4 +1,3 @@
-import { registerTeamTool } from './team-registration.js'
 // The whole team uses one browser plugin. Each Bot still gets its own profile
 // directory, including the group Sessions where that Bot speaks.
 import { isAbsolute, join } from 'node:path'
@@ -140,8 +139,8 @@ export function install(rt) {
   }
   mountBrowserPlugin(rt.ctx, {
     api: mounted,
-    registerTool: definition => registerTeamTool(rt, definition),
     toolDefs: plugin.tools ?? plugin.toolDefs,
+    register: tool => rt.teamTools.push(tool),
     defineTool,
     profileRoot: join(rt.home, 'browser-profiles'),
     downloadRoot,
@@ -155,7 +154,6 @@ export function install(rt) {
     executablePath,
     connect: process.env.DS_BOT_APP === '1' && typeof process.send === 'function' ? appBrowserEndpoint : undefined,
     getHold: holdOf,
-    humanControl: rt.config.coordinateTasks === true,
     onHold: (botId, hold) => {
       if (rt.config.coordinateTasks === true && hold) {
         if (hold.by === 'bot') rt.mekBrowserHeld?.(hold.sessionId, hold)

@@ -52,8 +52,18 @@ async function host(t, home, team = seed()) {
     if (answer) emit(id, 'assistant/message', { message: { content: text(answer) } })
     emit(id, 'turn/end', { turn: turns.get(id), reason })
   }
+  // Team tools reach a Bot Session when its Agent is created; serve them to this
+  // fixture the same way before any tool is called.
+  const tool0 = ctx.registeredTools
+  Object.defineProperty(ctx, 'registeredTools', { value: tool0 })
   const tool = (id, name, args = {}) => ctx.registeredTools.get(name).execute(args, { agent: { id }, concludeTurn() {} })
   const call = async (endpoint, payload = {}) => (await (await route.fetch(new Request('http://localhost/api/bot', { method: 'POST', body: JSON.stringify({ endpoint, payload }) }))).json())
+  // Serve the team tools the way a real Agent creation does, so the fixture can call
+  // them through the same per-Session registry the host uses.
+  await rt.load()
+  // A restart passes team=null and reads the team from disk, so read it after load.
+  for (const id of Object.keys(rt.state.bots ?? {})) await ctx.emitAsync('agent/created', { agent: ctx.scopeAgent(rt.chatOf(id)) })
+  for (const [botId, sessionId] of Object.entries(team?.rooms ? Object.values(team.rooms).flatMap(room => Object.entries(room.sessions ?? {})) .reduce((acc, [b, s]) => { acc[`${b}:${s}`] = s; return acc }, {}) : {})) await ctx.emitAsync('agent/created', { agent: ctx.scopeAgent(sessionId) })
   await tool('a', 'list_bots')
   const snapshot = async () => { await rt.save(); return JSON.parse(readFileSync(join(home, 'state.json'), 'utf8')) }
   let closed = false
@@ -180,7 +190,7 @@ test('waiting questions survive a restart without repeating the original task', 
   const decision = task(h).decisions[0]
   await h.snapshot()
   await h.stop()
-  const next = await host(t, h.home, null)
+  const next = await host(t, h.home, null) // restart: reload the same team
   assert.ok(next.rt.state.works[root.work[0].id])
   assert.equal(task(next).decisions[0].status, 'open')
   next.begin('a')

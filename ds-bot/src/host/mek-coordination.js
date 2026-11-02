@@ -289,6 +289,12 @@ export function install(rt) {
       } catch (error) {
         if (item.status !== 'taken') item.status = 'uncertain'
         item.error = 'Delivery outcome needs reconciliation; work was not repeated.'
+        // The work keeps its identity but is no longer simply queued: its delivery
+        // must be reconciled before anything is sent again.
+        if (!work.outcome && !['review', 'completed', 'cancelled', 'failed', 'blocked'].includes(work.status)) {
+          work.status = 'unknown'
+          work.result = 'The handoff delivery needs reconciliation; it must not be repeated blindly.'
+        }
         await save().catch(() => {})
         throw error
       }
@@ -370,7 +376,18 @@ export function install(rt) {
     if (final(rootOf(work.id)) || !work.dispatching) return
     const room = rt.roomOf(work.room)
     if (!room || !rt.botOf(work.from)) { work.outcome = 'blocked'; work.result = 'The group or task owner is unavailable.'; work.dispatching = false; await completeGroup(work); return }
-    if (!work.members) { work.members = await rt.prepareGroupTask(room, rt.botOf(work.from), work.instruction, work.groupFiles ?? []); await save() }
+    if (!work.members) {
+      work.members = await rt.prepareGroupTask(room, rt.botOf(work.from), work.instruction, work.groupFiles ?? [])
+      // A task dispatches to the members it selected, even when the post names nobody:
+      // upstream only wakes the members a plain member post mentions, and a delegated
+      // instruction carries no @Name.
+      if (!work.members?.length) {
+        const everyone = room.members.map(rt.botOf).filter(Boolean).filter(bot => bot.id !== work.from)
+        const admin = everyone.find(bot => rt.isAdminOf(room, bot.id))
+        work.members = (room.mode === 'admin' && admin ? [admin] : everyone).map(bot => bot.id)
+      }
+      await save()
+    }
     const items = []
     for (const member of work.members ?? []) {
       if (Object.values(data().works).some(child => child.parent === work.id && child.to === member && child.status !== 'superseded')) continue
