@@ -625,7 +625,9 @@ export function install(rt) {
       if (long === undefined) return tooLong(text)
       // Replies the poster waits for, while it works on what a Bot asked it for, are
       // work handed on for that request (handoffs.js).
-      const work = reportBack ? worksOf(exec).find(id => rt.ownsWork(self, id)) : undefined
+      // Work a Bot posts from inside a tracked task belongs to that task, whether or
+      // not it asked for the replies: its result rises to the original owner.
+      const work = worksOf(exec).find(id => rt.ownsWork(self, id))
       const sub = work === undefined && !rt.config.coordinateTasks ? undefined : randomUUID()
       const fromRoom = rt.mekPostGroup ? rt.groupOwners.get(exec.agent?.id)?.roomId : undefined
       if (sub !== undefined) rt.openWork(sub, { from: self, room: room.id, parent: work, ...(fromRoom ? { fromRoom } : {}) })
