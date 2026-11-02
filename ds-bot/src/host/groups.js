@@ -56,9 +56,11 @@ const isIdleRelayText = (text, everyone, priorBodies) => {
 
 // Logs written before rooms were versioned get sequence numbers in place.
 const ensureRoomLog = (room) => {
-  if (typeof room.seq !== 'number') {
-    room.log = (room.log ?? []).map((line, index) => ({ ...line, seq: index + 1 }))
-    room.seq = room.log.length
+  // A room created before logs were kept has a sequence number but no log; readers
+  // take room.log as a list, so it is materialized here either way.
+  if (typeof room.seq !== 'number' || !Array.isArray(room.log)) {
+    room.log = (Array.isArray(room.log) ? room.log : []).map((line, index) => ({ ...line, seq: index + 1 }))
+    room.seq = typeof room.seq === 'number' ? room.seq : room.log.length
   }
   room.seen ??= {}
 }
