@@ -59,3 +59,14 @@ Original README files remain as `README.upstream*.md`. Inherited desktop/release
 Every feature, changed user flow, capability restriction and upstream adaptation updates its documentation in the same change. Maintain current features and differences in the single Chinese [README](../README.md), synchronize its packaged copy, and keep old language entries as compatibility links. Maintain upstream changes and adoption in the [per-version merge records and documentation matrix](fork-vs-upstream.md), plus affected design/integration contracts. Visible behavior changes also update the [UI test plan](dev/mek-ui-testing.md).
 
 The UI plan distinguishes component checks, real-browser fixtures and isolated DSH/package acceptance. A fixture result does not establish slots, authentication, persistence or coexistence inside DSH; an upstream merge and release candidate require the applicable DSH integration checks. Record the actual source/bundle identity, executed cases, screenshots, failures and unknowns. Current CI does not execute the complete browser matrix. Documentation-only changes use link, source and root/package copy review without rerunning model/UI suites.
+
+
+## Review repairs for upstream 0.2.6 (2026-11-03)
+
+Native group history rows carry source Session, stable per-event/block identity and part order. The pane merges and sorts by that identity; on current-part rotation it reloads the newest page and restores the older-part cursor. Images use their producing Session. Native textareas reuse the upstream `mentionRows` candidates with local keyboard/IME-safe selection; upstream DSH inputs continue using their host trigger source.
+
+Group selection shares the upstream picker, preserving explicit targets, authorized @all, group mode, and poster exclusion. Ordinary member announcements bypass coordinated task creation and retain only their group post. A substantive tool-free reply to a caller participating in the round releases its fan-in barrier; external posts still honor their original report-back semantics. This does not invent a structured task for a plain relay turn.
+
+Resource auto-claims now last for a dispatch and any DSH background jobs it starts. Live conflicts wait without partial claims; cancellation, role restrictions and task limits are checked before execution. Explicit reservations and uncertain/legacy records remain conservative. See the updated execution-services design for release and restart boundaries.
+
+DSH 0.2.2's presentation waterfall may contain only sections, contexts and variables. Do not require a `tools` field there: filter it only on hosts that provide it, and keep the public tool-execution guards for forbidden subagents/workflows independently active.

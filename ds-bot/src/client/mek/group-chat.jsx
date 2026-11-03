@@ -37,9 +37,20 @@ export function GroupChat({ sessionId, team }) {
         const node = scroll.current
         const beforeHeight = cursor === undefined ? null : node.scrollHeight
         setView(old => {
-          const entries = new Map(old.items.map(item => [`${item.seq}:${item.kind}`, item]))
-          for (const item of page.items) entries.set(`${item.seq}:${item.kind}`, item)
-          return { items: [...entries.values()].sort((a, b) => a.seq - b.seq), cursor: cursor !== undefined || old.loading ? page.cursor : old.cursor, progress: page.progress, loading: false, beforeHeight }
+          const latest = cursor === undefined
+          const changedPart = latest && old.sessionId && old.sessionId !== page.sessionId
+          const entries = new Map((changedPart ? [] : old.items).map(item => [item.key, item]))
+          for (const row of page.items) {
+            const item = { ...row, sessionId: row.sessionId ?? page.sessionId ?? sessionId, part: row.part ?? page.part ?? 0 }
+            item.key ??= `${item.sessionId}:${item.seq}:${item.kind}:${item.block ?? 0}`
+            entries.set(item.key, item)
+          }
+          return {
+            items: [...entries.values()].sort((a, b) => a.part - b.part || a.seq - b.seq || (a.block ?? 0) - (b.block ?? 0)),
+            sessionId: latest ? page.sessionId : old.sessionId,
+            cursor: cursor !== undefined || old.loading || changedPart ? page.cursor : old.cursor,
+            progress: page.progress, loading: false, beforeHeight,
+          }
         })
       } catch (failure) { if (!stopped) setError(failure.message) }
       finally { request.current = false }
@@ -62,9 +73,9 @@ export function GroupChat({ sessionId, team }) {
       <div className="dsb-column"><div className="dsb-flow" role="feed" aria-label={room?.name} aria-busy={view.loading}>
         {view.cursor !== null && <button className="bt-soft" onClick={() => refresh.current?.(view.cursor)}>{t('Load earlier')}</button>}
         {view.items.map(item => item.kind === 'group'
-          ? <GroupReplies key={item.seq} sessionId={sessionId} callId={item.callId} done content={item.content} roster={roster} actions={actions} useUi={hooks.useUi} useWork={hooks.useWork} showActivity={false} />
-          : item.kind === 'post' ? <GroupMessage key={item.seq} bot={roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: 'gray' }} text={stripHeader(contentText(item.content))} room={room} roster={roster} actions={actions} time={item.time} />
-            : <ChatRows key={`${item.seq}:${item.kind}`} items={[item]} sessionId={sessionId} roster={roster} actions={actions} useUi={hooks.useUi} clock />)}
+          ? <GroupReplies key={item.key} sessionId={sessionId} callId={item.callId} done content={item.content} roster={roster} actions={actions} useUi={hooks.useUi} useWork={hooks.useWork} showActivity={false} />
+          : item.kind === 'post' ? <GroupMessage key={item.key} bot={roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: 'gray' }} text={stripHeader(contentText(item.content))} room={room} roster={roster} actions={actions} time={item.time} />
+            : <ChatRows key={item.key} items={[item]} sessionId={item.sessionId} roster={roster} actions={actions} useUi={hooks.useUi} clock />)}
         {view.progress.filter(id => !view.items.some(item => item.callId === id)).map(id => <GroupReplies key={id} sessionId={sessionId} callId={id} done={false} roster={roster} actions={actions} useUi={hooks.useUi} useWork={hooks.useWork} showActivity={false} />)}
         {error && <button className="bt-soft" role="alert" onClick={() => refresh.current?.()}>{error} · {t('Try again')}</button>}
         <div data-group-running="" hidden={active.length === 0}>

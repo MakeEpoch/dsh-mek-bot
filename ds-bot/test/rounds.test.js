@@ -930,8 +930,11 @@ test('members called in one message start together, each told who else answers',
   assert.ok(prompts.every(prompt => !/one at a time/.test(prompt)))
   await answer(second.sessionId, second.message.source.exchangeId, 'Second found it.', 2)
   await answer(first.sessionId, first.message.source.exchangeId, 'First found it too.', 3)
+  const reviewed = await turnFor(sent, admin, first, second)
+  assert.equal(reviewed.sessionId, admin.sessionId)
+  await answer(reviewed.sessionId, reviewed.message.source.exchangeId, 'Both results reviewed.', 4)
   const result = JSON.parse(await running)
-  assert.deepEqual(result.replies.map(reply => reply.text), ['@Writer @Tester search it', 'Second found it.', 'First found it too.'])
+  assert.deepEqual(result.replies.map(reply => reply.text), ['@Writer @Tester search it', 'Second found it.', 'First found it too.', 'Both results reviewed.'])
 })
 
 test('a user message mid-round reaches the admin at once while a member still answers', async (t) => {

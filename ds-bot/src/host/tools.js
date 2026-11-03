@@ -1,4 +1,3 @@
-import { registerTeamTool } from './team-registration.js'
 // Team tools: the roster, bot-to-bot messages, group chat settings and posts, and the
 // question and view cards. Group rounds and reading chats are in groups.js.
 import { randomUUID } from 'node:crypto'
@@ -623,6 +622,10 @@ export function install(rt) {
       }
       const long = await rt.attachLong(text, `Post from ${sender.name}.txt`)
       if (long === undefined) return tooLong(text)
+      if (member && named.length === 0) {
+        await rt.postToRoom(room, sender, long.text, { member: true, quiet: true, mentions, ...(long.length ? { length: long.length } : {}) }, long.files)
+        return `Posted in "${room.name}", where the user and its members read it. Nobody answers it: your post only calls the members you name with @Name.`
+      }
       // Replies the poster waits for, while it works on what a Bot asked it for, are
       // work handed on for that request (handoffs.js).
       // Work a Bot posts from inside a tracked task belongs to that task, whether or
@@ -632,13 +635,15 @@ export function install(rt) {
       const fromRoom = rt.mekPostGroup ? rt.groupOwners.get(exec.agent?.id)?.roomId : undefined
       if (sub !== undefined) rt.openWork(sub, { from: self, room: room.id, parent: work, ...(fromRoom ? { fromRoom } : {}) })
       try {
-        if (rt.mekPostGroup && sub) await rt.mekPostGroup(room, sender, text, sub, long.files)
+        // A post is a dispatch only when the poster asked for the replies or is handing
+        // work on inside a task; an ordinary announcement wakes only the members it names.
+        // The "@" resolved above travels with it, so a dispatch keeps its named targets.
+        if (rt.mekPostGroup && sub) await rt.mekPostGroup(room, sender, text, sub, long.files, { delegated: reportBack || work !== undefined, mentions })
         else await rt.postToRoom(room, sender, long.text, { mentions, ...(reportBack ? { reportBack: true, ...callerRoom(exec) } : {}), ...(member ? { member: true } : {}), ...(sub ? { sub } : {}), ...(long.length ? { length: long.length } : {}) }, long.files)
       } catch (failure) {
         if (sub !== undefined) rt.dropWork(sub)
         return `Could not post in "${room.name}": ${failure.message}`
       }
-      if (member && named.length === 0) return `Posted in "${room.name}", where the user and its members read it. Nobody answers it: your post only calls the members you name with @Name.`
       if (named.length > 0) {
         const turn = turnOf(exec)
         const earlier = calledInPosts.get(exec.agent?.id)
@@ -841,7 +846,9 @@ export function install(rt) {
       const assembled = await next()
       return {
         ...assembled,
-        tools: assembled.tools.filter(tool => !HIDDEN_TOOLS.includes(tool.name)),
+        // DSH 0.2.2's presentation waterfall owns sections, while tools stay in
+        // the provider's admitted tool set. Older hosts supplied tools here too.
+        ...(Array.isArray(assembled.tools) ? { tools: assembled.tools.filter(tool => !HIDDEN_TOOLS.includes(tool.name)) } : {}),
         sections: assembled.sections.filter(section => !HIDDEN_SECTIONS.has(section.name)),
       }
     })

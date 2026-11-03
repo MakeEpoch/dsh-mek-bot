@@ -28,9 +28,13 @@ async function host(t, home, team = seed()) {
     })
     return agents.get(id)
   }
+  let createdSession = 0
   Object.assign(ctx, {
     workspaceRegistry: { get: () => undefined, resolveByPath: async () => undefined, create: async path => ({ id: 'w', path }), archiveSession: async () => {} },
-    sessionController: { resolveAgent: async id => ({ agent: agentOf(id) }), selectModel: async () => {}, page: async () => ({ records: [], hasMore: false }) },
+    // `create` is what a member's group Session is made with (groups.js groupSessionFor):
+    // a dispatch to a member that has no Session yet calls it, so a fixture without it
+    // fails the dispatch before anyone is called.
+    sessionController: { create: async () => ({ sessionId: `created-${++createdSession}` }), resolveAgent: async id => ({ agent: agentOf(id) }), selectModel: async () => {}, page: async () => ({ records: [], hasMore: false }) },
     sessionTitle: { rename: async () => {} }, sessions: { flush: async () => {} },
   })
   let route
@@ -63,7 +67,7 @@ async function host(t, home, team = seed()) {
   await rt.load()
   // A restart passes team=null and reads the team from disk, so read it after load.
   for (const id of Object.keys(rt.state.bots ?? {})) await ctx.emitAsync('agent/created', { agent: ctx.scopeAgent(rt.chatOf(id)) })
-  for (const [botId, sessionId] of Object.entries(team?.rooms ? Object.values(team.rooms).flatMap(room => Object.entries(room.sessions ?? {})) .reduce((acc, [b, s]) => { acc[`${b}:${s}`] = s; return acc }, {}) : {})) await ctx.emitAsync('agent/created', { agent: ctx.scopeAgent(sessionId) })
+  for (const sessionId of Object.values(team?.rooms ? Object.values(team.rooms).flatMap(room => Object.entries(room.sessions ?? {})) .reduce((acc, [b, s]) => { acc[`${b}:${s}`] = s; return acc }, {}) : {})) await ctx.emitAsync('agent/created', { agent: ctx.scopeAgent(sessionId) })
   await tool('a', 'list_bots')
   const snapshot = async () => { await rt.save(); return JSON.parse(readFileSync(join(home, 'state.json'), 'utf8')) }
   let closed = false
@@ -796,6 +800,118 @@ test('a nested group dispatch returns to the delegating native group session bef
   assert.equal(h.rt.mekTasksView().length, 1)
 })
 
+// Regression: an ordinary member's post without an @mention wakes no one. The
+// dispatcher used to take its empty member list as "nobody was named, so wake the
+// admin or everyone", and because `coordinateTasks` opens a sub-task for any post the
+// call also answered "Delegated in ..." — so a plain announcement silently started
+// Chief and Tester. A dispatch (report_back, or work handed on inside a task) still
+// reaches its members, which the nested-group test above covers.
+test('an ordinary member\'s group post with no mention dispatches no work', async t => {
+  const team = groupTeam()
+  team.rooms.r.admin = 'a'
+  const h = await host(t, undefined, team)
+  h.take('gb')
+  const posted = await h.tool('gb', 'post_to_group', { group: 'Review group', message: 'Status update: the build is green', report_back: false })
+  assert.match(posted, /Nobody answers it/)
+  assert.doesNotMatch(posted, /Delegated in/)
+  await delay(40)
+  assert.equal(h.agentOf('a').calls.length, 0)
+  assert.equal(h.agentOf('gc').calls.length, 0)
+  const roots = h.rt.mekTasksView()
+  assert.equal(roots.length, 0, 'an announcement is not a blocked task')
+  assert.deepEqual([...h.agentOf('a').calls, ...h.agentOf('gc').calls], [])
+  assert.equal(h.agentOf('gb').calls.length, 0, 'the poster receives no failure or review notice')
+})
+
+// Regression: a dispatch that names its target keeps that target. The earlier fix
+// routed every dispatch through `openingCall`'s `kickoff`, which returns the admin
+// before any "@" is read, so Writer delegating "@Tester" selected Chief instead.
+test('a group dispatch that names a member selects that member, not the admin', async t => {
+  const team = groupTeam()
+  // Writer (b) is a plain member: its posts reach only the members it names.
+  team.rooms.r.admin = 'a'
+  const h = await host(t, undefined, team)
+  h.take('gb')
+  const posted = await h.tool('gb', 'post_to_group', { group: 'Review group', message: '@Tester Verify the release build', report_back: true })
+  assert.match(posted, /Delegated in/)
+  await settled(() => h.agentOf('gc').calls.length > 0)
+  const root = task(h)
+  const group = root.work.find(item => !item.to && !item.parent)
+  assert.deepEqual(group.members, ['c'])
+  assert.deepEqual(root.work.filter(item => item.to).map(item => item.to), ['c'])
+  // The named member was called; the admin and the poster were not.
+  assert.equal(h.agentOf('gc').calls.length, 1)
+  assert.equal(h.agentOf('a').calls.length, 0)
+  assert.equal(h.agentOf('b').calls.length, 0)
+})
+
+// The group's own rule (docs/plans/2026-10-07-group-chat.md): a Main Bot's or an
+// admin's post with no "@" is answered under the group mode, everyone else's is not.
+// These pin the edges the discarded `kickoff` fallback got wrong.
+test('a Main Bot\'s group post with no mention reaches the admin of a group it does not run', async t => {
+  const team = groupTeam()
+  // `a` is the Main Bot; `b` administers this group.
+  team.rooms.r.admin = 'b'
+  const h = await host(t, undefined, team)
+  h.begin('a')
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design' })
+  h.end('a')
+  await settled(() => h.agentOf('gb').calls.length > 0)
+  assert.equal(h.agentOf('gb').calls.length, 1)
+  assert.equal(h.agentOf('gc').calls.length, 0)
+  assert.deepEqual(h.rt.mekTasksView()[0].work.find(item => !item.to && !item.parent).members, ['b'])
+})
+
+// The poster never answers its own post. An admin that posts leaves no admin to
+// answer, so the group falls back to the members that are left.
+test('an admin\'s group post with no mention reaches the others, never back to itself', async t => {
+  const team = groupTeam()
+  // `b` both administers the group and posts in it. Every member already has a group
+  // Session, as a group that has been talking would: a member without one gets a
+  // freshly created Session, and the fixture only records calls on a known id.
+  team.rooms.r.admin = 'b'
+  team.rooms.r.sessions = { a: 'ga', b: 'gb', c: 'gc' }
+  const h = await host(t, undefined, team)
+  h.take('gb')
+  // What the poster's own turn looked like before its post: the member Session it speaks
+  // from, and its own chat. Neither may gain a call from its own post.
+  const ownBefore = h.agentOf('gb').calls.length
+  const chatBefore = h.agentOf('b').calls.length
+  await h.tool('gb', 'post_to_group', { group: 'Review group', message: 'Kick off the review' })
+  h.end('gb')
+  await settled(() => h.agentOf('gc').calls.length > 0 && h.agentOf('ga').calls.length > 0)
+  // The poster answers nothing — not in its group Session, not in its own chat; the
+  // other two each receive it once.
+  assert.equal(h.agentOf('gb').calls.length, ownBefore)
+  assert.equal(h.agentOf('b').calls.length, chatBefore)
+  assert.equal(h.agentOf('gc').calls.length, 1)
+  assert.equal(h.agentOf('ga').calls.length, 1)
+  assert.deepEqual(h.rt.mekTasksView()[0].work.find(item => !item.to && !item.parent).members.slice().sort(), ['a', 'c'])
+})
+
+test('a Main Bot\'s group post with no mention still reaches everyone in a group without an admin', async t => {
+  const team = groupTeam()
+  team.rooms.r.admin = 'zz-missing'
+  const h = await host(t, undefined, team)
+  h.begin('a')
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design' })
+  h.end('a')
+  await settled(() => h.agentOf('gb').calls.length > 0 && h.agentOf('gc').calls.length > 0)
+  assert.deepEqual(h.rt.mekTasksView()[0].work.find(item => !item.to && !item.parent).members.slice().sort(), ['b', 'c'])
+})
+
+test('a group in everyone mode answers a Main Bot\'s post with everyone but the poster', async t => {
+  const team = groupTeam()
+  team.rooms.r.mode = 'everyone'
+  team.rooms.r.admin = 'b'
+  const h = await host(t, undefined, team)
+  h.begin('a')
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design' })
+  h.end('a')
+  await settled(() => h.agentOf('gb').calls.length > 0 && h.agentOf('gc').calls.length > 0)
+  assert.deepEqual(h.rt.mekTasksView()[0].work.find(item => !item.to && !item.parent).members.slice().sort(), ['b', 'c'])
+})
+
 test('removing a group worker blocks its result and cancels its delegated branch', async t => {
   const h = await host(t, undefined, groupTeam())
   h.begin('a')
@@ -847,4 +963,39 @@ test('a browser handoff survives as identifiers and cold recovery blocks without
     assert.equal(task(restored).work.find(work => work.previous === root.work[0].id).browserHold, undefined)
     await restored.stop()
   }
+})
+
+test('Main Bot and admin @all posts keep every eligible target, including mixed explicit mentions', async t => {
+  for (const [poster, message] of [['a', '@all Review the design'], ['gb', '@Tester @all Review the design']]) {
+    const team = groupTeam()
+    team.rooms.r.admin = 'b'
+    team.rooms.r.sessions = { a: 'ga', b: 'gb', c: 'gc' }
+    const h = await host(t, undefined, team)
+    h.begin(poster)
+    await h.tool(poster, 'post_to_group', { group: 'Review group', message })
+    const expected = poster === 'a' ? ['b', 'c'] : ['a', 'c']
+    assert.deepEqual(h.rt.mekTasksView()[0].work.filter(work => work.to).map(work => work.to).sort(), expected)
+  }
+})
+
+test('a first group assignment creates its member Session and delivers once', async t => {
+  const team = groupTeam()
+  team.rooms.r.sessions = {}
+  const h = await host(t, undefined, team)
+  let created = 0
+  h.ctx.sessionController.create = async () => ({ sessionId: `fresh-${++created}` })
+  h.rt.ownChatBrief = async () => ''
+  h.begin('a')
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the design' })
+  assert.equal(created, 1)
+  assert.equal(h.rt.state.rooms.r.sessions.b, 'fresh-1')
+  assert.equal(h.agentOf('fresh-1').calls.length, 1)
+  assert.equal(h.agentOf('b').calls.length, 0)
+})
+
+test('ordinary group turns explain how to return results without inventing a tracked assignment', async t => {
+  const h = await host(t, undefined, groupTeam())
+  h.begin('gb', { content: text('Review the existing analysis'), source: { kind: 'bot', role: 'room', roomId: 'r', askedBy: 'a', exchangeId: 'relay-only' } })
+  await assert.rejects(h.tool('gb', 'report_bot_task', { status: 'completed', summary: 'Reviewed', evidence: 'Existing analysis checked' }), /ordinary group reply.*caller receives substantive results automatically/)
+  assert.equal(h.rt.mekTasksView().length, 0)
 })

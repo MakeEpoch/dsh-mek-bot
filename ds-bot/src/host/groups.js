@@ -1,4 +1,3 @@
-import { registerTeamTool } from './team-registration.js'
 // Group chats: the room log, members' group Sessions, rounds and @mentions, round
 // reports, and the group tools (group_relay, read_own_chat, read_group_chat).
 //
@@ -39,7 +38,7 @@ const NEEDS_CALLER_DECISION = /需要.*(?:决定|拍板|确认|指示|裁决|定
 const needsCallerDecision = text => typeof text === 'string' && NEEDS_CALLER_DECISION.test(text)
 
 // Short ack/thanks/closing phrases with no new content, used by the 0-tool idle loop guard.
-const IDLE_ACK_BODY = /^(?:(?:收到|好的|好|明白|明白了|了解|了解了|没问题|谢谢|多谢|感谢|辛苦了|辛苦|不客气|不用谢|完毕|完成|好嘞|行|ok|okay|got\s+it|understood|noted|thanks|thank\s+you|you\s+are\s+welcome|you're\s+welcome|welcome|np|no\s+problem|roger|ack|done|all\s+good|sounds\s+good)(?:[\s，,、。.!！~～：:]+|$))+$/i
+const IDLE_ACK_BODY = /^(?:(?:收到|好的|好|明白|明白了|了解|了解了|没问题|谢谢|多谢|感谢|辛苦了|辛苦|不客气|不用谢|完毕|完成|好嘞|行|ok|okay|got\s+it|understood|noted|thanks|thank\s+you|you\s+are\s+welcome|you're\s+welcome|welcome|np|no\s+problem|roger|ack|done|all\s+good|sounds\s+good|on\s+it)(?:[\s，,、。.!！~～：:]+|$))+$/i
 const normalizeRelayBody = (text, everyone) => {
   let out = String(text ?? '')
   for (const bot of everyone) {
@@ -818,9 +817,10 @@ export function install(rt) {
           batch.done.push(member.name)
           if (called.size > 0) batch.answered = true
           if (worked || needsCallerDecision(final)) batch.worked = true
+          if (final && round.slots.some(other => other.id === batch.by) && !isIdleRelayText(final, room.members.map(rt.botOf).filter(Boolean), [])) batch.returned = true
         }
         dropMemberFromBatch(room, member.id)
-        if (batch.pending.size === 0 && batch.done.length > 0 && batch.worked && !batch.answered && !signal.aborted) {
+        if (batch.pending.size === 0 && batch.done.length > 0 && (batch.worked || batch.returned) && !batch.answered && !signal.aborted) {
           const caller = rt.botOf(batch.by)
           if (caller !== undefined && room.members.includes(caller.id)
             && !round.slots.some(other => other.id === caller.id && (other.status === 'waiting' || other.status === 'speaking'))) {
@@ -1097,14 +1097,15 @@ export function install(rt) {
     return true
   }
 
-  // Optional downstream coordinator: use the same group context and sessions,
-  // while tracking long-running member work independently of a relay round.
-  rt.prepareGroupTask = async (room, sender, text, files = []) => {
+  // The coordinator shares the ordinary group picker, including @all, roles and
+  // the group mode. A post never selects its own author.
+  rt.prepareGroupTask = async (room, sender, text, files = [], { mentions } = {}) => {
     ensureRoomLog(room)
     await loadGroupLines(room)
     appendRoom(room, { who: sender.name, botId: sender.id, text, ...(files.length ? { files } : {}) })
     await rt.save()
-    return openingSpeakers(room, { botId: sender.id, text, member: !rt.isMain(sender.id) && !rt.isAdminOf(room, sender.id) }).map(member => member.id)
+    const member = !rt.isMain(sender.id) && !rt.isAdminOf(room, sender.id)
+    return openingSpeakers(room, { botId: sender.id, text, member, ...(mentions ? { mentions } : {}) }).map(bot => bot.id)
   }
   rt.prepareGroupMemberTask = async (room, member) => {
     const session = await groupSessionFor(room, member)

@@ -437,7 +437,7 @@ function HistoryImage({ attachment, sessionId, actions }) {
       : h('span', { className: 'bt-hint' }, t('Loading…'))
 }
 
-function EarlierUser({ row, actions }) {
+function EarlierUser({ row, sessionId, actions }) {
   const { shown, folded, control, code, codeHead } = useFold(row.text ?? '')
   const body = row.text && shown !== '' ? h(MarkdownText, { text: shown, labels: mdLabels(), variant: 'compact' }) : null
   const area = foldArea(body, code, codeHead, actions)

@@ -359,11 +359,18 @@ export function install(rt) {
       ...(parent !== groupRoot && fromSession ? { fromRoomId: room.id } : {}), text: groupInstruction(instruction, context), files }
     return { id, item: prepare(rootOf(id).id, args) }
   }
-  rt.mekPostGroup = async (room, sender, instruction, id, files = []) => {
+  // `delegated` says the post is a dispatch that must reach members: message_bot's
+  // group argument and a group revision. An ordinary group post wakes only the
+  // members it names, so it carries no dispatch intent and its empty list stands.
+  // `mentions` is the "@" the poster's tool call resolved, kept with the task so a
+  // resumed dispatch picks the same targets.
+  rt.mekPostGroup = async (room, sender, instruction, id, files = [], { delegated = false, mentions } = {}) => {
     const work = workOf(id)
     if (!work || final(rootOf(id))) refuse('The group task is no longer active.')
     work.instruction = instruction
     work.groupRoot = id
+    work.delegated = delegated
+    if (mentions !== undefined) work.groupMentions = mentions
     work.status = 'running'
     work.dispatching = true
     // Keep the group dispatch intent with the task before preparing sessions. A
@@ -377,15 +384,10 @@ export function install(rt) {
     const room = rt.roomOf(work.room)
     if (!room || !rt.botOf(work.from)) { work.outcome = 'blocked'; work.result = 'The group or task owner is unavailable.'; work.dispatching = false; await completeGroup(work); return }
     if (!work.members) {
-      work.members = await rt.prepareGroupTask(room, rt.botOf(work.from), work.instruction, work.groupFiles ?? [])
-      // A task dispatches to the members it selected, even when the post names nobody:
-      // upstream only wakes the members a plain member post mentions, and a delegated
-      // instruction carries no @Name.
-      if (!work.members?.length) {
-        const everyone = room.members.map(rt.botOf).filter(Boolean).filter(bot => bot.id !== work.from)
-        const admin = everyone.find(bot => rt.isAdminOf(room, bot.id))
-        work.members = (room.mode === 'admin' && admin ? [admin] : everyone).map(bot => bot.id)
-      }
+      // `prepareGroupTask` already applies the defaults: a dispatch keeps the members
+      // it names, and only a dispatch with no target at all falls back to the group's
+      // opening pick. An ordinary post that names nobody wakes no one.
+      work.members = await rt.prepareGroupTask(room, rt.botOf(work.from), work.instruction, work.groupFiles ?? [], { delegated: work.delegated === true, mentions: work.groupMentions })
       await save()
     }
     const items = []
@@ -610,7 +612,10 @@ export function install(rt) {
     artifacts: { type: 'array', items: { type: 'string' }, description: 'Paths or URLs of deliverables and evidence' },
   }, async (args, exec) => {
     const work = activeWork(exec.agent?.id)
-    if (!work || final(rootOf(work.rootId))) refuse('No active delegated work in this turn.')
+    if (!work || final(rootOf(work.rootId))) {
+      const ordinaryGroup = rt.groupOwners.has(exec.agent?.id) && rt.live.get(exec.agent?.id)?.info?.role === 'room'
+      refuse(ordinaryGroup ? 'No active delegated work in this turn. This is an ordinary group reply: write your result in the group; its caller receives substantive results automatically. report_bot_task is for tracked delegations created with message_bot or post_to_group.' : 'No active delegated work in this turn.')
+    }
     if (work.status === 'waiting_decision') refuse('A question is still open; this task cannot finish yet.')
     if (!['completed', 'blocked', 'failed'].includes(args.status) || !String(args.summary ?? '').trim() || !String(args.evidence ?? '').trim()) refuse('Give a valid status, concrete summary, and verification evidence.')
     work.sourceSessionId = exec.agent?.id
@@ -636,7 +641,7 @@ export function install(rt) {
     const id = randomUUID()
     open(id, { from: work.from, ...(work.to ? { to: work.to } : { room: work.room }), ...(own(state.works, work.parent) ? { parent: work.parent } : {}) })
     const next = { ...work, id, previous: work.id, status: 'queued', attempt: work.attempt + 1, instruction: `Original task: ${work.instruction}\nRevision required: ${feedback}`, createdAt: Date.now() }
-    for (const key of ['browserHold', 'restartResumeId', 'reviewNoticeId', 'dispatching', 'members', 'result', 'resultLength', 'resultAt', 'resultExchangeId', 'resultSessionId', 'outcome', 'report']) delete next[key]
+    for (const key of ['browserHold', 'restartResumeId', 'reviewNoticeId', 'dispatching', 'members', 'groupMentions', 'result', 'resultLength', 'resultAt', 'resultExchangeId', 'resultSessionId', 'outcome', 'report']) delete next[key]
     work.status = 'superseded'
     const replaced = new Set([work.id])
     let grew = true
@@ -650,7 +655,7 @@ export function install(rt) {
     touch(root)
     if (!next.to && next.room) {
       next.groupRoot = next.id
-      await rt.mekPostGroup(rt.roomOf(next.room), rt.botOf(next.from), next.instruction, next.id)
+      await rt.mekPostGroup(rt.roomOf(next.room), rt.botOf(next.from), next.instruction, next.id, [], { delegated: true })
       return `Group revision ${id} queued under task ${root.id}.`
     }
     await enqueue(root.id, { fromId: next.from, toId: next.to, ...(next.sessionId ? { sessionId: next.sessionId } : {}), role: 'request', exchangeId: id, text: next.instruction })

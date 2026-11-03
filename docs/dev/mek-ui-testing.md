@@ -99,7 +99,7 @@ DSH_HOME="$BOT_UI_HOME" "$BOT_UI_DSH" plugin --profile web add -w "$BOT_UI_PACKA
 
 ```sh
 cd "$BOT_UI_REPO/ds-bot"
-MOCK_PORT=8786 MOCK_LOG="$BOT_UI_HOME/mock.jsonl" MEK_MOCK_COORDINATION=1 \
+MOCK_PORT=8786 MOCK_LOG="$BOT_UI_HOME/mock.jsonl" MOCK_LOG_TOOLS=1 MEK_MOCK_COORDINATION=1 \
   node dev/mock-llm.mjs "$BOT_UI_HOME"
 ```
 
@@ -268,3 +268,17 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 - 现有群历史的悬停工具栏在 390px 下仍造成横向滚动（活动容器隐藏后，聊天滚动宽 344px / 可用 327px，越界节点为 `.bt-tools`）；本次活动行自身未越出聊天列，不将整个窄屏历史布局记为无溢出。未单独做实际 DSH 多成员并行、手动停止、真实审批交互、Desktop 或真实模型验收；这些分支的状态变化由上述组件回归覆盖，真实模型能力仍未知。
 
 测试标签已关闭；隔离 web/mock 进程组及 3187/8787 端口已确认退出。正式 DSH 未更新，未推送本轮修改。
+
+
+## 14. 2026-11-03 v0.2.6 审查修复验收
+
+本轮覆盖：跨段相同序号消息的保留和顺序、当前段轮换及 cursor、图片来源；普通公告无任务/自通知；@all 和角色规则；无工具复核回报与纯确认防空转；自动租约释放、后台 job 保留、等待恢复、取消和不确定操作；原生输入框 @ 搜索及键盘/IME。生成 bundle 的 JSDOM 生命周期回归与实际包/浏览器分别记录。
+
+- 基线 `313df0a`，最终生成客户端 SHA-256 `d35fc2b79856d89c6c149a181e90c4481650d50139c4d2453db747c817192ed5`；候选包 SHA-256 `2393fbcfef6f3af2e23506b891887ad40d67f975b37e8c7017cf9198802d2fa4`。内容哈希包安装到独立 `.dsh-test-review-026-2p2jBE`，90 个包文件的源码、归档及安装副本逐字节一致。
+- 最终全量：1547 项 / 1545 通过 / 0 失败 / 2 跳过；lint 44 warnings / 0 errors，构建及生成一致性通过。新增宿主 presentation 装配不含 `tools` 的回归，避免单测夹具掩盖真实 DSH 兼容错误。
+- 实际 DSH `0.2.2-alpha.2`、Node `24.14.1`，3199/8799 回环端口和明确配置的本地 mock：最终安装后，模型选择、委派、群回复冒烟，以及委派→常规决策→必要用户提问→恢复→复核→返工→证据→负责人验收闭环全部通过。新建群在真实成员 Session 执行；更换临时工作区后生成新群会话段，当前段和旧段通过 cursor 独立读取。
+- 真实 Chrome：私聊输入 `@` 立即显示 Writer，Enter 插入 `@Writer ` 而未发送；群聊列出 Chief / Writer / 所有人。失焦后重新聚焦未完成的提及会重新打开候选。390×844 下 scene 宽 334px，菜单左右边界 73/388px，可见且位于输入框上方。真实点击“加载更早的消息”后，`HISTORY_ONE` 和 `HISTORY_TWO` 同时保留，前者在前；后续轮询仍保留两个分段。
+- 截图：[私聊候选](../images/mek-026-mentions.png)、[390px 群候选](../images/mek-026-mentions-narrow.png)、[跨段历史](../images/mek-026-history.png)。均为合成测试数据；窄屏历史原有横向滚动仍存在，未计作整页无溢出。
+- 限制：图片来源、租约取消/后台 job/不确定状态、无工具回报及纯确认防空转由宿主/生成 bundle 回归覆盖；图片真实输入被该测试群 Session 的旧文本模型能力拒绝，未取得跨段图片浏览器证据。未做 Desktop、真实模型业务验收或完整浏览器矩阵；不自动清理正式环境遗留租约。最初未等异步切段完成的脚本失败不计作验收，修正为等待 activity/work 稳定空闲后重跑通过。正式 DSH 未更新。
+
+测试标签已关闭；本轮隔离 web/mock 进程已退出，3199/8799 端口已确认关闭。失焦重新聚焦、Escape、搜索及 IME 的完整组合由生成 bundle 回归覆盖，真实 Chrome 重点核对输入、候选、Enter 插入及宽窄屏布局。

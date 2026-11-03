@@ -290,3 +290,14 @@ test('Bot Sessions filter the hidden tools and their guidance out of the prompt 
   await stop()
   for (const record of scopedListeners) assert.equal(record.disposed, true)
 })
+
+test('DSH 0.2.2 presentation-only assembly keeps provider-owned tools and still denies delegation', async t => {
+  const { agentFor, scopedListeners, guard, stop } = await setup({ served: ['read'] })
+  t.after(stop)
+  await agentFor('chief')
+  const filter = scopedListeners.find(record => record.event === 'system-prompt/assemble').listener
+  const result = await filter({}, {}, async () => ({ sections: [{ name: 'bot-identity' }, { name: 'tool:subagent' }], contexts: [], variables: {} }))
+  assert.deepEqual(result.sections, [{ name: 'bot-identity' }])
+  assert.equal(Object.hasOwn(result, 'tools'), false)
+  assert.equal(guard('subagent', 'chief'), DELEGATION_REFUSAL)
+})

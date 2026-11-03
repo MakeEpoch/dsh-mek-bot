@@ -1,4 +1,3 @@
-import { registerTeamTool } from './team-registration.js'
 // Bot browsers (DSH Desktop and the desktop app). Every Bot owns a browser panel there: an
 // Electron webview in its own storage partition, which the user steers. The page lives in
 // the app window, not here, so `read_browser` reaches it through the window: the client

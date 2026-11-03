@@ -1,4 +1,3 @@
-import { registerTeamTool } from './team-registration.js'
 // Memory: what a Bot keeps across all its conversations, as Markdown in the Agent
 // Memory Repo format (github.com/AgentMemoryRepo/agentmemoryrepo): one entry per
 // bullet line ending in `[key: value; …]` metadata, and a MEMORY.md entry point whose

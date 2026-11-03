@@ -8,6 +8,7 @@ import { imageFiles, readImages, requestId } from './image-input.js'
 import { ModelChoiceDock } from '../../../ds-bot/src/client/model-menu.js'
 import { PendingQuestion } from '../../../ds-bot/src/client/questions.js'
 import { PendingView } from '../../../ds-bot/src/client/widget-cell.js'
+import { useComposerMentions } from '../../../ds-bot/src/client/composer-mentions.js'
 
 // The chat follows its end while the user is this close to it.
 const FOLLOW_PX = 80
@@ -115,6 +116,7 @@ export function Composer({ sessionId, placeholder, disabled, onSend, actions, us
   const attempt = useRef(null)
   const field = useRef(null)
   const inputActions = useInput(field, setText)
+  const mentions = useComposerMentions({ text, setText, field, sessionId, useRoster, disabled: disabled || sending })
   useEffect(() => { active.current = true; return () => { active.current = false } }, [])
   const replaceImages = value => { keptImages.current = value; setImages(value) }
   const addImages = files => {
@@ -163,6 +165,7 @@ export function Composer({ sessionId, placeholder, disabled, onSend, actions, us
       onDragOver: event => { if (!disabled && !sending && [...(event.dataTransfer?.types ?? [])].includes('Files')) event.preventDefault() },
       onDrop: event => { const files = imageFiles(event.dataTransfer); if (files.length) { event.preventDefault(); addImages(files) } },
     },
+      mentions.menu,
       h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', multiple: true, hidden: true, disabled: disabled || sending, 'aria-label': t('Add images'), onChange: event => { addImages([...(event.target.files ?? [])]); event.target.value = '' } }),
       h('div', { className: 'dsb-composer-tools' }, h(ComposerPlus, { sessionId, inputActions, useRoster, actions, fileLabel: 'Add images', disabled: disabled || sending })),
       h('div', { className: 'dsb-composer-input', 'data-input-scroll': '' },
@@ -174,7 +177,11 @@ export function Composer({ sessionId, placeholder, disabled, onSend, actions, us
           placeholder,
           'aria-label': placeholder,
           'data-composer-input': '',
-          onChange: event => setText(event.target.value),
+          ...mentions.props,
+          onChange: mentions.change,
+          onSelect: mentions.select,
+          onBlur: mentions.blur,
+          onFocus: mentions.focus,
           onPaste: event => {
             const files = imageFiles(event.clipboardData)
             if (!files.length) return
@@ -184,6 +191,7 @@ export function Composer({ sessionId, placeholder, disabled, onSend, actions, us
             if (pastedText) inputActions.insertText(pastedText, inputActions.captureInsertion())
           },
           onKeyDown: (event) => {
+            if (mentions.keydown(event)) return
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
               void submit()

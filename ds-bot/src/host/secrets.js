@@ -1,4 +1,3 @@
-import { registerTeamTool } from './team-registration.js'
 // Secrets: keys the user types into a card for a Bot. A value lives only in
 // secrets.json (mode 600) and in this process; Bots use it as $DSH_SECRET_<NAME> in
 // their shell, tool results lose it before they are saved, and every model request

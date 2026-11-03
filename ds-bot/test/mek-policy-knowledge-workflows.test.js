@@ -53,6 +53,7 @@ test('actual tool dispatch waits for durable exclusive workspace leases and syml
   mkdirSync(join(directory, 'real')); symlinkSync(join(directory, 'real'), join(directory, 'alias'))
   h.rt.sessionFolder = session => session.id === 'a' ? join(directory, 'real') : join(directory, 'alias', 'child')
   h.root('r1'); h.root('r2', 'b'); h.turn('a', 'r1'); h.turn('b', 'r2')
+  await h.rt.mekResourceAction('mek-resource-acquire', { rootId: 'r1', botId: 'a', kind: 'workspace', key: join(directory, 'real') })
   const wrap = h.ctx.listeners.get('tools/execute').at(-1)
   let started = 0
   await wrap(h.exec('a', 'apply_patch'), async () => { started++; assert.ok(h.snapshots.at(-1).mekPolicy.leases); return 'ok' })
@@ -216,7 +217,12 @@ test('task completion does not release an executing resource or block the owner 
   await wrap(h.exec('a', 'apply_patch'), async () => {
     root.status = 'completed'; h.rt.mekPolicyEnded('r')
     assert.equal(h.rt.mekPolicyView().resources.length, 1)
-    await assert.rejects(wrap(h.exec('b', 'apply_patch'), async () => assert.fail('lease stolen')), /in use/)
+    const cancelled = new AbortController()
+    const execution = { ...h.exec('b', 'apply_patch'), signal: cancelled.signal }
+    const waiting = wrap(execution, async () => assert.fail('lease stolen'))
+    await new Promise(resolve => setImmediate(resolve))
+    cancelled.abort(new Error('Cancelled waiting'))
+    await assert.rejects(waiting, /Cancelled waiting/)
   })
   assert.equal(h.rt.mekPolicyView().resources.length, 0)
   const meter = h.ctx.listeners.get('llm/stream').at(-1)
@@ -240,6 +246,7 @@ test('two sessions of one Bot cannot hold the same resource concurrently', async
   const h = host(t); policy(h.rt); h.root()
   h.rt.selfOf = id => id === 'group-a' ? 'a' : h.state.bots[id] ? id : undefined
   h.turn('a', 'r'); h.turn('group-a', 'r')
+  await h.rt.mekResourceAction('mek-resource-acquire', { rootId: 'r', botId: 'a', sessionId: 'a', kind: 'browser', key: 'a' })
   const wrap = h.ctx.listeners.get('tools/execute').at(-1)
   await wrap(h.exec('a', 'browser_open'), async () => 'opened')
   await wrap(h.exec('a', 'browser_click'), async () => 'same-session continuation')
@@ -247,6 +254,77 @@ test('two sessions of one Bot cannot hold the same resource concurrently', async
   const lease = h.rt.mekPolicyView().resources[0]
   assert.equal(lease.sessionId, 'a')
   await h.rt.mekResourceAction('mek-resource-release', { id: lease.id })
-  await wrap(h.exec('group-a', 'browser_open'), async () => 'available after release')
-  assert.equal(h.rt.mekPolicyView().resources[0].sessionId, 'group-a')
+  await wrap(h.exec('group-a', 'browser_open'), async () => { assert.equal(h.rt.mekPolicyView().resources[0].sessionId, 'group-a') })
+  assert.equal(h.rt.mekPolicyView().resources.length, 0)
+})
+
+test('automatic direct-call leases release after settlement and resume an already waiting caller once', async t => {
+  const h = host(t); policy(h.rt)
+  const wrap = h.ctx.listeners.get('tools/execute').at(-1)
+  let finish, started = 0
+  const first = wrap(h.exec('a', 'bash', { command: 'pwd' }), () => new Promise(resolve => { finish = resolve }))
+  while (!finish) await new Promise(resolve => setImmediate(resolve))
+  const second = wrap(h.exec('b', 'apply_patch'), async () => { started++; assert.ok(h.snapshots.at(-1).mekPolicy.leases); return 'done' })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(started, 0)
+  assert.equal(h.rt.mekPolicyView().resources[0].rootId, 'direct:a')
+  finish('done')
+  await Promise.all([first, second])
+  assert.equal(started, 1)
+  assert.deepEqual(h.rt.mekPolicyView().resources, [])
+})
+
+test('background jobs retain automatic leases until their settlement event', async t => {
+  const h = host(t)
+  const jobs = new Map()
+  h.ctx.get = name => name === 'jobs' ? { get: id => { if (!jobs.has(id)) throw new Error('unknown job'); return jobs.get(id) } } : undefined
+  policy(h.rt)
+  const emit = (id, type, data) => { for (const listener of h.ctx.listeners.get('session/event') ?? []) listener({ id }, { type, data }) }
+  const wrap = h.ctx.listeners.get('tools/execute').at(-1)
+  const call = { ...h.exec('a', 'bash'), callId: 'background-call' }
+  await wrap(call, async () => {
+    jobs.set('background', { status: 'running' })
+    emit('a', 'job/registered', { jobId: 'background', toolCall: { callId: call.callId } })
+    return { isError: false, value: { kind: 'background', jobId: 'background' }, content: [] }
+  })
+  assert.equal(h.rt.mekPolicyView().resources.length, 1)
+  const lease = h.rt.mekPolicyView().resources[0]
+  await assert.rejects(h.rt.mekResourceAction('mek-resource-release', { id: lease.id }), /background job/)
+  let started = 0
+  const queued = wrap(h.exec('b', 'apply_patch'), async () => { started++ })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(started, 0)
+  jobs.set('background', { status: 'completed' })
+  emit('a', 'job/settled', { jobId: 'background' })
+  await queued
+  assert.equal(started, 1)
+  assert.deepEqual(h.rt.mekPolicyView().resources, [])
+})
+
+test('uncertain old and failed calls require an explicit checked release, never a blind replay', async t => {
+  const h = host(t); policy(h.rt)
+  const wrap = h.ctx.listeners.get('tools/execute').at(-1)
+  await assert.rejects(wrap(h.exec('a', 'bash'), async () => { throw new Error('connection lost') }), /connection lost/)
+  const lease = h.rt.mekPolicyView().resources[0]
+  assert.equal(lease.status, 'stale')
+  assert.equal(lease.uncertain, true)
+  await assert.rejects(wrap(h.exec('b', 'bash'), async () => assert.fail('replayed')), /explicitly release/)
+  await h.rt.mekResourceAction('mek-resource-release', { id: lease.id })
+  await wrap(h.exec('b', 'bash'), async () => 'done')
+  assert.deepEqual(h.rt.mekPolicyView().resources, [])
+})
+
+test('cancelling a resource waiter never dispatches it after the holder finishes', async t => {
+  const h = host(t); policy(h.rt)
+  const wrap = h.ctx.listeners.get('tools/execute').at(-1)
+  let finish, started = 0
+  const first = wrap(h.exec('a', 'apply_patch'), () => new Promise(resolve => { finish = resolve }))
+  while (!finish) await new Promise(resolve => setImmediate(resolve))
+  const cancel = new AbortController()
+  const waiting = wrap({ ...h.exec('b', 'apply_patch'), signal: cancel.signal }, async () => { started++ })
+  await new Promise(resolve => setImmediate(resolve))
+  cancel.abort(new Error('user stopped waiting'))
+  await assert.rejects(waiting, /user stopped waiting/)
+  finish('done'); await first
+  assert.equal(started, 0)
 })

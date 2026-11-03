@@ -43,6 +43,11 @@ export function install(rt) {
   if (configured.maxRevisions !== undefined) defaults.maxRevisions = integer(configured.maxRevisions, 0, 20, 'Revision limit')
   if (configured.maxTokens !== undefined && configured.maxTokens !== null) defaults.maxTokens = integer(configured.maxTokens, 1, 1000000000, 'Token budget')
   const inFlightLeases = new Map()
+  const executing = new Map()
+  const waiters = new Set()
+  const stopped = new AbortController()
+  const wake = () => { for (const done of [...waiters]) done() }
+  ctx.effect(() => () => { stopped.abort(new Error('The Bot plugin was unloaded.')); wake() }, 'mek-bot: resource waiters')
   const countedUsage = new WeakSet()
   const rootOf = id => rt.mekTaskRoot?.(id) ?? own(state.mekTasks?.roots, id)
   const rootForSession = id => rt.mekTaskForSession?.(id)
@@ -78,11 +83,32 @@ export function install(rt) {
     return !DONE.has(rootOf(lease.rootId)?.status) && !!rootOf(lease.rootId)
   }
   const working = lease => [...(rt.live?.entries?.() ?? [])].some(([sessionId, entry]) => rt.selfOf(sessionId) === lease.botId && entry?.info && (rootForSession(sessionId)?.id === lease.rootId))
+  const finishLease = lease => {
+    lease.status = 'released'; lease.releasedAt = now()
+    delete lease.releasePending
+    wake()
+  }
+  const runningJobs = lease => {
+    if (!lease.jobs?.length) return false
+    const registry = ctx.get?.('jobs')
+    let active = false
+    lease.jobs = lease.jobs.filter(id => {
+      try {
+        if (['completed', 'failed', 'killed'].includes(registry.get(id, lease.sessionId).status)) return false
+        active = true
+        return true
+      }
+      catch { lease.uncertain = true; return true }
+    })
+    return active
+  }
   function reconcile() {
     for (const lease of Object.values(data().leases)) {
       if (!['held', 'stale'].includes(lease.status)) continue
-      if (!alive(lease) && !inFlightLeases.has(lease.id)) lease.status = 'released'
-      else if (lease.expiresAt <= now() && !working(lease) && !inFlightLeases.has(lease.id)) lease.status = 'stale'
+      if (inFlightLeases.has(lease.id) || runningJobs(lease)) continue
+      if (lease.scope === 'call' && !lease.uncertain && lease.jobs?.length === 0) finishLease(lease)
+      else if (!alive(lease) && !lease.uncertain) finishLease(lease)
+      else if (lease.scope === 'call' || (lease.expiresAt <= now() && !working(lease))) lease.status = 'stale'
     }
   }
   function acquire(input) {
@@ -100,9 +126,10 @@ export function install(rt) {
     if (!rootId.startsWith('direct:') && (!rootOf(rootId) || DONE.has(rootOf(rootId).status))) refuse('Resource task is not active.')
     const owner = leaseOwner({ ...input, sessionId })
     const clash = Object.values(data().leases).find(item => ['held', 'stale'].includes(item.status) && item.kind === input.kind && (item.kind === 'workspace' ? overlaps(item.key, key) : item.key === key) && leaseOwner(item) !== owner)
-    if (clash) refuse(`Resource is in use by Bot ${rt.botOf(clash.botId)?.name ?? clash.botId}, task ${clash.rootId}. Wait or use an independent resource. Nothing was executed.`)
+    if (clash) refuse(`Resource is in use by Bot ${rt.botOf(clash.botId)?.name ?? clash.botId}, task ${clash.rootId}, lease ${clash.id} (${clash.status}). Check its operation before releasing it, or use an independent resource. Nothing was executed.`)
     const found = Object.values(data().leases).find(item => ['held', 'stale'].includes(item.status) && item.kind === input.kind && item.key === key && leaseOwner(item) === owner)
-    const lease = found ?? { id: randomUUID(), rootId, botId, sessionId, kind: input.kind, key, status: 'held', createdAt: now() }
+    const lease = found ?? { id: randomUUID(), rootId, botId, sessionId, kind: input.kind, key, scope: input.scope ?? 'explicit', status: 'held', createdAt: now() }
+    if (input.scope !== 'call') lease.scope = 'explicit'
     lease.status = 'held'
     lease.expiresAt = now() + integer(input.ttlMs ?? 120000, 1000, 3600000, 'Lease duration')
     data().leases[lease.id] = lease
@@ -111,15 +138,15 @@ export function install(rt) {
   function release(id, owner) {
     const lease = own(data().leases, id)
     if (!lease || !['held', 'stale'].includes(lease.status)) refuse('This resource lease is no longer held.')
-    if (inFlightLeases.has(lease.id)) refuse('The resource still has an executing tool call. Wait for it to finish before releasing.')
+    if (inFlightLeases.has(lease.id) || runningJobs(lease)) refuse('The resource still has an executing tool call or background job. Wait for it to finish before releasing.')
     if (owner && lease.botId !== owner) refuse('Only the resource holder can release it.')
-    lease.status = 'released'; lease.releasedAt = now()
+    finishLease(lease)
     return clone(lease)
   }
   rt.mekPolicyEnded = id => {
     for (const lease of Object.values(data().leases)) if (lease.rootId === id && ['held', 'stale'].includes(lease.status)) {
-      if (inFlightLeases.has(lease.id)) lease.releasePending = true
-      else { lease.status = 'released'; lease.releasedAt = now() }
+      if (inFlightLeases.has(lease.id) || runningJobs(lease) || lease.uncertain) lease.releasePending = true
+      else finishLease(lease)
     }
     noteSave()
   }
@@ -146,45 +173,86 @@ export function install(rt) {
     if (SAFE_TOOLS.has(exec.name)) return
     try { guard({ root: context.root, action: 'execute' }) } catch (error) { return error.message }
   })
+  const waitForRelease = signal => new Promise((resolveWait, reject) => {
+    const aborted = () => { cleanup(); reject(signal.reason) }
+    const ready = () => { cleanup(); resolveWait() }
+    const cleanup = () => { waiters.delete(ready); signal.removeEventListener('abort', aborted) }
+    waiters.add(ready)
+    signal.addEventListener('abort', aborted, { once: true })
+    if (signal.aborted) aborted()
+  })
+  ctx.on('session/event', (session, event) => {
+    if (event.type === 'job/registered') {
+      const ids = executing.get(`${session.id}:${event.data?.toolCall?.callId}`) ?? []
+      for (const id of ids) {
+        const lease = own(data().leases, id)
+        lease.jobs = [...new Set([...(lease.jobs ?? []), event.data.jobId])]
+      }
+      if (ids.length) noteSave()
+    } else if (event.type === 'job/settled') {
+      for (const lease of Object.values(data().leases)) {
+        if (lease.sessionId !== session.id || !lease.jobs?.includes(event.data?.jobId)) continue
+        lease.jobs = lease.jobs.filter(id => id !== event.data.jobId)
+        if (!lease.jobs.length && !inFlightLeases.has(lease.id) && !lease.uncertain && (lease.scope === 'call' || lease.releasePending)) finishLease(lease)
+        noteSave()
+      }
+      wake()
+    }
+  })
   ctx.on('tools/execute', async (exec, next) => {
     const context = contextOf(exec)
     if (!context) return next()
-    await writable(rt)
-    exec.signal?.throwIfAborted()
-    const resources = neededResources(exec, context)
-    // Claim synchronously before the first await, so concurrent dispatch cannot
-    // both observe a free resource. Persistence must succeed before execution.
+    const signal = AbortSignal.any([stopped.signal, ...(exec.signal ? [exec.signal] : [])])
+    const resources = neededResources(exec, context).map(resource => ({ ...resource, key: resource.kind === 'workspace' ? canonicalPath(resource.key) : resource.key }))
+    const owner = leaseOwner(context)
+    while (true) {
+      await writable(rt)
+      signal.throwIfAborted()
+      if (profile(context.botId).denyTools.includes(exec.name)) refuse('This tool is disabled by the Bot role policy.')
+      if (!SAFE_TOOLS.has(exec.name)) guard({ root: rootOf(context.rootId), action: 'execute' })
+      reconcile()
+      const clashes = Object.values(data().leases).filter(lease => ['held', 'stale'].includes(lease.status) && leaseOwner(lease) !== owner
+        && resources.some(resource => resource.kind === lease.kind && (lease.kind === 'workspace' ? overlaps(lease.key, resource.key) : lease.key === resource.key)))
+      if (!clashes.length) break
+      // Only a live operation can notify us safely. Old/explicit holds require an
+      // owner decision, rather than waiting forever or stealing an uncertain lock.
+      const uncertain = clashes.find(lease => lease.uncertain || (!inFlightLeases.has(lease.id) && !runningJobs(lease)))
+      if (uncertain) refuse(`Resource is in use by Bot ${rt.botOf(uncertain.botId)?.name ?? uncertain.botId}, lease ${uncertain.id} (${uncertain.status}). Check and explicitly release the old hold before retrying. Nothing was executed.`)
+      await waitForRelease(signal)
+    }
     const claimed = []
     const previousIds = new Set(Object.keys(data().leases))
+    const call = `${context.sessionId}:${exec.callId}`
     let invoked = false
+    let settled = false
     try {
       for (const resource of resources) {
-        const lease = acquire({ ...context, ...resource })
+        const lease = acquire({ ...context, ...resource, scope: 'call' })
         claimed.push(lease.id)
         inFlightLeases.set(lease.id, (inFlightLeases.get(lease.id) ?? 0) + 1)
       }
+      executing.set(call, claimed)
       if (resources.length) await save()
-      exec.signal?.throwIfAborted()
+      signal.throwIfAborted()
       invoked = true
-      return await next()
-    } catch (error) {
-      if (!invoked) {
-        for (const id of claimed) if (!previousIds.has(id) && inFlightLeases.get(id) === 1) {
-          const lease = own(data().leases, id)
-          lease.status = 'released'; lease.releasedAt = now()
-        }
-        if (claimed.length) noteSave()
-      }
-      throw error
+      const result = await next()
+      settled = !signal.aborted
+      return result
     } finally {
+      executing.delete(call)
       for (const id of claimed) {
         const count = inFlightLeases.get(id) - 1
+        const lease = own(data().leases, id)
+        if (invoked && !settled) { lease.uncertain = true; lease.status = 'stale' }
         if (count) inFlightLeases.set(id, count)
         else {
           inFlightLeases.delete(id)
-          const lease = own(data().leases, id)
-          if (lease?.releasePending) { lease.status = 'released'; lease.releasedAt = now(); delete lease.releasePending; noteSave() }
+          if ((!invoked && !previousIds.has(id)) || (!lease.uncertain && !runningJobs(lease) && (lease.scope === 'call' || lease.releasePending))) finishLease(lease)
         }
+      }
+      if (claimed.length) {
+        if (invoked) await save()
+        else noteSave()
       }
     }
   })
@@ -271,8 +339,8 @@ export function install(rt) {
       tasks: Object.values(state.mekTasks?.roots ?? {}).map(root => ({ taskId: root.id, owner: root.owner, ...taskPolicy(root), limits: limits(root), limitsApplied: 'Next request and tool dispatch; in-flight provider output may exceed a token budget.' })),
       resources: Object.values(data().leases).filter(item => ['held', 'stale'].includes(item.status)), bindings: data().bindings })
   }
-  rt.mekPolicyResources = sessionId => { const botId = rt.selfOf(sessionId); return clone(Object.values(data().leases).filter(item => ['held', 'stale'].includes(item.status) && item.botId === botId)) }
-  teamTool(rt, 'list_task_resources', 'List this Bot resource leases. A lease coordinates known tools; it does not grant tool approval or sandbox access.', {}, (_args, _exec, self) => Object.values(data().leases).filter(item => item.botId === self && ['held', 'stale'].includes(item.status)))
+  rt.mekPolicyResources = sessionId => { reconcile(); const botId = rt.selfOf(sessionId); return clone(Object.values(data().leases).filter(item => ['held', 'stale'].includes(item.status) && item.botId === botId)) }
+  teamTool(rt, 'list_task_resources', 'List this Bot resource leases. A lease coordinates known tools; it does not grant tool approval or sandbox access.', {}, (_args, _exec, self) => { reconcile(); return Object.values(data().leases).filter(item => item.botId === self && ['held', 'stale'].includes(item.status)) })
   teamTool(rt, 'acquire_task_resource', 'Claim an exclusive resource before using it. A busy resource refuses execution; wait or use a separate workspace/account. Account keys are labels, never credentials.', {
     kind: { type: 'string', enum: ['workspace', 'browser', 'account'], required: true }, key: { type: 'string', required: true },
   }, async (args, exec, self) => { const root = rootForSession(exec.agent.id); const result = acquire({ ...args, rootId: root?.id ?? `direct:${self}`, botId: self, sessionId: exec.agent.id }); await save(); return result })

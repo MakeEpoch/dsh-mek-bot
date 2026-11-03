@@ -38,6 +38,8 @@ let pendingPanel=null
 let doing=null
 let extraTasks=0
 let groupEnabled=false
+let groupHistory=null
+const imageReads=[]
 let groupWork=[]
 let groupProgress=[]
 let groupSpeaking=null
@@ -55,7 +57,8 @@ const fetch = async (url,options={}) => {
  let value=null
  if(endpoint==='state') value=roster()
  else if(endpoint==='mek-task-list') value={tasks:roster().tasks,nextCursor:null}
- else if(endpoint==='room-chat') value={items:[],cursor:null,progress:groupProgress}
+ else if(endpoint==='room-chat') value=groupHistory ? groupHistory(payload.cursor) : {sessionId:payload.roomId,part:0,items:[],cursor:null,progress:groupProgress}
+ else if(endpoint==='image') { imageReads.push(payload.sessionId); value={attachment:{mediaType:'image/png'},data:'AAAA'} }
  else if(endpoint==='room-progress') value=groupProgress.map(callId=>({callId,replies:[],speaking:groupSpeaking}))
  else if(endpoint==='chat') value={sessionId:payload.botId,items:[],cursor:null}
  else if(endpoint==='send') {sends.push(payload);if(refuseSend)return new Response(JSON.stringify({ok:false,error:{code:'bot/refused',message:'Mock send refused'}}))}
@@ -367,6 +370,50 @@ try {
  groupWork=[];groupProgress=[];await refresh()
  assert.equal(document.querySelector('[data-group-running]').children.length,0,'exclude idle and privately busy members')
  doing=null;await refresh()
+ // Independent Session sequences must survive cross-part pagination and polling.
+ groupHistory=cursor=>cursor
+  ? {sessionId:'earlier-part',part:0,items:[{kind:'user',seq:10,text:'EARLIER_TEN',time:1000},{kind:'user',seq:30,text:'EARLIER_THIRTY',time:2000}],cursor:null,progress:[]}
+  : {sessionId:'current-part',part:1,items:[{kind:'user',seq:10,text:'CURRENT_TEN',time:3000,imageAttachments:[{attachmentId:'sha256:fixture',mediaType:'image/png'}],imageSessionId:'current-part'}],cursor:{part:0},progress:[]}
+ await refresh()
+ assert.match(document.querySelector('.dsb-flow').textContent,/CURRENT_TEN/)
+ const earlier=[...document.querySelectorAll('.dsb-flow button')].find(button=>button.textContent==='Load earlier')
+ assert.ok(earlier)
+ await act(async()=>{earlier.click();await pause();await pause()})
+ const transcript=()=>document.querySelector('.dsb-flow').textContent
+ assert.match(transcript(),/EARLIER_TEN/)
+ assert.match(transcript(),/CURRENT_TEN/)
+ assert.ok(transcript().indexOf('EARLIER_THIRTY')<transcript().indexOf('CURRENT_TEN'))
+ await refresh()
+ assert.match(transcript(),/EARLIER_TEN/)
+ assert.match(transcript(),/CURRENT_TEN/)
+ assert.ok(imageReads.includes('current-part'))
+ groupHistory=()=>({sessionId:'next-part',part:2,items:[{kind:'user',seq:10,text:'NEXT_TEN',time:4000}],cursor:{part:1},progress:[]})
+ await refresh()
+ assert.match(transcript(),/NEXT_TEN/)
+ assert.doesNotMatch(transcript(),/CURRENT_TEN/)
+ assert.ok([...document.querySelectorAll('.dsb-flow button')].some(button=>button.textContent==='Load earlier'),'rotation restores the earlier-parts cursor')
+ // Type @ in the actual native Composer: selection inserts text, never submits.
+ const field=document.querySelector('[data-composer-input]')
+ const type=async value=>{await act(async()=>{Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype,'value').set.call(field,value);field.setSelectionRange(value.length,value.length);field.dispatchEvent(new win.Event('input',{bubbles:true}));await pause()})}
+ await type('@')
+ assert.ok(document.querySelector('[role="listbox"]'))
+ assert.equal(document.querySelectorAll('.dsb-mention-menu [role="option"]').length,3)
+ const sendsBefore=sends.length
+ await act(async()=>{field.dispatchEvent(new win.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));await pause()})
+ await act(async()=>{field.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await pause()})
+ assert.equal(field.value,'@Keeper ')
+ assert.equal(sends.length,sendsBefore)
+ assert.equal(document.querySelector('.dsb-mention-menu'),null)
+ await type('@Ch')
+ assert.equal(document.querySelectorAll('.dsb-mention-menu [role="option"]').length,1)
+ await act(async()=>{field.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Enter',isComposing:true,bubbles:true}));await pause()})
+ assert.equal(field.value,'@Ch','IME confirmation must not choose or send a mention')
+ await act(async()=>{field.dispatchEvent(new win.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await pause()})
+ assert.equal(document.querySelector('.dsb-mention-menu'),null)
+ await act(async()=>{field.dispatchEvent(new win.FocusEvent('focusout',{bubbles:true}));field.dispatchEvent(new win.FocusEvent('focusin',{bubbles:true}));await pause()})
+ assert.equal(document.querySelectorAll('.dsb-mention-menu [role="option"]').length,1,'refocusing an unfinished mention reopens its candidates')
+ await type('name@example.test')
+ assert.equal(document.querySelector('.dsb-mention-menu'),null)
  assert.equal(sends.length,2,'activity must never send or persist messages')
  assert.deepEqual(errors, [])
 } finally {for(const stop of effects) stop?.(); await act(async()=>root.unmount());console.error=originalError;dom.window.close();for(const [key,descriptor] of saved) {if(descriptor) Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key]}}

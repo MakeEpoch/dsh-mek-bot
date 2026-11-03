@@ -170,8 +170,11 @@ test('message_bot from a group to one of its members calls it there, as "@Name" 
   assert.equal(called.source.askedBy, 'a')
   assert.match(text(called), /Chief: @Writer 把文档整理好/)
   host.finish('gb', '整理好了。')
+  await settle(() => host.agentOf('ga').calls.length === 2)
+  host.begin('ga')
+  host.finish('ga', '文档复核完成。')
   await settle(() => first() !== undefined)
-  assert.deepEqual(kinds(first()), [['message', 'Chief'], ['message', 'Chief'], ['message', 'Writer']])
+  assert.deepEqual(kinds(first()), [['message', 'Chief'], ['message', 'Chief'], ['message', 'Writer'], ['message', 'Chief']])
   assert.deepEqual([host.agentOf('b').calls, host.agentOf('gc').calls], [[], []])
 })
 
@@ -1498,3 +1501,16 @@ test('a group member with a running DSH subagent stays working and stop-room-wor
   assert.deepEqual(host.agentOf('r1').calls, [], 'suppressed settlement notice does not post to the group')
 })
 
+
+test('a substantive context-only review without tools or @Caller wakes its caller once', async t => {
+  const host = await start(t)
+  const result = host.round('context-review', host.say('Review the existing analysis'))
+  await settle(() => host.agentOf('ga').calls.length === 1)
+  host.begin('ga'); host.finish('ga', '@Writer Review the analysis already in context.')
+  await settle(() => host.agentOf('gb').calls.length === 1)
+  host.begin('gb'); host.finish('gb', '复核完成，现有分析一致，没有补充问题。')
+  await settle(() => host.agentOf('ga').calls.length === 2)
+  host.begin('ga'); host.finish('ga', '已复核现有分析。')
+  await settle(() => result() !== undefined)
+  assert.equal(host.agentOf('ga').calls.length, 2)
+})
