@@ -1118,10 +1118,15 @@ export function install(rt) {
   }
   rt.appendGroupTaskResult = async (roomId, botId, text) => {
     const room = rt.roomOf(roomId)
-    if (!room) return
+    const member = rt.botOf(botId)
+    if (!room || !member || !room.members.includes(botId) || !text?.trim()) return
+    // The bounded model log is not the native pane's durable transcript. Publish
+    // through the group Session too, without interpreting result text as new work.
     ensureRoomLog(room)
-    appendRoom(room, { who: rt.botOf(botId)?.name ?? 'Bot', botId, text })
+    appendRoom(room, { who: member.name, botId, text })
+    const logged = room.seq
     await rt.save()
+    await postToRoom(room, member, text, { quiet: true, taskPost: true, logged })
   }
 
   // A Bot's message into the group's own Session, which relays it as a new round.
@@ -1143,7 +1148,7 @@ export function install(rt) {
         running.replies.push({ kind, botId: sender.id, name: sender.name, color: sender.color, time: Date.now() })
       } else {
         const line = [text, ...files.map(fileLine)].filter(Boolean).join('\n')
-        appendRoom(room, { who: sender.name, botId: sender.id, text: line, ...(files.length > 0 ? { files } : {}) })
+        if (!(extra.taskPost && extra.logged !== undefined)) appendRoom(room, { who: sender.name, botId: sender.id, text: line, ...(files.length > 0 ? { files } : {}) })
         running.replies.push({ botId: sender.id, name: sender.name, color: sender.color, text: line, time: Date.now() })
       }
       callPost(room, running, sender, text, extra)

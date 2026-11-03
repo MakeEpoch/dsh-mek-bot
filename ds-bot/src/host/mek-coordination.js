@@ -13,16 +13,24 @@ const completedReport = work => work.report?.status === 'completed'
   && typeof work.report.evidence === 'string' && work.report.evidence.trim() !== ''
 const needsReport = work => work.to && work.status === 'review' && !completedReport(work)
 const refuse = message => { throw Object.assign(new Error(message), { code: 'bot/refused' }) }
+const taskTitle = value => {
+  if (typeof value !== 'string' || !value.trim() || value.trim().length > 120) refuse('Give a concise task title of 1 to 120 characters describing the intended outcome.')
+  return value.trim().replace(/\s+/g, ' ')
+}
+const groupResult = (text, report) => [text, report?.summary && !text?.includes(report.summary) ? report.summary : ''].filter(Boolean).join('\n\n')
 const rules = `## Task ownership (takes precedence over the ordinary team messaging rules)
 - The Bot the user contacted owns the task, even when it delegates. Keep the entire conversation, questions, decisions, and final delivery in that Bot's chat. Never tell the user to visit a worker's chat. Direct user conversations with other Bots remain independent.
 - message_bot always returns the work to its sender here. Give a self-contained goal, relevant context, constraints, and acceptance criteria. Delegate each task once. End your turn while workers run; results wake you up automatically. For group work use post_to_group; its report comes back here too.
 - A worker needing information or a decision calls ask_user: for delegated work it asks the task owner, not the user. This suspends that work rather than completing it. Never send a new message_bot request to an ancestor to ask a question.
 - When a task decision arrives, inspect its task and evidence with list_tasks/read_task. Decide routine implementation details using the user's instructions, existing conventions and available evidence. Answer with answer_bot_question. Do not forward routine choices to the user. Ask the user in your own chat only for essential missing information, unresolved intent, or authorization that only the user can give. After their answer, answer_bot_question to resume the same worker task.
 - A worker's result is evidence to review, not automatic success. Check the goal and acceptance criteria; request concrete corrections or missing checks with revise_bot_task. This continues the same task. Do not thank a worker or echo status messages. You may send follow-up work when it is necessary to finish the goal.
+- Record a checked formal step with accept_bot_work before starting its successor; this accepts only that assignment, not the whole main task. For to-do children use control_todo accept instead. When the entire goal is satisfied, finish_bot_task records final acceptance. Saying "accepted" in chat alone does not change the task state. A user approval continues the intended task; do not create a task titled with their approval text.
 - A needs_report result has returned but lacks a structured completed report. Use revise_bot_task with its work id to request the missing report and evidence from the retained result; do not repeat completed external actions. Missing documentation alone is not a reason to cancel. A review task awaits your acceptance, not further worker execution. Cancel only work the user has abandoned or superseded.
 - Workers should call report_bot_task with a concrete outcome, verification evidence and artifacts before ending delegated work. Use blocked or failed when the task cannot be completed. Ask a question with ask_user when a decision could unblock it.
 - In a group, message_bot is a formal delegation, including the administrator's first dispatch. It keeps a persistent main task and returns to the delegator in this group. Use message_bot for nested implementation/review work; plain @mentions only display text in a tracked turn. Report back to an ancestor instead of delegating back to it. The ancestor reviews your returned result and can revise the same assignment for another pass.
 - Use list_tasks to recover pending work and decisions after another user message or a restart. Use read_task for a full result when its preview is cut. Do not copy unrelated private conversations into a task.
+- Give substantive work a concise outcome-based title in the user's language. For plan_todo use title; for message_bot use task_title. "Remember to delegate", approvals, progress questions and other follow-ups are not task titles. When continuing an existing task, read list_tasks/read_task and pass its exact task_id to message_bot; retain its title unless its actual goal changes. Never infer a task link solely because it is the only task in this group.
+- Correct a misleading formal task title with name_bot_task and its exact task id, without dispatching work again. For a to-do change its title with plan_todo and its current id/revision. Naming changes no acceptance state or original user goal.
 - Only the task owner calls finish_bot_task, after all delegated work and questions are settled and the results satisfy the user's request. Then deliver the actual outcome, evidence, artifacts, and remaining limitations in the owner's conversation. A failed or blocked worker must not be described as success. cancel_bot_task stops a task and its outstanding delegated work.
 - Tool approvals and secrets are not ordinary Bot decisions. Never approve your own tools, fabricate user authorization, or request credentials in an ordinary question. The user answers real approval cards and secure credential requests.`
 
@@ -76,6 +84,16 @@ export function install(rt) {
   const touch = root => { if (root && !final(root)) { root.status = 'running'; root.updatedAt = Date.now() } }
   const save = () => rt.save({ required: true })
   const changed = () => { void save().catch(error => rt.warn('mek-bot: task save failed: %s', error)) }
+  const conversation = sessionId => {
+    const group = rt.groupOwners.get(sessionId) ?? rt.pastOwners.get(sessionId)
+    return group?.roomId ? `room:${group.roomId}` : `bot:${rt.selfOf(sessionId) ?? group?.botId ?? sessionId}`
+  }
+  const selectedRoot = (id, from, sessionId, parent) => {
+    if (id === undefined) return undefined
+    const root = rootOf(id), inherited = rootOf(parent)
+    if (!root || final(root) || (inherited ? root.id !== inherited.id : root.owner !== from || conversation(root.originSessionId) !== conversation(sessionId))) refuse('Choose an open task owned in this conversation, or keep the current delegated task. Read list_tasks for its exact id.')
+    return root
+  }
   const rootFor = (from, parent, sessionId) => {
     const existing = rootOf(parent)
     if (existing) return existing
@@ -90,7 +108,15 @@ export function install(rt) {
     return root
   }
 
-  rt.mekRootForDelegation = (from, parent, sessionId) => rootFor(from, parent, sessionId).id
+  rt.mekRootForDelegation = (from, parent, sessionId, { taskId, title, instruction } = {}) => {
+    const selected = selectedRoot(taskId, from, sessionId, parent)
+    if (title !== undefined) taskTitle(title)
+    const root = selected ?? rootFor(from, parent, sessionId)
+    if (root.owner === from && (title !== undefined || !root.title)) root.title = taskTitle(title ?? String(instruction ?? root.goal ?? 'Task').slice(0, 120))
+    const entry = rt.live.get(sessionId)
+    if (entry && selected) entry.mekRoot = root.id
+    return root.id
+  }
   rt.mekSameTask = (id, rootId) => workOf(id)?.rootId === rootId
   const upstreamOpen = rt.openWork
   const open = (id, options) => {
@@ -178,9 +204,9 @@ export function install(rt) {
   const decisionArgs = (decision, work) => ({ fromId: work.to, toId: decision.owner, role: 'decision', exchangeId: decision.id,
     ...(ownerGroupSession(rootOf(decision.rootId)) ? { sessionId: ownerGroupSession(rootOf(decision.rootId)) } : {}),
     text: `Decision needed for task ${decision.rootId}; delegated work ${work.id}.\nQuestion ${decision.id}: ${decision.question}\nOptions: ${JSON.stringify(decision.options ?? [])}\n${decision.detail ?? ''}\nThe worker is paused, not finished. Resolve this from the user's instructions, conventions, and evidence, then call answer_bot_question. Ask the user here only for essential information or authorization. Do not send the user to another chat.` })
-  const createRoot = ({ owner, goal, projectId, criteria = [], sessionId, workflow, attach = true }) => {
+  const createRoot = ({ owner, goal, title, projectId, criteria = [], sessionId, workflow, attach = true }) => {
     if (!rt.botOf(owner) || !String(goal ?? '').trim()) refuse('Choose an existing owner and a concrete goal.')
-    const root = { id: randomUUID(), owner, originSessionId: sessionId ?? rt.chatOf(owner), status: 'running', goal: String(goal), summary: String(goal),
+    const root = { id: randomUUID(), owner, originSessionId: sessionId ?? rt.chatOf(owner), status: 'running', goal: String(goal), summary: String(goal), title: taskTitle(title ?? String(goal).slice(0, 120)),
       criteria: criteria.map(String), ...(projectId ? { projectId } : {}), ...(workflow ? { workflow } : {}), createdAt: Date.now(), updatedAt: Date.now() }
     rt.mekPolicyGuard?.({ root, action: 'begin' })
     data().roots[root.id] = root
@@ -309,7 +335,7 @@ export function install(rt) {
       item.args.text = `${long?.text ?? text}${structured}${reviewAdvice(work)}`
       work.reviewNoticeId = id
       await save()
-      if (work.room) await rt.appendGroupTaskResult?.(work.room, work.to, `${text}${structured}`)
+      if (work.room) await rt.appendGroupTaskResult?.(work.room, work.to, groupResult(text, work.report))
       await send(item)
       announce('result', rootOf(work.rootId), work)
     })().catch(error => rt.warn('mek-bot: could not retain task result: %s', error))
@@ -469,12 +495,14 @@ export function install(rt) {
     for (const item of items) await send(item)
     await completeGroup(work)
   }
-  rt.mekDelegateGroup = async (sessionId, room, sender, target, instruction) => {
+  rt.mekDelegateGroup = async (sessionId, room, sender, target, instruction, { taskId, title } = {}) => {
     const parent = activeWork(sessionId)
+    const selected = selectedRoot(taskId, sender.id, sessionId, parent)
+    if (title !== undefined) taskTitle(title)
     if (!parent && room.admin !== sender.id) refuse('Only the group administrator can start a formal task. Ask the administrator to arrange this work; members delegate within their existing assignment.')
     if (parent && parent.room !== room.id && parent.fromRoom !== room.id) refuse('Delegate only within the current task’s group.')
     if (parent && rt.upstreamOf([parent.id]).has(target.id)) refuse('That Bot waits for this work. Return your result with report_bot_task, or use ask_user for an owner decision instead of creating a cycle.')
-    let root = parent && rootOf(parent.id), prepared
+    let root = selected ?? (parent && rootOf(parent.id)), prepared
     if (!root) {
       // Loading the group context restores long log entries before retaining the
       // user's goal. Dispatch instructions may cover only one step of that goal.
@@ -483,8 +511,12 @@ export function install(rt) {
       if (room.admin !== sender.id) refuse('The group administrator changed before dispatch.')
       const continuing = rt.mekTaskForSession(sessionId)
       root = continuing && !final(continuing) ? continuing : createRoot({ owner: sender.id, sessionId,
+        title: title ?? instruction.slice(0, 120),
         goal: rt.live.get(sessionId)?.mekGoal ?? room.log?.findLast(line => line.who === 'User')?.text ?? instruction })
     }
+    if (root.owner === sender.id && title !== undefined) root.title = taskTitle(title)
+    const entry = rt.live.get(sessionId)
+    if (entry && !parent) entry.mekRoot = root.id
     const { id, item } = await groupMember(room, sender.id, target.id, instruction, parent?.id, parent?.groupRoot, { rootId: root.id, prepared })
     await save(); await send(item)
     announce('created', root, workOf(id))
@@ -498,7 +530,7 @@ export function install(rt) {
     rt.closeWork(work.id, rt.botOf(work.to)?.name ?? 'Bot', result)
     rt.takenWork(work.parent, work.id)
     await save()
-    await rt.appendGroupTaskResult?.(work.room, work.to, result)
+    await rt.appendGroupTaskResult?.(work.room, work.to, groupResult(text, work.report))
     announce('result', rootOf(work.rootId), work)
     await completeGroup(workOf(work.groupRoot))
   }
@@ -665,6 +697,15 @@ export function install(rt) {
   }
   const idParam = { type: 'string', required: true, description: 'Exact task id returned by list_tasks' }
   register('list_tasks', 'List your open tasks, delegated work, pending decisions, and results awaiting your review. Direct conversations with other Bots remain separate.', {}, (_args, _exec, self) => JSON.stringify(Object.values(data().roots).filter(root => canRead(root, self) && !final(root)).map(root => taskView(root, self))))
+  register('name_bot_task', 'Set a concise outcome-based title on your formal task without dispatching, accepting, reopening or changing its original goal. For a to-do use plan_todo with its current revision.', {
+    task_id: idParam, title: { type: 'string', required: true, description: 'Concise intended outcome in the user language, 1-120 characters' },
+  }, async ({ task_id, title }, _exec, self) => {
+    const root = rootOf(task_id)
+    if (!root || root.owner !== self) refuse('Only the task owner can change its title.')
+    root.title = taskTitle(title); root.updatedAt = Date.now()
+    await save(); announce('renamed', root)
+    return JSON.stringify({ id: root.id, title: root.title, status: root.status })
+  })
   register('read_task', 'Read one task and its result, including the full durable reply when its preview was cut. Read only tasks you own or participate in.', { task_id: idParam }, async ({ task_id }, _exec, self) => {
     const root = rootOf(task_id)
     if (!canRead(root, self)) refuse('No task available to this Bot under that id.')
@@ -678,6 +719,31 @@ export function install(rt) {
       else work.resultComplete = false
     }
     return JSON.stringify(result)
+  })
+  register('accept_bot_work', 'Accept one returned formal assignment after checking its report and evidence. Only its delegator may accept it. The main task remains open for later implementation or verification; to-do children use control_todo accept.', {
+    work_id: { type: 'string', required: true, description: 'Exact returned work id from read_task' },
+    summary: { type: 'string', required: true, description: 'What was checked and accepted' },
+    evidence: { type: 'string', required: true, description: 'Concrete verification evidence, including required user approval when applicable' },
+  }, async ({ work_id, summary, evidence }, _exec, self) => {
+    const work = workOf(work_id), root = rootOf(work_id)
+    if (!work || work.from !== self || final(root)) refuse('Only the delegator can accept a returned assignment in an open task.')
+    if (work.acceptance && work.status === 'completed') return JSON.stringify(work.acceptance)
+    if (work.status !== 'review' || !completedReport(work) || !work.resultAt) refuse('Read a returned completed report with verification evidence before accepting this assignment.')
+    if (rt.mekTodoReviewAdvice?.(work)) refuse('This assignment belongs to a to-do. Use control_todo accept with its current revision.')
+    const branch = new Set([work.id])
+    for (let grew = true; grew;) {
+      grew = false
+      for (const child of Object.values(data().works)) if (branch.has(child.parent) && !branch.has(child.id)) { branch.add(child.id); grew = true }
+    }
+    if (Object.values(data().works).some(child => child.id !== work.id && branch.has(child.id) && !['completed', 'cancelled', 'superseded'].includes(child.status))
+      || Object.values(data().decisions).some(decision => branch.has(decision.workId) && decision.status === 'open')
+      || Object.values(data().outbox).some(item => branch.has(item.id) && ['pending', 'sending', 'uncertain'].includes(item.status))) refuse('Resolve this assignment’s outstanding work, decisions and delivery before accepting it.')
+    if (!String(summary ?? '').trim() || !String(evidence ?? '').trim()) refuse('Record the accepted result and concrete evidence.')
+    work.status = 'completed'
+    work.acceptance = { summary: String(summary), evidence: String(evidence), by: self, at: Date.now() }
+    touch(root)
+    await save(); announce('accepted-work', root, work)
+    return JSON.stringify(work.acceptance)
   })
   register('answer_bot_question', 'Decide a pending worker question as the original task owner. This resumes the same work. Never use this to grant tool approval or invent user authorization.', {
     question_id: { type: 'string', required: true, description: 'Exact pending question id from list_tasks or the decision message' },
@@ -857,7 +923,7 @@ export function install(rt) {
     }
     const query = String(search ?? '').trim().toLocaleLowerCase()
     const roots = Object.values(data().roots).filter(root => (!owner || root.owner === owner) && (!status || root.status === status)
-      && (!query || [root.id, root.goal, root.summary, root.progress].filter(Boolean).join(' ').toLocaleLowerCase().includes(query))
+      && (!query || [root.id, root.title, root.goal, root.summary, root.progress].filter(Boolean).join(' ').toLocaleLowerCase().includes(query))
       && (!cursor || root.updatedAt < cursor[0] || (root.updatedAt === cursor[0] && root.id < cursor[1])))
       .sort((a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id))
     const page = roots.slice(0, limit)
@@ -978,4 +1044,18 @@ export function install(rt) {
   ctx.effect(() => ctx.systemPrompt.section({ name: 'mek-task-ownership', order: 650, interpolate: false,
     text: context => rt.selfOf(context?.agent?.id) === undefined ? '' : rules,
   }), 'mek-bot: task ownership')
+  ctx.effect(() => ctx.systemPrompt.section({ name: 'mek-group-coordination', order: 670, interpolate: false,
+    text: context => {
+      const sessionId = context?.agent?.id, group = rt.groupOwners.get(sessionId)
+      const room = rt.roomOf(group?.roomId)
+      if (!room || room.admin !== rt.selfOf(sessionId)) return ''
+      const peers = room.members.filter(id => id !== room.admin).map(rt.botOf).filter(Boolean)
+      return `## Group administrator: coordinate before executing
+You coordinate this group's substantive work: clarify the goal, assign suitable members, resolve questions, review evidence, and deliver the outcome here. Do not silently take over specialist work when a suitable member is available. Casual chat and quick factual answers need no task or delegation.
+Available members (name and role): ${peers.map(bot => JSON.stringify({ name: bot.name, role: bot.role ?? '' })).join('; ') || '(none)'}.
+Use list_bots to read member responsibilities when needed. For substantive work, retain one main task with plan_todo, give it a concise outcome-based title, split independent work among suitable members, and control_todo start it. Design before implementation and implementation before verification when the user requires those dependencies; do not invent stages for a simple request. If continuing formal work outside a to-do, message_bot performs the delegation; use task_title and the exact task_id for a follow-up. Naming a member or writing @Name in progress text is not a formal assignment.
+Dispatch before claiming that work was assigned. Do not say "I told X" without a successful dispatch receipt. If the user requested only a plan or approval is required before implementation, retain that boundary. For "remember this" record without starting. Start independent assignments together; wait for dependent results and never redo a member's active assignment yourself. If no suitable member exists or the user explicitly asks you to do it, explain briefly and do the necessary work yourself.
+End your turn after successful dispatch while members work; their results wake you. Review returned reports and evidence, accept each checked step with control_todo accept (or accept_bot_work for formal work outside a to-do), request revisions on the same task, and deliver only verified outcomes. Use finish_bot_task only when the whole formal goal is satisfied. A reminder such as "remember to delegate" changes how you coordinate the ongoing goal; it is not a new goal or title. Read list_todos/list_tasks to recover the intended task instead of treating the latest sentence as the task.`
+    },
+  }), 'mek-bot: group administrator coordination')
 }

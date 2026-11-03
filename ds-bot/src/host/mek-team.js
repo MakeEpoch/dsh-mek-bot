@@ -171,10 +171,10 @@ export function install(rt) {
     } }))
   }
   register('begin_bot_task', 'Register substantive direct user work with a goal and acceptance criteria. Keep casual chat out of the task ledger. The original Bot remains responsible when delegating.', {
-    goal: { type: 'string', required: true }, project_id: { type: 'string' }, criteria: { type: 'array', required: true, items: { type: 'string' } },
+    goal: { type: 'string', required: true }, title: { type: 'string', description: 'Concise intended outcome in the user language, not the latest reminder or conversational wording; 1-120 characters' }, project_id: { type: 'string' }, criteria: { type: 'array', required: true, items: { type: 'string' } },
   }, async (args, exec, self) => {
     if (!String(args.goal ?? '').trim() || !Array.isArray(args.criteria) || !args.criteria.length) refuse('Give a goal and at least one acceptance criterion.')
-    return JSON.stringify(await rt.mekBeginTask({ owner: self, goal: clean(args.goal), projectId: clean(args.project_id, 100), criteria: args.criteria.slice(0, 20).map(item => clean(item, 400)), sessionId: exec.agent.id }))
+    return JSON.stringify(await rt.mekBeginTask({ owner: self, goal: clean(args.goal), ...(args.title !== undefined ? { title: args.title } : {}), projectId: clean(args.project_id, 100), criteria: args.criteria.slice(0, 20).map(item => clean(item, 400)), sessionId: exec.agent.id }))
   })
   register('report_team_activity', 'Record a concise factual summary of your task. Ordinary progress is queryable without waking the supervisor. Use blocked, failed or needs_user only for a real issue; never include credentials or unrelated private chat. This does not finish or accept a task.', {
     task_id: { type: 'string', required: true }, status: { type: 'string', required: true, enum: ['running', 'blocked', 'failed', 'needs_user'] },

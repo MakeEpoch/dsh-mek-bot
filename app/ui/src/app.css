@@ -48,6 +48,9 @@ html[data-mac] .dsb-frame .dsb-side{padding-top:var(--dsb-band)}
 .dsb-scroll::-webkit-scrollbar-thumb{border:0;border-radius:5px;background:var(--bt-line-2)}
 .dsb-column{max-width:min(960px,100%);margin:0 auto}
 .dsb-flow{display:flex;flex-direction:column;gap:6px}
+/* Group avatars sit inside the row, but their hover tools still need 82px.
+   The shared 52px allowance otherwise makes even hidden tools scroll the chat. */
+body:not([data-bt-layout=flat]) .dsb-flow .bt-astack[data-lead]>.bt-msg{max-width:min(calc(var(--bt-msg-w) * (100% - 30px) + 30px),calc(100% - 82px))}
 /* The first separator sits where DSH puts a transcript's opening time. */
 .dsb-flow>.bt-time-sep{margin:8px 0 2px}
 .dsb-flow>.bt-time-sep:first-child{margin:17px 0 6px}

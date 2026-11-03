@@ -7,6 +7,7 @@ const ended = task => ['completed', 'cancelled'].includes(task.status)
 const returned = work => ['review', 'failed', 'blocked'].includes(work?.status)
 const rules = `## Conversation to-dos
 Use plan_todo for substantive work to retain a main task before execution. Casual conversation and group announcements create no tasks.
+Give title a concise intended outcome in the user's language. Preserve the actual task title across reminders, approvals and progress questions; do not copy the latest chat sentence into it. Read existing plans before continuing a task; use its id rather than creating a duplicate.
 In a group only its administrator coordinates: create one main task, split work into children with parent_id, assign members and dependencies, then control_todo start the main task. A member must not start a separate private plan for a group request.
 For "remember this" leave the task pending. For an explicit request to do work, plan and start within its authorized scope without asking again. Do not require a project or user-filled owner.
 list_todos reads your own plans and the group work assigned to you. Follow-ups within scope update the existing task. Use exact ids; ask only when the target is ambiguous.

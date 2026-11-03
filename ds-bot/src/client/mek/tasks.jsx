@@ -47,7 +47,7 @@ export function TaskCard({ task, roster, team, ctx, compact = false, onChanged }
     finally { setBusy(false) }
   }
   return <details className="mek-task" data-task-state={task.status}>
-      <summary><span className={compact ? "mek-task-title" : undefined}>{compact ? task.summary : label('Team task', '团队任务')}</span><span>{taskStatus(task.status)}</span>{!compact && <span className="mek-task-preview">{task.summary}</span>}</summary>
+      <summary><span className={compact ? "mek-task-title" : undefined}>{compact ? task.title ?? task.summary : label('Team task', '团队任务')}</span><span>{taskStatus(task.status)}</span>{!compact && <span className="mek-task-preview">{task.title ?? task.summary}</span>}</summary>
       <div className="mek-task-body">
         {task.status === 'needs_report' && <p role="status">{label('The result has returned. The owner must request a structured report and verification evidence before accepting it. Missing a report alone does not require cancellation.', '结果已返回，负责人需请求执行者补充结构化报告和验证证据，再进行验收；无需仅因缺报告取消任务。')}</p>}
         {task.status === 'review' && <p role="status">{label('The results are ready for the owner to review and accept. The task is not still executing.', '结果已返回，等待负责人检查证据并验收。')}</p>}
@@ -104,7 +104,7 @@ export function TaskProgress({ team, sessionId, ctx, all = false }) {
   const known = all ? [...new Map([...history,...(roster.tasks ?? [])].map(task => [task.id, task])).values()] : (roster.tasks ?? [])
   const planned = new Set((roster.todos ?? []).map(task => task.executionId).filter(Boolean))
   const owned = known.filter(task => !planned.has(task.id) && (all || (room ? roomSessions.has(task.originSessionId) || task.work?.some(item => item.fromRoom === room.id || item.room === room.id) : task.owner === owner)))
-  const tasks = owned.filter(task => !all || (filter === 'all' || (filter === 'open' ? !['completed','cancelled'].includes(task.status) : task.status === filter)) && `${task.summary ?? ''} ${roster.byId[task.owner]?.name ?? ''}`.toLowerCase().includes(search.toLowerCase()))
+  const tasks = owned.filter(task => !all || (filter === 'all' || (filter === 'open' ? !['completed','cancelled'].includes(task.status) : task.status === filter)) && `${task.title ?? ''} ${task.summary ?? ''} ${roster.byId[task.owner]?.name ?? ''}`.toLowerCase().includes(search.toLowerCase()))
   const foldOwner = room?.id ?? owner
   const expanded = all || folds[foldOwner] !== true
   const toggleTasks = () => setFolds(previous => {

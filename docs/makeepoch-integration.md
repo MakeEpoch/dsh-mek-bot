@@ -71,6 +71,10 @@ Resource auto-claims now last for a dispatch and any DSH background jobs it star
 
 DSH 0.2.2's presentation waterfall may contain only sections, contexts and variables. Do not require a `tools` field there: filter it only on hosts that provide it, and keep the public tool-execution guards for forbidden subagents/workflows independently active.
 
+Group administrator coordination is a scoped system section rebuilt from the current group ownership, never a rewrite of every Bot's private instructions. Formal task titles, source goals and accepted outcome summaries are separate. Explicit continuation ids are checked against task ownership, conversation and inherited assignment. Individual formal work acceptance records a reviewed step, while to-do acceptance retains its revision checks and final task acceptance remains explicit.
+
+Tracked group progress and results must pass through the group's durable Session as quiet posts; updating the bounded model log alone does not publish a native chat message. Already logged task posts carry their log sequence to avoid duplicate model-context entries, and the native pane recognizes them as visible member posts. Their text does not select speakers or dispatch another assignment.
+
 
 ## Conversation to-dos (2026-11-03)
 

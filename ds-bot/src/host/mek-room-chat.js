@@ -36,7 +36,7 @@ export async function roomChatPage(rt, roomId, cursor, signal) {
     const start = items.length
     if (event.type === 'tool/result') {
       items.push({ kind: 'group', seq: event.seq, time: event.time, callId: event.data.message.toolCallId, content: event.data.message.content })
-    } else if (event.type === 'user/message' && event.data?.source?.role === 'post' && event.data.source.logged === undefined && !['failed', 'resumed', 'stopped', 'done'].some(key => event.data.source[key])) {
+    } else if (event.type === 'user/message' && event.data?.source?.role === 'post' && (event.data.source.logged === undefined || event.data.source.taskPost === true) && !['failed', 'resumed', 'stopped', 'done'].some(key => event.data.source[key])) {
       const source = event.data.source
       items.push({ kind: 'post', seq: event.seq, time: event.time, botId: source.senderSessionId, name: source.senderName, content: event.data.content })
     } else items.push(...rt.displayItems(sessionId, [event]))

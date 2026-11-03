@@ -156,6 +156,10 @@ export function install(rt) {
     parameters: {
       to: { type: 'string', required: true, description: 'Exact Bot name from list_bots' },
       message: { type: 'string', required: true, description: 'Self-contained message; the other Bot cannot see this conversation' },
+      ...(rt.config.coordinateTasks ? {
+        task_title: { type: 'string', description: 'Concise intended outcome in the user language (1-120 characters), not a quote of a reminder or approval. The task owner may correct the title without changing its goal or id.' },
+        task_id: { type: 'string', description: 'Exact existing main task id from list_tasks when continuing work in this conversation. Omit for a genuinely new goal; never guess from title similarity.' },
+      } : {}),
       reply_to: {
         type: 'string',
         enum: rt.config.coordinateTasks ? ['me'] : ['me', 'user'],
@@ -195,6 +199,8 @@ export function install(rt) {
           message: String(args.message ?? '').replace(/\r\n?/g, '\n').trim(),
           reply_to: args.reply_to === 'user' ? 'user' : 'me',
           when: args.when === 'queue' ? 'queue' : 'now',
+          ...(rt.config.coordinateTasks && args.task_title !== undefined ? { task_title: args.task_title } : {}),
+          ...(rt.config.coordinateTasks && args.task_id !== undefined ? { task_id: args.task_id } : {}),
         },
       })
       // What the caller gets for a request that was admitted before.
@@ -214,7 +220,7 @@ export function install(rt) {
         const refusal = groupRefusal(room, sender, target)
         if (refusal !== undefined) refuse(refusal)
         const send = () => rt.mekDelegateGroup
-          ? rt.mekDelegateGroup(exec.agent.id, room, sender, target, text.trim())
+          ? rt.mekDelegateGroup(exec.agent.id, room, sender, target, text.trim(), { taskId: args.task_id, title: args.task_title })
           : callInGroup(exec, room, sender, target, text.trim())
         return request === undefined ? await send() : answer(await rt.admitRequest(request, send))
       }
@@ -233,7 +239,7 @@ export function install(rt) {
       const send = async () => {
         const toUser = args.reply_to === 'user'
         const work = toUser ? undefined : works[0]
-        const rootId = rt.mekRootForDelegation?.(sender.id, work, exec.agent?.id)
+        const rootId = rt.mekRootForDelegation?.(sender.id, work, exec.agent?.id, { taskId: args.task_id, title: args.task_title, instruction: text.trim() })
         const chat = rt.chatOf(target.id)
         const agent = await rt.resolveAgent(chat)
         const status = rt.statusOf(target.id)

@@ -2,6 +2,21 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { roomChatPage } from '../src/host/mek-room-chat.js'
 
+test('already logged formal member posts remain visible in the durable group pane', async () => {
+  const source = { role: 'post', senderSessionId: 'designer', senderName: 'Designer', quiet: true, logged: 41, taskPost: true }
+  const rt = {
+    roomOf: () => ({ id: 'room' }), sessionOfRoom: () => 'room', roomProgress: new Map(), displayItems: () => [],
+    ctx: { sessionController: { page: async () => ({ hasMore: false, records: [{ event: { seq: 7, type: 'user/message', data: { source, content: [{ type: 'text', text: 'Design checked and returned.' }] } } }] }) } },
+  }
+  const first = await roomChatPage(rt, 'room'), refreshed = await roomChatPage(rt, 'room')
+  assert.equal(first.items[0].kind, 'post')
+  assert.equal(first.items[0].botId, 'designer')
+  assert.match(first.items[0].content[0].text, /Design checked/)
+  assert.deepEqual(refreshed.items, first.items)
+  source.taskPost = false
+  assert.deepEqual((await roomChatPage(rt, 'room')).items, [], 'ordinary posts already represented by relay results stay deduplicated')
+})
+
 test('group pane pages durable history, keeps speaker identity and live rounds', async () => {
   let query
   const content = [{ type: 'text', text: JSON.stringify({ replies: [{ botId: 'writer', text: 'Complete reply' }] }) }]
