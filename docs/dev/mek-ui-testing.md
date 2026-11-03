@@ -355,3 +355,5 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 - 证据：[会话目录](../images/mek-bot-directory.png)、[窄屏目录](../images/mek-bot-directory-narrow.png)、[完整任务标题](../images/mek-task-title-wrap.png)、[窄屏任务标题](../images/mek-task-title-narrow.png)。图片均为隔离数据，截图使用独立浏览器，延续前轮 Chrome 扩展截图超时的备用路径。初次窄屏视觉检查发现目录仍继承顶部行的宽度上限，修正后重新打包复验；消息红点的测试改用实际消息 feed，而非不属于团队状态源的原生问题卡状态。未将这些失败计为最终通过。
 
 收藏复用用户现有置顶，升级不主动重置收藏。真实模型规划与外部任务交付不属于 UI 验收；没有向正式群发送测试消息。
+
+功能提交 `f42ded3` 已通过 gh 凭据推送到 `main`，并安装至本机 `web` profile（同时包含 `f90af26` 群任务返回链修复）。此前安装因小音正在维护群工作而在停服前退出，未中断运行；等运行/排队归零后再备份安装。备份 `.plugin-manager/backups/dsh-mek-bot-compactnav-20261103T100951Z`，92 个源码/归档/正式安装文件一致；配置、其他依赖和停机安装期间团队状态未改变。重启后 `dsh-web.service` 为 `active/running`、认证入口 401。真实 Chrome 只读确认正式顶部会话行数量为 1，Bot 列表图标为 1；没有改收藏或发送测试消息。所有本轮浏览器标签及隔离 web/mock 已退出，3193/8793 端口关闭。
