@@ -16,6 +16,12 @@ Object.defineProperty(globalThis,'navigator',{value:win.navigator,configurable:t
 win.matchMedia = () => ({matches:false,addEventListener(){},removeEventListener(){}})
 win.Element.prototype.getAnimations = () => []
 win.Element.prototype.animate = () => ({finished:Promise.resolve(),cancel(){}})
+const intersections = new Set()
+class IntersectionObserver {
+ constructor(callback) { this.callback=callback; this.targets=new Set(); intersections.add(this) }
+ observe(target) { this.targets.add(target) }
+ disconnect() { this.targets.clear(); intersections.delete(this) }
+}
 const observers = new Set()
 class ResizeObserver {
  constructor(callback) { this.callback=callback; this.targets=new Set(); observers.add(this) }
@@ -51,7 +57,7 @@ const feedControllers=new Set()
 let nativeStatuses=new Map()
 const nativeListeners=new Set()
 const sessionStatus={getSnapshot:()=>nativeStatuses,subscribe:listener=>{nativeListeners.add(listener);return()=>nativeListeners.delete(listener)}}
-const roster = () => ({revision,todos:todoFixtures,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:groupEnabled?[{id:'group-fixture',name:'Fixture group',members:['main','keep'],admin:'main'},{id:'other-group',name:'Other group',members:['main','keep'],admin:'main'}]:[],agents:[],tasks:[...(groupEnabled?[{id:'group-task',owner:'main',originSessionId:'group-fixture',status:'review',summary:'Only this group task',work:[],decisions:[],deliveries:[]},{id:'other-task',owner:'main',originSessionId:'other-group',status:'review',summary:'Different group task',work:[],decisions:[],deliveries:[]}]:[]),{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]},...Array.from({length:extraTasks},(_,i)=>({id:`extra-${i}`,owner:'main',status:'completed',summary:`Archived fixture ${i}`,work:[],decisions:[],deliveries:[]}))],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:groupWork.length?{'group-fixture':groupWork}:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}},...(groupApproval?[{id:'group-approval',botId:'keep',roomId:'group-fixture',at:Date.now(),tool:'write_file'}]:[])]}})
+const roster = () => ({revision,todos:todoFixtures,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:groupEnabled?[{id:'group-fixture',name:'Fixture group',members:['main','keep'],admin:'main'},{id:'other-group',name:'Other group',members:['main','keep'],admin:'main'}]:[],agents:[],tasks:[...(groupEnabled?[{id:'group-task',owner:'main',originSessionId:'group-fixture',status:'review',summary:'Only this group task',work:[],decisions:[],deliveries:[]},{id:'other-task',owner:'main',originSessionId:'other-group',status:'review',summary:'Different group task',work:[],decisions:[],deliveries:[]}]:[]),{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]},...Array.from({length:extraTasks},(_,i)=>({id:`extra-${i}`,owner:'main',status:'running',summary:`Extra fixture ${i}`,work:[],decisions:[],deliveries:[]}))],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:groupWork.length?{'group-fixture':groupWork}:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}},...(groupApproval?[{id:'group-approval',botId:'keep',roomId:'group-fixture',at:Date.now(),tool:'write_file'}]:[])]}})
 const fetch = async (url,options={}) => {
  if(url.endsWith('/feed')) return new Response(new ReadableStream({ start(controller) { feedControllers.add(controller);options.signal?.addEventListener('abort',()=>{feedControllers.delete(controller);controller.close()},{once:true}) } }))
  const {endpoint,payload} = JSON.parse(options.body)
@@ -75,7 +81,7 @@ const fetch = async (url,options={}) => {
 win.__ModuleLoader__={load: value=>{win.moduleEntry=value}}
 const errors=[]
 const logger={...console,error:(...args)=>{errors.push(args.map(x=>x?.stack??String(x)).join(' '))}}
-runInNewContext(readFileSync(`${plugin}/client.js`,'utf8'),{window:win,document:win.document,navigator:win.navigator,console:logger,fetch,Response,ReadableStream,TextDecoder,AbortController,URL,URLSearchParams,Element:win.Element,HTMLElement:win.HTMLElement,MutationObserver:win.MutationObserver,ResizeObserver,localStorage:win.localStorage,sessionStorage:win.sessionStorage,FileReader:win.FileReader,crypto:globalThis.crypto,CSS:{escape:x=>x},getComputedStyle:win.getComputedStyle.bind(win),requestAnimationFrame:win.requestAnimationFrame.bind(win),cancelAnimationFrame:win.cancelAnimationFrame.bind(win),matchMedia:win.matchMedia,setTimeout,clearTimeout,setInterval,clearInterval,queueMicrotask,performance})
+runInNewContext(readFileSync(`${plugin}/client.js`,'utf8'),{window:win,document:win.document,navigator:win.navigator,console:logger,fetch,Response,ReadableStream,TextDecoder,AbortController,URL,URLSearchParams,Element:win.Element,HTMLElement:win.HTMLElement,MutationObserver:win.MutationObserver,ResizeObserver,IntersectionObserver,localStorage:win.localStorage,sessionStorage:win.sessionStorage,FileReader:win.FileReader,crypto:globalThis.crypto,CSS:{escape:x=>x},getComputedStyle:win.getComputedStyle.bind(win),requestAnimationFrame:win.requestAnimationFrame.bind(win),cancelAnimationFrame:win.cancelAnimationFrame.bind(win),matchMedia:win.matchMedia,setTimeout,clearTimeout,setInterval,clearInterval,queueMicrotask,performance})
 const platform={react:React,'react-dom':ReactDOM,'@deepseek-ai/dsh-client-ui-primitives':{MarkdownText:({text})=>React.createElement('span',null,text),FishLogo:()=>React.createElement('span',null,'Fish')}}
 const exports=win.moduleEntry.factory(name=>platform[name])
 const registrations=[]
@@ -93,6 +99,8 @@ async function publish(pending, sessionId='main') {
  await act(async()=>{nativeStatuses=new Map(pending?[[sessionId,{pendingInteraction:pending}]]:[]);for(const listener of nativeListeners)listener();await pause()})
 }
 async function click(selector) {const node=document.querySelector(selector);if(!node) throw new Error(`Missing ${selector}`);await act(async()=>{node.focus();node.click();await pause()})}
+async function tab(name) {const node=[...document.querySelectorAll('.bt-tabs [role="tab"]')].find(node=>node.textContent===name);assert.ok(node,`Missing tab ${name}`);await act(async()=>{node.click();await pause()})}
+async function see() {await act(async()=>{for(const observer of [...intersections])observer.callback([...observer.targets].map(target=>({target,isIntersecting:true,intersectionRatio:1})));await pause()})}
 try {
  await act(async()=>{root.render(React.createElement(main.component));await pause()})
  assert.ok(document.querySelector('.mek-team-header [data-bot-id="main"]'))
@@ -103,18 +111,38 @@ try {
  await click('[data-bot-id="main"]')
  todoFixtures=[
   {id:'todo-root',rootId:'todo-root',botId:'main',title:'One complete request',instruction:'One complete request',status:'running',startRequested:true,revision:1,dependencies:[],predecessors:[]},
-  {id:'todo-child',rootId:'todo-root',parentId:'todo-root',botId:'main',worker:'keep',title:'Check after repair',instruction:'Check after repair',status:'waiting',revision:1,dependencies:['repair'],predecessors:[{id:'repair',title:'Repair',status:'running'}]},
+  {id:'todo-future',rootId:'todo-future',botId:'main',title:'A future plan',instruction:'A future plan',status:'pending',revision:1,dependencies:[],predecessors:[]},
+  {id:'todo-child',startRequested:true,rootId:'todo-root',parentId:'todo-root',botId:'main',worker:'keep',title:'Check after repair',instruction:'Check after repair',status:'waiting',revision:1,dependencies:['repair'],predecessors:[{id:'repair',title:'Repair',status:'running'}]},
  ]
  await refresh()
  assert.equal(document.querySelector('.dsb-main .mek-todos,.dsb-main .mek-tasks'),null,'task lists do not occupy the conversation')
  await click('.mek-team-tools [aria-label="Tasks"]')
  assert.ok(document.querySelector('.bt-panel .mek-task-panel'))
  assert.equal(document.querySelector('.bt-tabs [aria-selected="true"]').textContent,'Tasks')
- assert.equal(document.querySelectorAll('.mek-todo-list > .mek-todo').length,1,'main work is one row, not one row per assignment')
+ assert.equal(document.querySelectorAll('.mek-plan-list > .mek-inbox-entry > .mek-todo').length,1,'main work is one row, not one row per assignment')
  await click('[data-todo-id="todo-root"] > summary')
  assert.ok(document.querySelector('[data-todo-id="todo-root"] [data-todo-id="todo-child"]'),'child remains nested in the main task')
  assert.match(document.querySelector('[data-todo-id="todo-child"]').textContent,/Repair/)
- assert.equal(sends.length,0,'opening to-dos never sends chat messages')
+ assert.equal(sends.length,0,'opening tasks never sends chat messages')
+ const stableTabs=document.querySelector('.bt-tabs')
+ assert.ok(document.querySelector('[data-bot-id="main"] .mek-nav-unread'))
+ await see()
+ assert.ok(document.querySelector('[data-bot-id="main"] .mek-nav-unread'),'unread future plans survive viewing active tasks')
+ await tab('Details')
+ assert.equal(document.querySelector('.bt-tabs'),stableTabs,'tab navigation does not remount or move the tab bar')
+ assert.ok(document.querySelector('.bt-drawer-body > .bt-drawer-id'),'identity is part of the scrollable details content')
+ await tab('To-dos')
+ assert.equal(document.querySelector('.bt-tabs'),stableTabs)
+ assert.ok(document.querySelector('[data-todo-id="todo-future"]'))
+ assert.equal(document.querySelector('[data-todo-id="todo-root"]'),null,'active work is not a future plan')
+ assert.equal(document.querySelector('.mek-plan-form'),null,'creation form is not permanently displayed')
+ await see()
+ assert.equal(document.querySelector('[data-bot-id="main"] .mek-nav-unread'),null,'reading both buckets clears the task dot')
+ await click('.mek-plan-add')
+ assert.ok(document.querySelector('.mek-plan-form'))
+ await click('.mek-plan-actions button[type="button"]')
+ assert.equal(document.querySelector('.mek-plan-form'),null)
+ await tab('Tasks')
  await click('[data-bot-id="keep"]')
  assert.equal(document.querySelector('.bt-tabs [aria-selected="true"]').textContent,'Tasks','the selected task tab follows the conversation')
  assert.ok(document.querySelector('[data-todo-id="todo-child"]'),'assigned work references the same child in the member view')
@@ -149,9 +177,9 @@ try {
  assert.match(document.querySelector('[data-chat-flow]').textContent,/Choose a panel/)
  assert.equal(document.querySelectorAll('.dv-q').length,1)
  await click('.mek-team-tools [aria-label="Tasks"]')
- await click('[aria-label="Collapse tasks"]')
- assert.ok(document.querySelector('.dv-q'),'task folding leaves the pending panel visible')
- await click('[aria-label="Expand tasks"]')
+ await tab('To-dos')
+ assert.ok(document.querySelector('.dv-q'),'switching task tabs leaves the pending panel visible')
+ await tab('Tasks')
  await click('.dv-q button.dv-q-opt:nth-child(2)')
  assert.equal(panelReplies.length,1)
  assert.equal(panelReplies[0].viewId,'panel-fixture')
@@ -252,20 +280,18 @@ try {
  assert.equal(document.querySelector('.dsb-composer-images'),null)
  assert.equal(document.querySelector('.dsb-send').disabled,true)
  await click('.mek-team-tools [aria-label="Tasks"]')
- assert.equal(document.querySelector('.mek-task').dataset.taskState, 'needs_decision')
- await click('[aria-label="Collapse tasks"]')
+ assert.ok(document.querySelector('.mek-task[data-task-state="needs_decision"]'))
+ await tab('To-dos')
  assert.equal(document.querySelector('.mek-task'),null)
- assert.ok(document.querySelector('.dsb-main .mek-task-attention .bt-mw-card'),'approvals remain visible while tasks are folded')
- assert.ok(document.querySelector('.dsb-main .mek-task-attention .bt-secret'),'secure credential cards remain visible while tasks are folded')
- assert.equal(document.querySelector('[aria-label="Expand tasks"]').getAttribute('aria-expanded'),'false')
- assert.match(document.querySelector('[aria-label="Expand tasks"]').textContent,/3/)
+ assert.ok(document.querySelector('.dsb-main .mek-task-attention .bt-mw-card'))
+ assert.ok(document.querySelector('.dsb-main .mek-task-attention .bt-secret'))
  await click('[data-bot-id="keep"]')
  await click('[data-bot-id="main"]')
- assert.ok(document.querySelector('[aria-label="Expand tasks"]'),'folding belongs to this Bot and survives a conversation switch')
- await click('[aria-label="Expand tasks"]')
+ assert.equal(document.querySelector('.bt-tabs [aria-selected="true"]').textContent,'To-dos')
+ await tab('Tasks')
  assert.equal(document.querySelectorAll('.mek-task').length,3)
- await click('.mek-task summary')
- assert.match(document.querySelector('.mek-task-body').textContent, /Which project convention/)
+ await click('.mek-task[data-task-state="needs_decision"] summary')
+ assert.match(document.querySelector('.mek-task[data-task-state="needs_decision"] .mek-task-body').textContent, /Which project convention/)
  await click('.mek-task[data-task-state="needs_report"] summary')
  assert.match(document.querySelector('.mek-task[data-task-state="needs_report"]').textContent, /Report required/)
  assert.match(document.querySelector('.mek-task[data-task-state="needs_report"] [role="status"]').textContent, /Missing a report alone does not require cancellation/)
@@ -337,17 +363,15 @@ try {
  assert.equal(document.querySelector('[data-bot-id="keep"]').getAttribute('aria-current'), 'page')
  await click('[data-bot-id="main"]')
  await click('.mek-team-tools [aria-label="Tasks"]')
- await click('[aria-label="Collapse tasks"]')
  await act(async()=>{root.render(null);await pause()})
  await act(async()=>{root.render(React.createElement(main.component));await pause()})
+ assert.equal(document.querySelector('.mek-task-panel'),null,'a remount does not inject task lists into chat')
  await click('.mek-team-tools [aria-label="Tasks"]')
- assert.ok(document.querySelector('[aria-label="Expand tasks"]'),'tab-local folding survives remount')
- assert.equal(document.querySelector('.mek-task'),null)
- await click('[aria-label="Expand tasks"]')
+ assert.equal(document.querySelectorAll('.mek-task').length,3)
  extraTasks=9;await refresh()
  assert.equal(document.querySelectorAll('.mek-task').length,8)
- assert.equal(document.querySelector('.mek-task-footer .mek-task-more-count').textContent,'4')
- assert.equal(document.querySelector('.mek-task-footer').closest('.mek-tasks'),document.querySelector('.mek-tasks'))
+ assert.match(document.querySelector('.mek-task-footer').textContent,/4/)
+ assert.ok(document.querySelector('.mek-task-panel .mek-task-footer'))
  await click('.mek-task-footer .mek-task-more')
  assert.equal(document.querySelectorAll('.mek-task').length,12)
  assert.equal(document.querySelector('.mek-task-footer'),null,'pagination action disappears once all tasks are shown')

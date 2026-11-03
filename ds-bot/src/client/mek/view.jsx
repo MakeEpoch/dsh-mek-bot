@@ -39,23 +39,32 @@ import { SessionPermissions, PERMISSION_CSS } from './permissions.jsx'
 import { TODO_CSS } from './todos.jsx'
 import { TODO_SCHEDULE_CSS } from './todo-schedules.jsx'
 import { ConversationTaskPanel, TASK_PANEL_CSS } from './task-panel.jsx'
+import { createTaskInbox } from './task-inbox.js'
 import { mountScene, sceneRoot, scopeCss } from './dom.js'
 
 const STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS + HANDOFF_CSS + SIDE_CSS + appCss
 
 function TeamView({ ctx, requests, viewport }) {
-  const team = useMemo(() => { const value = createTeam(); value.actions.schedules = undefined; attachAgentActions(value, ctx); return value }, [ctx])
+  const team = useMemo(() => { const value = createTeam(); value.taskInbox = createTaskInbox(); value.actions.schedules = undefined; attachAgentActions(value, ctx); return value }, [ctx])
+  useSyncExternalStore(team.taskInbox.subscribe, team.taskInbox.getSnapshot)
   useEffect(() => {
     const stopWatching = watchDeletedSubjects(team)
     const stopRemembering = rememberConversation(team)
+    const stopInbox = team.taskInbox.start()
     const stop = team.start()
-    return () => { stopWatching(); stopRemembering(); stop() }
+    return () => { stopInbox(); stopWatching(); stopRemembering(); stop() }
   }, [team])
   const { hooks, actions } = team
   actions.sessionPermission = ctx.sessions.retain ? sessionId => <SessionPermissions key={sessionId} ctx={ctx} sessionId={sessionId} /> : undefined
-  actions.TaskPanel = useMemo(() => function TaskPanel({ sessionId }) { return <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} /> }, [team, ctx])
+  actions.TaskPanel = useMemo(() => function TaskPanel({ sessionId, bucket }) { return <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} bucket={bucket} /> }, [team, ctx])
+  actions.taskUnread = (id, bucket) => {
+    const snapshot = team.roster.getSnapshot()
+    const target = snapshot.byId[id]?.id ?? snapshot.roomsById[id]?.id ?? id
+    return team.taskInbox.has(target, bucket)
+  }
   const shown = hooks.useShown(value => value)
   const roster = hooks.useRoster(value => value)
+  useEffect(() => { team.taskInbox.update(roster) }, [team, roster])
   const prefs = roster.prefs
   useEffect(() => {
     const root = sceneRoot()

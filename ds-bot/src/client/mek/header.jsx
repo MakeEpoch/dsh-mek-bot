@@ -50,7 +50,7 @@ export function TeamHeader({ team, views }) {
   return <header className="mek-team-header">
     <nav ref={list} className="mek-team-center" aria-label={t('Bot list')}><TeamSidebar {...views} actions={actions} wide navigation /></nav>
     <div ref={more} className="mek-team-tools">
-      <button type="button" className="bt-round" aria-label={t('Tasks')} title={t('Tasks')} disabled={!roster.byId[shown] && !roster.roomsById[shown]} aria-pressed={ui.details === shown && ui.view === 'details' && ui.tab === 'tasks'} onClick={() => { setOpen(false); team.actions.showDetails(shown, 'tasks') }}><TasksIcon /></button>
+      <button type="button" className="bt-round" aria-label={t('Tasks')} title={t('Tasks')} disabled={!roster.byId[shown] && !roster.roomsById[shown]} aria-pressed={ui.details === shown && ui.view === 'details' && ['todos', 'tasks'].includes(ui.tab)} onClick={() => { setOpen(false); team.actions.showDetails(shown, 'tasks') }}><TasksIcon />{team.actions.taskUnread?.(shown) && <span className="mek-tab-dot" aria-hidden="true" />}</button>
       <button type="button" className="bt-round" aria-label={t('Search')} title={t('Search')} onClick={() => { setOpen(false); team.actions.openPalette() }}><SearchIcon /></button>
       <button ref={trigger} type="button" className="bt-round" aria-label={t('More')} title={t('More')} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(value => !value)}><DotsIcon /></button>
       {menu && <div className="bt-menu mek-team-menu" role="menu" data-leaving={leaving ? '' : undefined} inert={leaving ? '' : undefined} onKeyDown={menuKeys}>

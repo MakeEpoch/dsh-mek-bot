@@ -44,7 +44,7 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
         const view = state.view === 'browser' && snap.byId[id] === undefined ? 'details'
           : state.view === 'side' && !(snap.sideChats?.[snap.byId[id]?.id] ?? []).some(chat => chat?.id === state.side) ? 'details'
             : state.view
-        return { ...state, details: id, view, renaming: false, tab: state.view === 'details' && state.tab === 'tasks' ? 'tasks' : null }
+        return { ...state, details: id, view, renaming: false, tab: state.view === 'details' && ['todos', 'tasks'].includes(state.tab) ? state.tab : null }
       })
     },
     showDetails: (id, tab = null) => { ui.set(state => ({ ...state, details: id, view: 'details', renaming: false, tab, panelYield: yieldTo(state, 'details') })) },

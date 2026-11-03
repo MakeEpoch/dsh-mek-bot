@@ -38,9 +38,34 @@ export function TaskAttention({ team, sessionId }) {
   </section>
 }
 
+export function TaskCard({ task, roster, team, ctx, compact = false, onChanged }) {
+  const [busy, setBusy] = useState(false)
+  const cancel = async taskId => {
+    setBusy(true)
+    try { await call('task-cancel', { taskId }); await team.refresh(); onChanged?.(taskId) }
+    catch (error) { team.actions.reportError(error, 'task-cancel') }
+    finally { setBusy(false) }
+  }
+  return <details className="mek-task" data-task-state={task.status}>
+      <summary><span className={compact ? "mek-task-title" : undefined}>{compact ? task.summary : label('Team task', '团队任务')}</span><span>{taskStatus(task.status)}</span>{!compact && <span className="mek-task-preview">{task.summary}</span>}</summary>
+      <div className="mek-task-body">
+        {task.status === 'needs_report' && <p role="status">{label('The result has returned. The owner must request a structured report and verification evidence before accepting it. Missing a report alone does not require cancellation.', '结果已返回，负责人需请求执行者补充结构化报告和验证证据，再进行验收；无需仅因缺报告取消任务。')}</p>}
+        {task.status === 'review' && <p role="status">{label('The results are ready for the owner to review and accept. The task is not still executing.', '结果已返回，等待负责人检查证据并验收。')}</p>}
+        {(task.work ?? []).filter(item => item.status !== 'superseded').map(item => <div key={item.id} className="mek-task-step">
+          <strong>{item.name}</strong><span>{taskStatus(item.status)}</span>
+          {item.report && <p>{item.report.summary}<br />{item.report.evidence}</p>}
+          {!item.report && item.result && <p>{item.result}</p>}
+          {item.report?.artifacts?.length > 0 && <Artifacts values={item.report.artifacts} sessionId={item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to} ctx={ctx} />}
+        </div>)}
+        {(task.decisions ?? []).filter(item => item.status === 'open').map(item => <p key={item.id}>{label('Question being handled by the owner: ', '负责人正在处理的问题：')}{item.question}</p>)}
+        {task.deliveries?.some(item => item.status === 'uncertain') && <p role="status">{label('A delivery is being reconciled. The task has not been repeated.', '消息送达情况待核对，未重复执行任务。')}</p>}
+        {!['completed', 'cancelled'].includes(task.status) && <button type="button" disabled={busy} onClick={() => cancel(task.id)}>{label('Cancel task', '取消任务')}</button>}
+      </div>
+    </details>
+}
+
 export function TaskProgress({ team, sessionId, ctx, all = false }) {
   const roster = team.hooks.useRoster(value => value)
-  const [busy, setBusy] = useState(null)
   const [filter, setFilter] = useState('open')
   const [search, setSearch] = useState('')
   const [limit, setLimit] = useState(8)
@@ -87,33 +112,12 @@ export function TaskProgress({ team, sessionId, ctx, all = false }) {
     try { window.sessionStorage.setItem(foldsKey, JSON.stringify(next)) } catch { /* Folding still works when storage is unavailable. */ }
     return next
   })
-  const cancel = async taskId => {
-    setBusy(taskId)
-    try { await call('task-cancel', { taskId }); await team.refresh() }
-    catch (error) { team.actions.reportError(error, 'task-cancel') }
-    finally { setBusy(null) }
-  }
   return <section className={`mek-tasks${all ? ' mek-task-ledger' : ''}`} aria-label={label('Team tasks', '团队任务')}>
     {!all && !owned.length && <p className="mek-task-empty">{label('No team tasks in this conversation.', '当前会话暂无团队任务。')}</p>}
     {!all && tasks.length > 0 && <button type="button" className="mek-task-toggle" aria-expanded={expanded} aria-label={expanded ? label('Collapse tasks', '收起任务') : label('Expand tasks', '展开任务')} onClick={toggleTasks}><span>{label('Team tasks', '团队任务')} · {tasks.length}</span><span>{expanded ? label('Collapse', '收起') : label('Expand', '展开')}</span></button>}
     {all && <div className="mek-form-row"><input aria-label={label('Search tasks', '搜索任务')} placeholder={label('Search tasks', '搜索任务')} value={search} onChange={event => setSearch(event.target.value)} /><select aria-label={label('Task status', '任务状态')} value={filter} onChange={event => setFilter(event.target.value)}>{[['open','Open tasks','未完成'],['completed','Accepted','已验收'],['cancelled','Cancelled','已取消'],['all','All tasks','全部任务']].map(([key,en,zh]) => <option key={key} value={key}>{label(en,zh)}</option>)}</select></div>}
     {all && !tasks.length && <p>{label('No matching tasks.', '没有符合条件的任务。')}</p>}
-    {expanded && tasks.slice(0, all ? tasks.length : limit).map(task => <details key={task.id} className="mek-task" data-task-state={task.status}>
-      <summary><span>{label('Team task', '团队任务')}</span><span>{taskStatus(task.status)}</span><span className="mek-task-preview">{task.summary}</span></summary>
-      <div className="mek-task-body">
-        {task.status === 'needs_report' && <p role="status">{label('The result has returned. The owner must request a structured report and verification evidence before accepting it. Missing a report alone does not require cancellation.', '结果已返回，负责人需请求执行者补充结构化报告和验证证据，再进行验收；无需仅因缺报告取消任务。')}</p>}
-        {task.status === 'review' && <p role="status">{label('The results are ready for the owner to review and accept. The task is not still executing.', '结果已返回，等待负责人检查证据并验收。')}</p>}
-        {(task.work ?? []).filter(item => item.status !== 'superseded').map(item => <div key={item.id} className="mek-task-step">
-          <strong>{item.name}</strong><span>{taskStatus(item.status)}</span>
-          {item.report && <p>{item.report.summary}<br />{item.report.evidence}</p>}
-          {!item.report && item.result && <p>{item.result}</p>}
-          {item.report?.artifacts?.length > 0 && <Artifacts values={item.report.artifacts} sessionId={item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to} ctx={ctx} />}
-        </div>)}
-        {(task.decisions ?? []).filter(item => item.status === 'open').map(item => <p key={item.id}>{label('Question being handled by the owner: ', '负责人正在处理的问题：')}{item.question}</p>)}
-        {task.deliveries?.some(item => item.status === 'uncertain') && <p role="status">{label('A delivery is being reconciled. The task has not been repeated.', '消息送达情况待核对，未重复执行任务。')}</p>}
-        {!['completed', 'cancelled'].includes(task.status) && <button type="button" disabled={busy === task.id} onClick={() => cancel(task.id)}>{label('Cancel task', '取消任务')}</button>}
-      </div>
-    </details>)}
+    {expanded && tasks.slice(0, all ? tasks.length : limit).map(task => <TaskCard key={task.id} task={task} roster={roster} team={team} ctx={ctx} />)}
     {!all && expanded && tasks.length > limit && <div className="mek-task-footer"><button type="button" className="mek-task-more" onClick={() => setLimit(value => value + 8)}><span>{label('Show more tasks', '显示更多任务')}</span><span className="mek-task-more-count">{tasks.length - limit}</span><ChevronRightIcon /></button></div>}
     {all && cursor && <div className="mek-task-footer"><button type="button" className="mek-task-more" disabled={loading} onClick={() => void loadEarlier()}>{label('Load earlier tasks', '加载更早任务')}</button></div>}
     {all && loading && <p role="status">{label('Loading tasks…', '正在加载任务…')}</p>}
