@@ -6,7 +6,7 @@ import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { clone, optionalText, own, refuse, safeText, teamTool, writable } from './mek-safe.js'
 
 const DONE = new Set(['completed', 'cancelled'])
-const SAFE_TOOLS = new Set(['ask_user', 'show_view', 'list_tasks', 'read_task', 'report_bot_task', 'finish_bot_task', 'cancel_bot_task', 'release_task_resource', 'list_task_resources'])
+const SAFE_TOOLS = new Set(['ask_user', 'show_view', 'list_tasks', 'read_task', 'list_todos', 'control_todo', 'report_bot_task', 'finish_bot_task', 'cancel_bot_task', 'release_task_resource', 'list_task_resources'])
 const WRITES = new Set(['exec_command', 'run_command', 'shell', 'bash', 'terminal', 'execute', 'apply_patch', 'write_file', 'edit_file', 'create_file', 'delete_file', 'move_file'])
 const DEFAULTS = { maxParallel: 4, maxRevisions: 3, maxTokens: null, deadlineAt: null }
 const ROLES = {

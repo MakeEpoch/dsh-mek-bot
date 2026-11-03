@@ -70,3 +70,10 @@ Group selection shares the upstream picker, preserving explicit targets, authori
 Resource auto-claims now last for a dispatch and any DSH background jobs it starts. Live conflicts wait without partial claims; cancellation, role restrictions and task limits are checked before execution. Explicit reservations and uncertain/legacy records remain conservative. See the updated execution-services design for release and restart boundaries.
 
 DSH 0.2.2's presentation waterfall may contain only sections, contexts and variables. Do not require a `tools` field there: filter it only on hosts that provide it, and keep the public tool-execution guards for forbidden subagents/workflows independently active.
+
+
+## Conversation to-dos (2026-11-03)
+
+The native adapter now layers persistent conversation plans over the existing root/work coordinator. Stable child ids retain their independent work attempts. Group-local plans use the current group administrator, while private task ownership remains unchanged; a handover retains running work and routes results to the new administrator. Accepted predecessor versions gate dispatch and supported tool execution. Paused or unknown work is never treated as success. The native pane exposes the same task records in group and assigned-member views.
+
+DSH remains the clock owner. The optional schedule adapter uses public durable delivery history and change events to deduplicate occurrences, then creates a pending main plan or durably notifies its coordinator. The original clock wake is not a business dispatch and cannot call tools. Existing permissions, evidence checks, resource leases and cancellation continue to apply. See the [complete design and implementation limits](plans/2026-11-03-mek-conversation-tasks.md); do not infer full design acceptance from this first implementation.

@@ -40,7 +40,7 @@ function requestOf(record) {
 }
 
 // The settings form's timing as a create request selector.
-function selectorOf(when) {
+export function selectorOf(when) {
   const zone = typeof when?.timeZone === 'string' && when.timeZone !== '' ? when.timeZone : 'UTC'
   switch (when?.kind) {
     case 'at': {

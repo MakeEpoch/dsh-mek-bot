@@ -6,6 +6,8 @@ import { install as installPolicy } from './src/host/mek-policy.js'
 import { install as installKnowledge } from './src/host/mek-knowledge.js'
 import { install as installWorkflows } from './src/host/mek-workflows.js'
 import { install as installTeam } from './src/host/mek-team.js'
+import { install as installTodos } from './src/host/mek-todos.js'
+import { install as installTodoSchedules } from './src/host/mek-todo-schedules.js'
 import { dshHomeOf } from './src/host/folders.js'
 
 export { inject }
@@ -24,4 +26,6 @@ export function apply(ctx, config = {}) {
   installKnowledge(rt)
   installWorkflows(rt)
   installTeam(rt)
+  installTodos(rt)
+  installTodoSchedules(rt)
 }

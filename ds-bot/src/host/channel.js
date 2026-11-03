@@ -66,6 +66,8 @@ export function install(rt) {
     questions: state.questions,
     ...(rt.mekTasksView ? { tasks: rt.mekTasksView() } : {}),
     ...(rt.mekTeamView ? { mekTeam: rt.mekTeamView() } : {}),
+    ...(rt.mekTodosView ? { todos: rt.mekTodosView() } : {}),
+    ...(rt.mekTodoSchedulesView ? { todoSchedules: rt.mekTodoSchedulesView() } : {}),
     views: state.views ?? {},
     // Aside answers of each Bot's current part, newest first. Not part of the
     // model-visible history; earlier parts send their cards on their own pages.
@@ -125,7 +127,7 @@ export function install(rt) {
   // What a host that only reads the team may still answer.
   // Updates change the dsh profile, not the team, so a reading host may run them too.
   const READS = new Set(['state', 'models', 'efforts', 'providers', 'provider-models', 'earlier', 'chat', 'run-stats', 'room-progress', 'room-chat', 'exchange', 'exchange-text', 'file-text', 'usage', 'schedules', 'memory-view', 'browser-wait', 'browser-result', 'diagnostics', 'diagnostics-log', 'diagnostics-clear', 'update-check', 'update-install', 'dsh-update-install', 'repo-stars', 'approval-answer', 'thinking', 'avatar-library'])
-  for (const endpoint of ['mek-task-list', 'mek-activity-list', 'mek-browser-state', 'mek-policy-view', 'mek-knowledge-list', 'mek-workflow-list', 'mek-resource-list']) READS.add(endpoint)
+  for (const endpoint of ['mek-task-list', 'mek-todo-list', 'mek-todo-schedule-list', 'mek-activity-list', 'mek-browser-state', 'mek-policy-view', 'mek-knowledge-list', 'mek-workflow-list', 'mek-resource-list']) READS.add(endpoint)
   READS.add('image')
 
   function setPrefs(body) {
@@ -176,7 +178,9 @@ export function install(rt) {
       if (endpoint.startsWith('mek-')) {
       if (endpoint === 'mek-task-list') { await rt.load(); return ok(rt.mekTaskHistory?.(body) ?? { tasks: [], nextCursor: null }) }
         await rt.load()
-        const handler = endpoint.startsWith('mek-browser-') ? rt.mekBrowserEndpoint
+        const handler = endpoint.startsWith('mek-todo-schedule-') ? rt.mekTodoScheduleAction
+          : endpoint.startsWith('mek-todo-') ? rt.mekTodoAction
+          : endpoint.startsWith('mek-browser-') ? rt.mekBrowserEndpoint
           : endpoint.startsWith('mek-policy-') ? rt.mekPolicyAction
             : endpoint.startsWith('mek-knowledge-') ? rt.mekKnowledgeAction
               : endpoint.startsWith('mek-workflow-') ? rt.mekWorkflowAction

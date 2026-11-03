@@ -29,3 +29,10 @@ Recovery sends one durable reminder to the original delegator for legacy returne
 In chat, a task-list disclosure keeps the count visible and remembers folding per Bot in tab-local session storage. It folds task rows only; approvals/secure credential requests remain visible. The complete team ledger remains expanded and separate.
 
 Regression checks include missing/malformed evidence, mixed active/returned/failed work, owner-only repair and acceptance, legacy reminders across repeated recovery/restarts, unchanged final results, and UI folding with conversation switching/remount.
+
+
+## Conversation to-dos (2026-11-03)
+
+The native adapter now layers persistent conversation plans over the existing root/work coordinator. Stable child ids retain their independent work attempts. Group-local plans use the current group administrator, while private task ownership remains unchanged; a handover retains running work and routes results to the new administrator. Accepted predecessor versions gate dispatch and supported tool execution. Paused or unknown work is never treated as success. The native pane exposes the same task records in group and assigned-member views.
+
+DSH remains the clock owner. The optional schedule adapter uses public durable delivery history and change events to deduplicate occurrences, then creates a pending main plan or durably notifies its coordinator. The original clock wake is not a business dispatch and cannot call tools. Existing permissions, evidence checks, resource leases and cancellation continue to apply. See the [complete design and implementation limits](2026-11-03-mek-conversation-tasks.md); do not infer full design acceptance from this first implementation.

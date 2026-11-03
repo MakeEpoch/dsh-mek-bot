@@ -1108,6 +1108,7 @@ export function install(rt) {
     return openingSpeakers(room, { botId: sender.id, text, member, ...(mentions ? { mentions } : {}) }).map(bot => bot.id)
   }
   rt.prepareGroupMemberTask = async (room, member) => {
+    ensureRoomLog(room)
     const session = await groupSessionFor(room, member)
     if (!session) throw new Error('The group member is no longer available')
     await loadGroupLines(room)

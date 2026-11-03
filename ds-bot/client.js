@@ -45,9 +45,9 @@ var subscriptions = /* @__PURE__ */ new WeakMap();
 var listeners = /* @__PURE__ */ new Set();
 var inactiveRoot;
 var localBody = () => scene ?? (inactiveRoot ??= globalThis.document.createElement("div"));
-function scopeCss(text) {
+function scopeCss(text3) {
   return `@scope (.mek-bot-scene) {
-${text.replace(/\bhtml\s+body\b/g, ":scope").replace(/(?<![\w.\-#])(?:html|body)\b(?=[\s[{.:>,#])/g, ":scope").replace(/:root\b/g, ":scope")}
+${text3.replace(/\bhtml\s+body\b/g, ":scope").replace(/(?<![\w.\-#])(?:html|body)\b(?=[\s[{.:>,#])/g, ":scope").replace(/:root\b/g, ":scope")}
 }`;
 }
 function mountScene(element) {
@@ -1350,7 +1350,7 @@ var HOST_ZH = {
   "DS Bot is still loading this chat.": "DS Bot 还在加载这个对话。"
 };
 Object.assign(ZH, HOST_ZH);
-var fill = (text, params) => params ? text.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match) : text;
+var fill = (text3, params) => params ? text3.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match) : text3;
 var service = null;
 var bound = null;
 function installLocale(locale) {
@@ -1401,15 +1401,15 @@ function noteClientError(where, error) {
   }
   const message = String(error?.message ?? error ?? "error").slice(0, 300);
   const code = typeof error?.code === "string" ? error.code : void 0;
-  const text = `${where}: ${message}`;
+  const text3 = `${where}: ${message}`;
   const now = Date.now();
   const last = entries.at(-1);
-  if (last && last.text === text && now - last.time < REPEAT_MS) {
+  if (last && last.text === text3 && now - last.time < REPEAT_MS) {
     last.time = now;
     last.count = (last.count ?? 1) + 1;
     return;
   }
-  entries.push({ time: now, level: "error", text, ...code ? { code } : {} });
+  entries.push({ time: now, level: "error", text: text3, ...code ? { code } : {} });
   if (entries.length > MAX) entries.splice(0, entries.length - MAX);
 }
 var quietly = (where) => (error) => noteClientError(where, error);
@@ -1446,9 +1446,9 @@ var WHAT_MAX = 2e3;
 var PASTE_NOTE = "DS Bot copied the diagnostics to the clipboard. Paste them here.";
 var REST_NOTE = "The recent errors do not fit in the link. DS Bot copied the diagnostics to the clipboard: paste them below this line.";
 function issueUrl(base, { what = "", diagnostics }) {
-  const text = what.trim().slice(0, WHAT_MAX);
-  const title = text.split("\n")[0].slice(0, 80);
-  const build = (body) => `${base}?${new URLSearchParams({ template: "bug.yml", ...title ? { title } : {}, ...text ? { what: text } : {}, diagnostics: body })}`;
+  const text3 = what.trim().slice(0, WHAT_MAX);
+  const title = text3.split("\n")[0].slice(0, 80);
+  const build = (body) => `${base}?${new URLSearchParams({ template: "bug.yml", ...title ? { title } : {}, ...text3 ? { what: text3 } : {}, diagnostics: body })}`;
   const full2 = build(diagnostics);
   if (full2.length <= URL_LIMIT) return { url: full2, inline: true };
   const facts = build(`${diagnostics.split("\n\n")[0]}
@@ -1545,31 +1545,31 @@ var speakerOf = (line) => line.botId !== void 0 && USER_NAMES.includes(String(li
 var NAME_GOES_ON = /^(?:[a-z0-9_\-/\\]|\.[a-z0-9_-])/i;
 var ADDRESS_BEFORE = /[a-z0-9_./]/i;
 var LITERAL = /```[\s\S]*?(?:```|$)|`[^`\n]*`|\[[^\]\n]*\]\([^)\s]*(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\)/g;
-var fitsAt = (text, at, word) => text.slice(at, at + word.length).toLowerCase() === word.toLowerCase() && !NAME_GOES_ON.test(text.slice(at + word.length));
+var fitsAt = (text3, at, word) => text3.slice(at, at + word.length).toLowerCase() === word.toLowerCase() && !NAME_GOES_ON.test(text3.slice(at + word.length));
 var overlaps = (spans, start, end) => spans.some((span) => start < span.end && span.start < end);
 function nameProblem(name) {
-  const text = String(name ?? "").trim();
-  if (text === "") return "A Bot needs a name";
-  if (/[@`\r\n]/.test(text)) return "A Bot name cannot contain @, ` or a line break";
-  if (ALL_WORDS.includes(text.toLowerCase())) return `"${text}" calls everyone in a group, so it cannot be a Bot name`;
-  if (USER_NAMES.includes(text.toLowerCase())) return `"${text}" stands for the user in a chat, so it cannot be a Bot name`;
+  const text3 = String(name ?? "").trim();
+  if (text3 === "") return "A Bot needs a name";
+  if (/[@`\r\n]/.test(text3)) return "A Bot name cannot contain @, ` or a line break";
+  if (ALL_WORDS.includes(text3.toLowerCase())) return `"${text3}" calls everyone in a group, so it cannot be a Bot name`;
+  if (USER_NAMES.includes(text3.toLowerCase())) return `"${text3}" stands for the user in a chat, so it cannot be a Bot name`;
   return void 0;
 }
-function referenceSpans(text, labels = []) {
+function referenceSpans(text3, labels = []) {
   const spans = [];
-  for (const label2 of [...labels].sort((a, b) => b.length - a.length)) {
-    const mention = `@${label2}`;
-    for (let at = text.indexOf(mention); at !== -1; at = text.indexOf(mention, at + 1)) {
+  for (const label3 of [...labels].sort((a, b) => b.length - a.length)) {
+    const mention = `@${label3}`;
+    for (let at = text3.indexOf(mention); at !== -1; at = text3.indexOf(mention, at + 1)) {
       const end = at + mention.length;
-      if (at > 0 && ADDRESS_BEFORE.test(text[at - 1]) || NAME_GOES_ON.test(text.slice(end)) || overlaps(spans, at, end)) continue;
-      spans.push({ start: at, end, label: label2 });
+      if (at > 0 && ADDRESS_BEFORE.test(text3[at - 1]) || NAME_GOES_ON.test(text3.slice(end)) || overlaps(spans, at, end)) continue;
+      spans.push({ start: at, end, label: label3 });
       break;
     }
   }
   return spans.sort((a, b) => a.start - b.start);
 }
-function mentionSpans(text, bots, { references = [] } = {}) {
-  const value = String(text ?? "");
+function mentionSpans(text3, bots, { references = [] } = {}) {
+  const value = String(text3 ?? "");
   const skip = [
     ...[...value.matchAll(LITERAL)].map((match) => ({ start: match.index, end: match.index + match[0].length })),
     ...referenceSpans(value, references)
@@ -1590,16 +1590,16 @@ function mentionSpans(text, bots, { references = [] } = {}) {
 
 // src/client/text.js
 var MENTION_ORIGIN = "https://bots.local/";
-function linkMentions(text, bots, selfId) {
-  if (!text || !text.includes("@")) return text;
+function linkMentions(text3, bots, selfId) {
+  if (!text3 || !text3.includes("@")) return text3;
   let out = "";
   let cursor = 0;
-  for (const span of mentionSpans(text, bots)) {
+  for (const span of mentionSpans(text3, bots)) {
     if (!span.bot || span.bot.id === selfId) continue;
-    out += `${text.slice(cursor, span.start)}[${text.slice(span.start + 1, span.end).replace(/[[\]\\]/g, "\\$&")}](${MENTION_ORIGIN}${span.bot.id})`;
+    out += `${text3.slice(cursor, span.start)}[${text3.slice(span.start + 1, span.end).replace(/[[\]\\]/g, "\\$&")}](${MENTION_ORIGIN}${span.bot.id})`;
     cursor = span.end;
   }
-  return cursor === 0 ? text : out + text.slice(cursor);
+  return cursor === 0 ? text3 : out + text3.slice(cursor);
 }
 function mentionTarget(event) {
   const anchor = event.target instanceof Element ? event.target.closest(`a[href^="${MENTION_ORIGIN}"]`) : null;
@@ -1644,9 +1644,9 @@ function elapsedLabel(ms) {
 var contentText = (content) => (content ?? []).filter((block) => block?.type === "text").map((block) => block.text).join("\n");
 var HEADER = /^\[(Message from|Reply from|Group chat|Group post from|Bot team setup|Handoff · part|Secret card)(?:[^\r\n]*\]\r?\n|[^\]\r\n]*\])/;
 var currentPart = (bot) => bot.sessionId ?? bot.id;
-function reminderPrompts(text) {
-  const one = /^reminder_prompt_json: (.*)$/m.exec(text);
-  const batch = /^reminders_json: (.*)$/m.exec(text);
+function reminderPrompts(text3) {
+  const one = /^reminder_prompt_json: (.*)$/m.exec(text3);
+  const batch = /^reminders_json: (.*)$/m.exec(text3);
   try {
     const prompts = [...one ? [JSON.parse(one[1])] : [], ...batch ? JSON.parse(batch[1]).map((entry) => entry.reminder_prompt) : []];
     return prompts.filter((prompt) => typeof prompt === "string" && prompt.trim() !== "");
@@ -1654,19 +1654,19 @@ function reminderPrompts(text) {
     return [];
   }
 }
-var stripHeader = (text) => text.replace(HEADER, "");
+var stripHeader = (text3) => text3.replace(HEADER, "");
 function latestMemoryChange(news, ids) {
   const at = (id) => news?.[id]?.seen ? news[id].at ?? 0 : 0;
   return ids.reduce((best, id) => at(id) > at(best) ? id : best, ids[0] ?? null);
 }
-function summaryBlocks(text) {
+function summaryBlocks(text3) {
   const blocks = [];
   let paragraph = [];
   const flush = () => {
     if (paragraph.length > 0) blocks.push({ kind: "p", text: paragraph.join(" ") });
     paragraph = [];
   };
-  for (const raw of String(text ?? "").split("\n")) {
+  for (const raw of String(text3 ?? "").split("\n")) {
     const line = raw.trim().replace(/\*\*|__/g, "");
     const heading = /^#{1,6}\s+(.+)$/.exec(line);
     if (heading) {
@@ -1763,8 +1763,8 @@ function previewOf(list, id, hiddenTurns = []) {
   for (let index = outline.length - 1; index >= 0; index -= 1) {
     const entry = outline[index];
     if (hiddenTurns.includes(entry.turn)) continue;
-    const text = entry.response || entry.prompt || "";
-    if (text !== "") return stripHeader(text).replace(/\s+/g, " ").trim();
+    const text3 = entry.response || entry.prompt || "";
+    if (text3 !== "") return stripHeader(text3).replace(/\s+/g, " ").trim();
   }
   return "";
 }
@@ -1787,8 +1787,8 @@ function usageOf(list, ids) {
 function percentText(part, whole) {
   if (part >= whole) return "100";
   for (let places = 0; places < 3; places += 1) {
-    const text = (part / whole * 100).toFixed(places);
-    if (Number(text) < 100) return text;
+    const text3 = (part / whole * 100).toFixed(places);
+    if (Number(text3) < 100) return text3;
   }
   return "99.99";
 }
@@ -1879,12 +1879,12 @@ var lineIcon = (paths) => function LineIcon() {
   );
 };
 var CLOUD = "M6.5 15.25H5.75a3.25 3.25 0 0 1-.55-6.45 4.75 4.75 0 0 1 9.2-1.1 3.75 3.75 0 0 1 .1 7.55H13.5";
-function CloudDownloadIcon({ done = false }) {
+function CloudDownloadIcon({ done: done2 = false }) {
   return (0, import_react.createElement)(
     "svg",
     { width: 16, height: 16, viewBox: "0 0 20 20", fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
     (0, import_react.createElement)("path", { d: CLOUD }),
-    done ? (0, import_react.createElement)("path", { d: "M7.75 13.25l1.75 1.75 3-3.25" }) : (0, import_react.createElement)("g", { className: "bt-cloud-arrow" }, (0, import_react.createElement)("path", { d: "M10 9.75v7" }), (0, import_react.createElement)("path", { d: "M7.75 14.5L10 16.75l2.25-2.25" }))
+    done2 ? (0, import_react.createElement)("path", { d: "M7.75 13.25l1.75 1.75 3-3.25" }) : (0, import_react.createElement)("g", { className: "bt-cloud-arrow" }, (0, import_react.createElement)("path", { d: "M10 9.75v7" }), (0, import_react.createElement)("path", { d: "M7.75 14.5L10 16.75l2.25-2.25" }))
   );
 }
 var SmileIcon = lineIcon(["M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z", "M7.3 11.6a3.4 3.4 0 0 0 5.4 0", "M7.75 8.25h.01M12.25 8.25h.01"]);
@@ -1963,9 +1963,9 @@ var MAIN_LOOK = Object.freeze({ shape: "whale", color: "deepseek" });
 var CHARACTER_COLORS = ["black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray", "aurora"];
 var DEFAULT_COLORS = CHARACTER_COLORS.filter((color) => !["black", "gray", "brown"].includes(color) && !GRADIENTS[color]);
 var isColor = (color) => isHex(color) || Object.hasOwn(INKS, color);
-function fnv1a(text) {
+function fnv1a(text3) {
   let value = 2166136261;
-  for (let index = 0; index < text.length; index += 1) value = Math.imul(value ^ text.charCodeAt(index), 16777619);
+  for (let index = 0; index < text3.length; index += 1) value = Math.imul(value ^ text3.charCodeAt(index), 16777619);
   return value >>> 0;
 }
 function defaultColor(id) {
@@ -2083,7 +2083,7 @@ function useGaze(ref, enabled) {
   }, [enabled]);
 }
 var FIDGETS = ["hop", "sway", "stretch", "look"];
-function BotMark({ bot, look: given, size = 36, state = "idle", live = false, gaze = false, pokeable = false, label: label2 }) {
+function BotMark({ bot, look: given, size = 36, state = "idle", live = false, gaze = false, pokeable = false, label: label3 }) {
   const look = given ?? lookOf(bot);
   const ref = (0, import_react2.useRef)(null);
   const maskId = (0, import_react2.useRef)("");
@@ -2102,9 +2102,9 @@ function BotMark({ bot, look: given, size = 36, state = "idle", live = false, ga
     "data-gaze": gaze ? "" : void 0,
     "data-poke": pokeable ? "" : void 0,
     style: { width: size, height: size, ...live ? { "--bt-delay": `${-(fnv1a(String(bot?.id ?? "")) % 5e3) / 1e3}s`, "--bt-fidget-delay": `${-(fnv1a(`${bot?.id ?? ""}:when`) % 9e3) / 1e3}s` } : {} },
-    role: label2 ? "img" : void 0,
-    "aria-label": label2,
-    "aria-hidden": label2 ? void 0 : true,
+    role: label3 ? "img" : void 0,
+    "aria-label": label3,
+    "aria-hidden": label3 ? void 0 : true,
     onClick: pokeable ? () => setPoked(true) : void 0,
     onAnimationEnd: poked ? (event) => {
       if (/^bt-poke/.test(event.animationName)) setPoked(false);
@@ -2351,14 +2351,14 @@ function QuestionView({ question, onAnswer, onDismiss, onInteract, busy = false,
   const multi = question.multiSelect === true;
   const custom = own.trim();
   const canSubmit = multi ? picked.length > 0 || custom !== "" : custom !== "";
-  const choose = (label2) => {
+  const choose = (label3) => {
     if (busy) return;
     onInteract?.();
     if (multi) {
-      setPicked((current) => current.includes(label2) ? current.filter((item) => item !== label2) : [...current, label2]);
+      setPicked((current) => current.includes(label3) ? current.filter((item) => item !== label3) : [...current, label3]);
       return;
     }
-    onAnswer({ selected: [label2] });
+    onAnswer({ selected: [label3] });
   };
   const submit = () => {
     if (!canSubmit || busy) return;
@@ -2487,13 +2487,13 @@ function SettledQuestion({ question, answer }) {
     "div",
     { className: "bt-q bt-q-settled", role: "group", "aria-label": prompt },
     prompt ? (0, import_react5.createElement)("div", { className: "bt-q-head" }, (0, import_react5.createElement)("div", { className: "bt-q-text" }, (0, import_react5.createElement)("p", { className: "bt-q-title" }, prompt))) : null,
-    (0, import_react5.createElement)("div", { className: "bt-q-list", role: "group", "aria-label": t("Your answer") }, chosen.map((label2, index) => {
-      const optionIndex = options.findIndex((option) => option.label === label2);
+    (0, import_react5.createElement)("div", { className: "bt-q-list", role: "group", "aria-label": t("Your answer") }, chosen.map((label3, index) => {
+      const optionIndex = options.findIndex((option) => option.label === label3);
       return (0, import_react5.createElement)(
         "div",
-        { key: `${label2}-${index}`, className: "bt-q-opt" },
+        { key: `${label3}-${index}`, className: "bt-q-opt" },
         optionIndex >= 0 ? (0, import_react5.createElement)("span", { className: "bt-key", "aria-hidden": true }, keyLetter(optionIndex)) : null,
-        (0, import_react5.createElement)("span", { className: "bt-q-body" }, (0, import_react5.createElement)("span", { className: "bt-q-label" }, label2)),
+        (0, import_react5.createElement)("span", { className: "bt-q-body" }, (0, import_react5.createElement)("span", { className: "bt-q-label" }, label3)),
         (0, import_react5.createElement)("span", { className: "bt-q-check", title: t("Selected") }, (0, import_react5.createElement)(CheckIcon))
       );
     }))
@@ -2725,7 +2725,7 @@ var HANDOFF_CSS = `
 
 // node_modules/deep-view/src/react/ui.js
 var import_react7 = require("react");
-var FallbackMarkdown = ({ text }) => (0, import_react7.createElement)("span", null, String(text ?? ""));
+var FallbackMarkdown = ({ text: text3 }) => (0, import_react7.createElement)("span", null, String(text3 ?? ""));
 var ViewUi = (0, import_react7.createContext)({ t: (key) => key, Markdown: FallbackMarkdown });
 var useViewUi = () => (0, import_react7.useContext)(ViewUi);
 var lineIcon2 = (paths) => function LineIcon() {
@@ -2743,8 +2743,8 @@ var InfoIcon2 = lineIcon2(["M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z", "M1
 function CloseIcon2() {
   return (0, import_react7.createElement)("svg", { width: 16, height: 16, viewBox: "0 0 20 20", "aria-hidden": true }, (0, import_react7.createElement)("path", { d: "M5 5l10 10M15 5L5 15", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" }));
 }
-function Segmented({ label: label2, value, className, children }) {
-  return (0, import_react7.createElement)("div", { className: className ? `dv-seg ${className}` : "dv-seg", role: "group", "aria-label": label2, "data-active": value }, children);
+function Segmented({ label: label3, value, className, children }) {
+  return (0, import_react7.createElement)("div", { className: className ? `dv-seg ${className}` : "dv-seg", role: "group", "aria-label": label3, "data-active": value }, children);
 }
 var keyLetter2 = (index) => String.fromCharCode(65 + index);
 var isTypingTarget2 = (node) => node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement || node instanceof HTMLElement && node.isContentEditable;
@@ -2861,18 +2861,18 @@ function tokenize(source) {
     }
     if (char === '"' || char === "'") {
       let end = at + 1;
-      let text = "";
+      let text3 = "";
       while (end < source.length && source[end] !== char) {
         if (source[end] === "\\" && end + 1 < source.length) {
-          text += source[end + 1];
+          text3 += source[end + 1];
           end += 2;
           continue;
         }
-        text += source[end];
+        text3 += source[end];
         end += 1;
       }
       if (end >= source.length) fail(`unclosed string at ${at + 1}`);
-      tokens.push({ kind: "string", value: text, at });
+      tokens.push({ kind: "string", value: text3, at });
       at = end + 1;
       continue;
     }
@@ -3042,18 +3042,18 @@ function show(value) {
   return String(value);
 }
 function createScope(inputs, lets) {
-  const done = /* @__PURE__ */ new Map();
+  const done2 = /* @__PURE__ */ new Map();
   const busy = /* @__PURE__ */ new Set();
   const lookup = (name) => {
     if (inputs.has(name)) return inputs.get(name);
-    if (done.has(name)) return done.get(name);
+    if (done2.has(name)) return done2.get(name);
     const tree = lets.get(name);
     if (tree === void 0) fail(`unknown name "${name}"`);
     if (busy.has(name)) fail(`"${name}" refers to itself`);
     busy.add(name);
     try {
       const value = run(tree, lookup);
-      done.set(name, value);
+      done2.set(name, value);
       return value;
     } finally {
       busy.delete(name);
@@ -3280,8 +3280,8 @@ function checkTable(node, path, ctx) {
         ctx.formulas.push({ source: cells[column]["="], path: at, kind: "scalar" });
         continue;
       }
-      const text = cellText(cells[column]);
-      if (text.length > MAX_CELL) return `${at}: ${text.length} characters exceeds the limit of ${MAX_CELL}`;
+      const text3 = cellText(cells[column]);
+      if (text3.length > MAX_CELL) return `${at}: ${text3.length} characters exceeds the limit of ${MAX_CELL}`;
     }
   }
   return void 0;
@@ -3290,8 +3290,8 @@ function checkChart(node, path, ctx) {
   if (node.kind !== void 0 && !CHART_KINDS.includes(node.kind)) return `${path}.kind: unknown chart ${quoted(node.kind)}; allowed: ${allowed(CHART_KINDS)}`;
   if (!Array.isArray(node.categories) || node.categories.length === 0) return `${path}.categories: expected a non-empty array of labels`;
   for (let index = 0; index < node.categories.length; index += 1) {
-    const label2 = node.categories[index];
-    if (typeof label2 !== "string" && !isNumber(label2)) return `${path}.categories[${index}]: expected a string`;
+    const label3 = node.categories[index];
+    if (typeof label3 !== "string" && !isNumber(label3)) return `${path}.categories[${index}]: expected a string`;
   }
   if (!Array.isArray(node.series) || node.series.length === 0) return `${path}.series: expected a non-empty array of { name?, values }`;
   if (node.kind === "donut" && node.series.length > 1) return `${path}.series: a donut takes one series; got ${node.series.length}`;
@@ -3503,8 +3503,8 @@ function kindProblem(value, kind) {
 }
 function cellText(value) {
   if (typeof value === "string") return value;
-  const text = JSON.stringify(value);
-  return typeof text === "string" ? text : "";
+  const text3 = JSON.stringify(value);
+  return typeof text3 === "string" ? text3 : "";
 }
 var compiled = /* @__PURE__ */ new WeakMap();
 var treeOf = (formula) => {
@@ -3552,8 +3552,8 @@ function resolve(value, lookup, fallback = void 0) {
   return result.error === void 0 ? result.value : fallback;
 }
 var asText = (value) => value === void 0 || value === null ? "" : show(value);
-function clip(text) {
-  const flat = String(text).replace(/\s+/g, " ").trim();
+function clip(text3) {
+  const flat = String(text3).replace(/\s+/g, " ").trim();
   return flat.length <= SUMMARY_PART ? flat : flat.slice(0, SUMMARY_PART);
 }
 var choiceLabel = (node, value) => (Array.isArray(node.options) ? node.options : []).find((option) => choiceValue(option) === value)?.label ?? asText(value);
@@ -3580,7 +3580,7 @@ function componentSummary(node, lookup) {
       const series = Array.isArray(node.series) ? node.series[0] : void 0;
       const values = Array.isArray(series?.values) ? series.values : [];
       const unit = node.unit ? ` ${node.unit}` : "";
-      return `chart: ${(Array.isArray(node.categories) ? node.categories : []).map((label2, index) => `${label2}=${value(values[index])}${unit}`).join(", ")}`;
+      return `chart: ${(Array.isArray(node.categories) ? node.categories : []).map((label3, index) => `${label3}=${value(values[index])}${unit}`).join(", ")}`;
     }
     case "progress":
       return `progress: ${node.label ? `${node.label} ` : ""}${Math.round(progressPercent(node, lookup))}%`;
@@ -3668,7 +3668,7 @@ function validateInputs(view, sent) {
 function validateOptions(node, values) {
   if (!Array.isArray(values.selected)) return { error: "values.selected: expected an array of option labels" };
   const labels = new Set((node.options ?? []).map((option) => option?.label));
-  const picked = values.selected.filter((label2) => typeof label2 === "string" && labels.has(label2));
+  const picked = values.selected.filter((label3) => typeof label3 === "string" && labels.has(label3));
   const selected = node.multi === true ? [...new Set(picked)] : picked.slice(0, 1);
   if (selected.length === 0) return { error: "values.selected: select at least one option" };
   return { selected };
@@ -3697,11 +3697,11 @@ var PALETTE = ["var(--dv-accent)", "var(--dv-ink-tangerine)", "var(--dv-ink-gree
 var colorAt = (index) => PALETTE[index % PALETTE.length];
 var TICK = 10;
 var LABEL = 11;
-var textWidth = (text, size) => [...String(text)].reduce((sum, char) => sum + (char.charCodeAt(0) > 11904 ? size : size * 0.58), 0);
-var fit = (text, room2, size) => {
-  if (textWidth(text, size) <= room2) return text;
+var textWidth = (text3, size) => [...String(text3)].reduce((sum, char) => sum + (char.charCodeAt(0) > 11904 ? size : size * 0.58), 0);
+var fit = (text3, room2, size) => {
+  if (textWidth(text3, size) <= room2) return text3;
   let out = "";
-  for (const char of String(text)) {
+  for (const char of String(text3)) {
     if (textWidth(`${out}${char}…`, size) > room2) break;
     out += char;
   }
@@ -3746,7 +3746,7 @@ function chartData(node, lookup) {
 var csvCell = (value) => /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 function chartCsv({ categories, series, unit }, t2 = (key) => key) {
   const head = ["", ...series.map((item, index) => item.name || (series.length === 1 ? unit || t2("Value") : `${t2("Series")} ${index + 1}`))];
-  const rows2 = categories.map((label2, at) => [label2, ...series.map((item) => String(item.values[at]))]);
+  const rows2 = categories.map((label3, at) => [label3, ...series.map((item) => String(item.values[at]))]);
   return [head, ...rows2].map((row) => row.map((cell) => csvCell(String(cell))).join(",")).join("\n");
 }
 function valueAxis(values, zero) {
@@ -3775,9 +3775,9 @@ function columns({ categories, series, unit, kind }, width, active, shown) {
     parts.push((0, import_react8.createElement)("text", { key: `t${tick}`, className: "dv-chart-tick", x: plot.x - 8, y: y(tick) + 3, textAnchor: "end" }, withUnit(tick, unit)));
   }
   const points = [];
-  categories.forEach((label2, at) => {
+  categories.forEach((label3, at) => {
     const cx = plot.x + band * at + band / 2;
-    parts.push((0, import_react8.createElement)("text", { key: `c${at}`, className: "dv-chart-label", x: cx, y: height - 7, textAnchor: "middle" }, fit(label2, band - 4, LABEL)));
+    parts.push((0, import_react8.createElement)("text", { key: `c${at}`, className: "dv-chart-label", x: cx, y: height - 7, textAnchor: "middle" }, fit(label3, band - 4, LABEL)));
     points.push({ x: cx, y: y(Math.max(...visible.map((item) => item.values[at]), lo)) });
   });
   if (kind === "bar") {
@@ -3820,7 +3820,7 @@ function rows({ categories, series, unit }, width, active, shown) {
   const ticks = valueAxis(visible.flatMap((item) => item.values), true);
   const lo = ticks[0];
   const hi = ticks.at(-1);
-  const labelW = Math.min(width * 0.38, Math.ceil(Math.max(...categories.map((label2) => textWidth(label2, LABEL)))) + 10);
+  const labelW = Math.min(width * 0.38, Math.ceil(Math.max(...categories.map((label3) => textWidth(label3, LABEL)))) + 10);
   const valueW = Math.ceil(Math.max(...visible.flatMap((item) => item.values).map((value) => textWidth(withUnit(value, unit), LABEL)))) + 10;
   const barH = 14;
   const rowH = 10 + visible.length * barH + (visible.length - 1) * 2;
@@ -3835,9 +3835,9 @@ function rows({ categories, series, unit }, width, active, shown) {
   }
   const points = [];
   const zero = x(Math.max(lo, Math.min(0, hi)));
-  categories.forEach((label2, at) => {
+  categories.forEach((label3, at) => {
     const rowY = plot.y + rowH * at + 5;
-    parts.push((0, import_react8.createElement)("text", { key: `c${at}`, className: "dv-chart-label", x: labelW - 10, y: rowY + (rowH - 10) / 2 + 4, textAnchor: "end" }, fit(label2, labelW - 12, LABEL)));
+    parts.push((0, import_react8.createElement)("text", { key: `c${at}`, className: "dv-chart-label", x: labelW - 10, y: rowY + (rowH - 10) / 2 + 4, textAnchor: "end" }, fit(label3, labelW - 12, LABEL)));
     visible.forEach((item, row) => {
       const value = item.values[at];
       const by = rowY + row * (barH + 2);
@@ -3951,10 +3951,10 @@ function ChartTable({ data }) {
       "table",
       null,
       (0, import_react8.createElement)("thead", null, (0, import_react8.createElement)("tr", null, (0, import_react8.createElement)("th", { scope: "col" }), heads.map((head, index) => (0, import_react8.createElement)("th", { key: index, scope: "col", className: "dv-num" }, head)))),
-      (0, import_react8.createElement)("tbody", null, categories.map((label2, at) => (0, import_react8.createElement)(
+      (0, import_react8.createElement)("tbody", null, categories.map((label3, at) => (0, import_react8.createElement)(
         "tr",
         { key: at },
-        (0, import_react8.createElement)("th", { scope: "row" }, label2),
+        (0, import_react8.createElement)("th", { scope: "row" }, label3),
         series.map((item, index) => (0, import_react8.createElement)("td", { key: index, className: "dv-num" }, withUnit(item.values[at], series.length === 1 && !item.name ? "" : unit)))
       )))
     )
@@ -3980,7 +3980,7 @@ function WidgetChart({ node, lookup, registerChart, refreshCharts }) {
     if (hidden.includes(index)) setHidden(hidden.filter((item) => item !== index));
     else if (shown.filter(Boolean).length > 1) setHidden([...hidden, index]);
   };
-  const label2 = typeof node.caption === "string" && node.caption !== "" ? node.caption : ui2.t("Chart");
+  const label3 = typeof node.caption === "string" && node.caption !== "" ? node.caption : ui2.t("Chart");
   const isDonut = kind === "donut";
   const legendBeside = isDonut && width >= 360;
   const drawn = isDonut ? donut(data, legendBeside ? width - 200 : width, active, setActive) : kind === "hbar" ? rows(data, width, active, shown) : columns(data, width, active, shown);
@@ -4081,7 +4081,7 @@ function WidgetChart({ node, lookup, registerChart, refreshCharts }) {
   return (0, import_react8.createElement)(
     "figure",
     { ref: box, className: "dv-chart", "data-kind": kind },
-    (0, import_react8.createElement)("span", { id: labelId, hidden: true }, label2),
+    (0, import_react8.createElement)("span", { id: labelId, hidden: true }, label3),
     body,
     // The SVG stays mounted under the table, so the image can still be saved from it.
     asTable ? (0, import_react8.createElement)("div", { hidden: true }, plot) : null,
@@ -4238,13 +4238,13 @@ function OptionsInput({ node, onSubmit, keys, busy = false }) {
   const [picked, setPicked] = (0, import_react10.useState)([]);
   const options = optionsOf2(node);
   const multi = node.multi === true;
-  const choose = (label2) => {
+  const choose = (label3) => {
     if (busy) return;
     if (multi) {
-      setPicked((current) => current.includes(label2) ? current.filter((item) => item !== label2) : [...current, label2]);
+      setPicked((current) => current.includes(label3) ? current.filter((item) => item !== label3) : [...current, label3]);
       return;
     }
-    onSubmit?.(node.id, { selected: [label2] });
+    onSubmit?.(node.id, { selected: [label3] });
   };
   const submit = () => {
     if (!busy && picked.length > 0) onSubmit?.(node.id, { selected: picked });
@@ -4324,8 +4324,8 @@ function SettledConfirm({ node, answer }) {
       (0, import_react10.createElement)("button", { type: "button", className: "dv-q-submit", disabled: true }, node.confirmLabel ?? ui2.t("Confirm"))
     );
   }
-  const label2 = confirmed ? node.confirmLabel ?? ui2.t("Confirm") : node.cancelLabel ?? ui2.t("Cancel");
-  return (0, import_react10.createElement)("span", { className: "dv-q-badge" }, label2);
+  const label3 = confirmed ? node.confirmLabel ?? ui2.t("Confirm") : node.cancelLabel ?? ui2.t("Cancel");
+  return (0, import_react10.createElement)("span", { className: "dv-q-badge" }, label3);
 }
 function FormInput({ node, onSubmit, busy = false }) {
   const ui2 = useViewUi();
@@ -4485,11 +4485,11 @@ function WidgetSources({ node }) {
     items.map((item, index) => (0, import_react10.createElement)("a", { key: index, role: "listitem", className: "dv-view-source", href: item.url, target: "_blank", rel: "noopener noreferrer", title: item.url }, (0, import_react10.createElement)(LinkIcon), item.label))
   );
 }
-function InputHead({ id, label: label2, value }) {
+function InputHead({ id, label: label3, value }) {
   return (0, import_react10.createElement)(
     "div",
     { className: "dv-view-input-head" },
-    (0, import_react10.createElement)("label", { htmlFor: id, className: "dv-view-input-label" }, label2),
+    (0, import_react10.createElement)("label", { htmlFor: id, className: "dv-view-input-label" }, label3),
     value !== void 0 ? (0, import_react10.createElement)("output", { htmlFor: id, className: "dv-view-input-value" }, value) : null
   );
 }
@@ -4611,8 +4611,8 @@ function WidgetNode({ node, ctx }) {
       );
     }
     case "text": {
-      const text = (0, import_react10.createElement)(ui2.Markdown, { text: asText(resolve(node.text, lookup, "")), labels: mdLabels(ui2), variant: "compact" });
-      return node.tone === "muted" ? (0, import_react10.createElement)("div", { className: "dv-view-muted" }, text) : text;
+      const text3 = (0, import_react10.createElement)(ui2.Markdown, { text: asText(resolve(node.text, lookup, "")), labels: mdLabels(ui2), variant: "compact" });
+      return node.tone === "muted" ? (0, import_react10.createElement)("div", { className: "dv-view-muted" }, text3) : text3;
     }
     case "metric":
       return (0, import_react10.createElement)(WidgetMetric, { node, lookup });
@@ -5051,13 +5051,13 @@ function viewAnswerText(view, answer) {
     });
     parts.push(...Object.entries(values.inputs).map(([key, value]) => `${labels.get(key) ?? key}=${value}`));
   }
-  const text = parts.join("; ");
-  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+  const text3 = parts.join("; ");
+  return text3.length > 200 ? `${text3.slice(0, 200)}…` : text3;
 }
-function readViewReply(text) {
+function readViewReply(text3) {
   let value;
   try {
-    value = JSON.parse(text);
+    value = JSON.parse(text3);
   } catch {
     return void 0;
   }
@@ -5073,19 +5073,19 @@ function actionSummary(answer, view) {
   const values = answer?.values;
   if (!isRecord2(values)) return "(skipped)";
   const inputs = inputsSummary(view, values.inputs);
-  let text;
-  if (Array.isArray(values.selected)) text = `selected: ${values.selected.join(", ")}`;
-  else if (typeof values.confirmed === "boolean") text = values.confirmed ? "confirmed" : "cancelled";
-  else if (isRecord2(values.fields)) text = Object.entries(values.fields).map(([key, value]) => `${key}: ${value}`).join("; ");
-  else if (inputs !== "") text = "";
-  else text = typeof answer.action === "string" && answer.action !== "" ? answer.action : "(skipped)";
-  if (inputs !== "") text = text === "" ? inputs : `${text}; ${inputs}`;
-  if (text === "") text = "(empty)";
-  return text.length > 500 ? text.slice(0, 500) : text;
+  let text3;
+  if (Array.isArray(values.selected)) text3 = `selected: ${values.selected.join(", ")}`;
+  else if (typeof values.confirmed === "boolean") text3 = values.confirmed ? "confirmed" : "cancelled";
+  else if (isRecord2(values.fields)) text3 = Object.entries(values.fields).map(([key, value]) => `${key}: ${value}`).join("; ");
+  else if (inputs !== "") text3 = "";
+  else text3 = typeof answer.action === "string" && answer.action !== "" ? answer.action : "(skipped)";
+  if (inputs !== "") text3 = text3 === "" ? inputs : `${text3}; ${inputs}`;
+  if (text3 === "") text3 = "(empty)";
+  return text3.length > 500 ? text3.slice(0, 500) : text3;
 }
-function viewReplyText(text) {
-  const reply = readViewReply(text);
-  if (reply === void 0) return text;
+function viewReplyText(text3) {
+  const reply = readViewReply(text3);
+  if (reply === void 0) return text3;
   return reply.views.map((view) => {
     const answer = reply.answers.find((item) => item.id === view.id);
     return `${view.title === "" ? "[Answer to view card]" : `[Answer to view card] ${view.title}`}
@@ -5123,13 +5123,13 @@ function PendingView({ sessionId, view, actions, inline }) {
     (0, import_react11.createElement)(Card, { key: view.id, title: view.title ?? "", view: view.view, onSubmit, onDismiss, busy: flying, raised: !inline })
   );
 }
-function WidgetCell({ sessionId, callId, args, done, isError, roster, actions, heldCards }) {
+function WidgetCell({ sessionId, callId, args, done: done2, isError, roster, actions, heldCards }) {
   const record = roster.views?.[sessionId];
   if (record !== void 0 && record.callId === callId) {
     if (heldCards?.[heldCardKey("view", record.id)] > 0) return (0, import_react11.createElement)(CellEmpty);
     return (0, import_react11.createElement)(PendingView, { sessionId, view: record, actions, inline: true });
   }
-  if (done && isError) return (0, import_react11.createElement)(CellEmpty, { className: "bt-q-gone" });
+  if (done2 && isError) return (0, import_react11.createElement)(CellEmpty, { className: "bt-q-gone" });
   const shown = checkShownView(args?.text?.("title"), args?.value?.("view"));
   if (shown.error !== void 0 || shown.interactive || args?.value?.("await_reply") === true) {
     return (0, import_react11.createElement)(CellEmpty, { className: "bt-q-gone" });
@@ -5351,11 +5351,11 @@ function useGlide(key, { axis = "x", selector = CHOSEN, lead = SPRING_LEAD, trai
   }, []);
   return { box, thumb };
 }
-function Segmented2({ label: label2, value, className, children }) {
+function Segmented2({ label: label3, value, className, children }) {
   const glide = useGlide(value);
   return (0, import_react13.createElement)(
     "div",
-    { ref: glide.box, className: className ? `bt-seg ${className}` : "bt-seg", role: "group", "aria-label": label2 },
+    { ref: glide.box, className: className ? `bt-seg ${className}` : "bt-seg", role: "group", "aria-label": label3 },
     (0, import_react13.createElement)("span", { ref: glide.thumb, className: "bt-thumb", "aria-hidden": true }),
     children
   );
@@ -5458,7 +5458,7 @@ var scopeLabel = (scope, roster) => {
   return names.length === 0 ? t("No Bot") : names.join(t(" and "));
 };
 var when = (time) => Number.isFinite(time) ? new Date(time).toLocaleString(dateLocale(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
-function MaskedInput({ value, onChange, onEnter, label: label2, autoFocus = false }) {
+function MaskedInput({ value, onChange, onEnter, label: label3, autoFocus = false }) {
   return (0, import_react14.createElement)("input", {
     className: "bt-secret-input",
     type: MASK_BY_CSS ? "text" : "password",
@@ -5473,7 +5473,7 @@ function MaskedInput({ value, onChange, onEnter, label: label2, autoFocus = fals
     "data-lpignore": "true",
     "data-bwignore": "",
     "data-form-type": "other",
-    "aria-label": label2,
+    "aria-label": label3,
     placeholder: t("Paste or type the key"),
     onChange: (event) => onChange(event.target.value),
     onKeyDown: (event) => {
@@ -5489,14 +5489,14 @@ function ScopeSwitch({ value, onChange, bot }) {
     "div",
     { className: "bt-secret-scope", role: "radiogroup", "aria-label": t("Who may use it") },
     (0, import_react14.createElement)("span", { className: "bt-secret-glide", "data-at": value === "all" ? 0 : 1, "aria-hidden": true }),
-    options.map(([id, text]) => (0, import_react14.createElement)("button", {
+    options.map(([id, text3]) => (0, import_react14.createElement)("button", {
       key: id,
       type: "button",
       role: "radio",
       "aria-checked": value === id,
       className: "bt-secret-seg",
       onClick: () => onChange(id)
-    }, text))
+    }, text3))
   );
 }
 function SecretHead({ bot, title, detail, name, onClose }) {
@@ -5591,10 +5591,10 @@ function SecretCard({ sessionId, bot, request, roster, actions, inline = false }
 }
 function SettledSecret({ bot, request, roster }) {
   const canceled = request.status === "canceled";
-  const text = canceled ? t("{bot} asked for {name}", { bot: bot.name, name: request.name }) : request.status === "allowed" ? t("Allowed {bot} to use {name}", { bot: bot.name, name: request.name }) : t("Saved {name}", { name: request.name });
+  const text3 = canceled ? t("{bot} asked for {name}", { bot: bot.name, name: request.name }) : request.status === "allowed" ? t("Allowed {bot} to use {name}", { bot: bot.name, name: request.name }) : t("Saved {name}", { name: request.name });
   return (0, import_react14.createElement)(
     "div",
-    { className: "bt-q bt-q-settled bt-secret bt-secret-done", role: "group", "aria-label": text, "data-status": request.status },
+    { className: "bt-q bt-q-settled bt-secret bt-secret-done", role: "group", "aria-label": text3, "data-status": request.status },
     (0, import_react14.createElement)(
       "div",
       { className: "bt-q-head" },
@@ -5602,7 +5602,7 @@ function SettledSecret({ bot, request, roster }) {
       (0, import_react14.createElement)("div", { className: "bt-q-text" }, (0, import_react14.createElement)(
         "p",
         { className: "bt-q-title" },
-        text,
+        text3,
         canceled ? null : (0, import_react14.createElement)("span", { className: "bt-secret-scope-tag" }, ` · ${scopeLabel(request.scope, roster)}`)
       )),
       canceled ? (0, import_react14.createElement)("span", { className: "bt-q-badge" }, t("Canceled")) : (0, import_react14.createElement)("span", { className: "bt-q-check bt-secret-check", title: t("Done") }, (0, import_react14.createElement)(CheckIcon))
@@ -5612,16 +5612,16 @@ function SettledSecret({ bot, request, roster }) {
 function RequestView({ sessionId, bot, request, roster, actions }) {
   return request.status === "pending" ? (0, import_react14.createElement)(SecretCard, { key: JSON.stringify([sessionId, request.id, request.kind]), sessionId, bot, request, roster, actions, inline: true }) : (0, import_react14.createElement)(SettledSecret, { bot, request, roster });
 }
-function SecretToolCell({ sessionId, callId, name, done, content, roster, actions, heldCards = NONE }) {
+function SecretToolCell({ sessionId, callId, name, done: done2, content, roster, actions, heldCards = NONE }) {
   const bot = roster.byId[sessionId];
   if (!bot) return (0, import_react14.createElement)(CellEmpty);
   const request = (roster.secretRequests?.[bot.id] ?? []).find((entry) => entry.callId === callId && (entry.sessionId ?? sessionId) === sessionId);
   if (request?.status === "pending" && heldCards[heldCardKey("secret", request.id)] > 0) return (0, import_react14.createElement)(CellEmpty);
   if (request) return (0, import_react14.createElement)("div", { className: "bt-q-inline" }, (0, import_react14.createElement)(RequestView, { sessionId, bot, request, roster, actions }));
-  if (done && /already saved/.test(contentText(content))) {
+  if (done2 && /already saved/.test(contentText(content))) {
     return (0, import_react14.createElement)("div", { className: "bt-event" }, (0, import_react14.createElement)("span", { className: "bt-secret-event" }, (0, import_react14.createElement)(KeyIcon), t("{bot} is using {name}", { bot: bot.name, name: name ?? t("a saved key") })));
   }
-  if (done && contentText(content).startsWith("No card can be shown now")) {
+  if (done2 && contentText(content).startsWith("No card can be shown now")) {
     return (0, import_react14.createElement)("div", { className: "bt-event" }, (0, import_react14.createElement)("span", { className: "bt-secret-event" }, (0, import_react14.createElement)(KeyIcon), t("{bot} could not ask for a key: this window can only view the team", { bot: bot.name })));
   }
   return (0, import_react14.createElement)(CellEmpty);
@@ -5649,11 +5649,11 @@ function ScopeEditor({ secret, roster, onSave }) {
     (0, import_react14.createElement)(
       "div",
       { className: "bt-secret-radios", role: "radiogroup", "aria-label": t("Who may use {name}", { name: secret.name }) },
-      [["all", t("All Bots")], ["some", t("Chosen Bots")]].map(([id, text]) => (0, import_react14.createElement)(
+      [["all", t("All Bots")], ["some", t("Chosen Bots")]].map(([id, text3]) => (0, import_react14.createElement)(
         "label",
         { key: id, className: "bt-secret-radio" },
         (0, import_react14.createElement)("input", { type: "radio", name: `scope-${secret.name}`, checked: mode === id, onChange: () => setMode(id) }),
-        text
+        text3
       ))
     ),
     mode === "some" ? (0, import_react14.createElement)("div", { className: "bt-secret-bots" }, roster.bots.map((bot) => (0, import_react14.createElement)("button", {
@@ -5896,28 +5896,28 @@ var stepReasoning = (step) => step.blocks.filter((block) => block.kind === "reas
 // src/shared/group-replies.js
 var RELAY_LIST = /"replies"\s*:\s*\[/;
 var PRUNE_MARKER = /\[\.\.\. tool result middle pruned \.\.\.\]/;
-function parseReplies(text) {
+function parseReplies(text3) {
   try {
-    return { replies: JSON.parse(text).replies ?? [], broken: false };
+    return { replies: JSON.parse(text3).replies ?? [], broken: false };
   } catch {
   }
   const replies = [];
-  const head = RELAY_LIST.exec(text);
+  const head = RELAY_LIST.exec(text3);
   if (head) {
-    for (const piece of text.slice(head.index + head[0].length).split(PRUNE_MARKER)) {
+    for (const piece of text3.slice(head.index + head[0].length).split(PRUNE_MARKER)) {
       const first = piece.indexOf('{"');
       if (first !== -1) scanReplies(piece, first, replies);
     }
   }
   return { replies, broken: true };
 }
-function scanReplies(text, start, replies) {
+function scanReplies(text3, start, replies) {
   let depth = 0;
   let from = -1;
   let inString = false;
   let escaped = false;
-  for (let i = start; i < text.length; i += 1) {
-    const ch = text[i];
+  for (let i = start; i < text3.length; i += 1) {
+    const ch = text3[i];
     if (inString) {
       if (escaped) escaped = false;
       else if (ch === "\\") escaped = true;
@@ -5935,7 +5935,7 @@ function scanReplies(text, start, replies) {
       depth -= 1;
       if (depth === 0 && from >= 0) {
         try {
-          replies.push(JSON.parse(text.slice(from, i + 1)));
+          replies.push(JSON.parse(text3.slice(from, i + 1)));
         } catch {
         }
         from = -1;
@@ -5969,13 +5969,13 @@ var closes = (line, open) => {
   const marker = CLOSE.exec(line)?.[1];
   return marker !== void 0 && marker[0] === open[0] && marker.length >= open.length;
 };
-function cutAt(text, end) {
-  const code = text.charCodeAt(end - 1);
-  return text.slice(0, code >= 55296 && code <= 56319 ? end - 1 : end);
+function cutAt(text3, end) {
+  const code = text3.charCodeAt(end - 1);
+  return text3.slice(0, code >= 55296 && code <= 56319 ? end - 1 : end);
 }
-function moreLines(text, max) {
+function moreLines(text3, max) {
   let lines = 1;
-  for (let at = text.indexOf("\n"); at !== -1; at = text.indexOf("\n", at + 1)) {
+  for (let at = text3.indexOf("\n"); at !== -1; at = text3.indexOf("\n", at + 1)) {
     if (++lines > max) return true;
   }
   return false;
@@ -6003,9 +6003,9 @@ function blockCode(body, fenceLine, open) {
   }
   return code.join("\n");
 }
-function foldView(text, limit = FOLD_AT, markdown = true) {
-  if (text.length <= limit.chars && !moreLines(text, limit.lines)) return null;
-  const body = text.replace(/^(\s*\n)+/, "");
+function foldView(text3, limit = FOLD_AT, markdown = true) {
+  if (text3.length <= limit.chars && !moreLines(text3, limit.lines)) return null;
+  const body = text3.replace(/^(\s*\n)+/, "");
   if (body.trim() === "") return null;
   let head = body.split("\n", PREVIEW_LINES).join("\n");
   if (head.length > PREVIEW_CHARS) {
@@ -6033,19 +6033,19 @@ ${opened.marker}`,
     code: blockCode(body, opened.line, opened.marker)
   };
 }
-function foldPreview(text, limit = FOLD_AT, markdown = true) {
-  return foldView(text, limit, markdown)?.head ?? null;
+function foldPreview(text3, limit = FOLD_AT, markdown = true) {
+  return foldView(text3, limit, markdown)?.head ?? null;
 }
-var stripLongNote = (text) => text.replace(/^\[A long message: \d+ characters\.[^\]\n]*\]\n/, "");
-function useFold(text, { limit = FOLD_AT, whole, live = false, markdown = true } = {}) {
+var stripLongNote = (text3) => text3.replace(/^\[A long message: \d+ characters\.[^\]\n]*\]\n/, "");
+function useFold(text3, { limit = FOLD_AT, whole, live = false, markdown = true } = {}) {
   const [open, setOpen] = (0, import_react15.useState)(false);
   const [read2, setRead] = (0, import_react15.useState)();
-  const cut = whole !== void 0 && whole.length > text.length;
-  const view = (0, import_react15.useMemo)(() => live ? null : foldView(text, cut ? ALWAYS : limit, markdown), [text, live, limit, markdown, cut]);
-  if (view === null) return { shown: text, control: null };
+  const cut = whole !== void 0 && whole.length > text3.length;
+  const view = (0, import_react15.useMemo)(() => live ? null : foldView(text3, cut ? ALWAYS : limit, markdown), [text3, live, limit, markdown, cut]);
+  if (view === null) return { shown: text3, control: null };
   const code = cut ? void 0 : view.code;
   const shown = code === void 0 ? view.head : view.prose;
-  const count = (cut ? whole.length : text.length).toLocaleString();
+  const count = (cut ? whole.length : text3.length).toLocaleString();
   if (!open) {
     const show2 = async () => {
       setOpen(true);
@@ -6056,9 +6056,9 @@ function useFold(text, { limit = FOLD_AT, whole, live = false, markdown = true }
     return { shown, folded: true, code, codeHead: view.codeHead, control: (0, import_react15.createElement)("span", { className: "bt-fold" }, (0, import_react15.createElement)("button", { type: "button", className: "bt-more", onClick: show2 }, t("Show all · {count} characters", { count }))) };
   }
   const loaded = typeof read2?.text === "string" ? read2 : void 0;
-  const note = !cut || read2 === void 0 || read2 === "loading" || loaded?.whole ? null : loaded !== void 0 && loaded.text.length > text.length ? t("Showing the first {count} characters", { count: loaded.text.length.toLocaleString() }) : t("Only the start of this message is kept here");
+  const note = !cut || read2 === void 0 || read2 === "loading" || loaded?.whole ? null : loaded !== void 0 && loaded.text.length > text3.length ? t("Showing the first {count} characters", { count: loaded.text.length.toLocaleString() }) : t("Only the start of this message is kept here");
   return {
-    shown: loaded?.text ?? text,
+    shown: loaded?.text ?? text3,
     control: (0, import_react15.createElement)(
       "span",
       { className: "bt-fold" },
@@ -6271,8 +6271,8 @@ var import_react16 = require("react");
 var mdLabels2 = () => ({ code: { copyLabel: t("Copy"), copiedLabel: t("Copied") }, footnotes: t("Footnotes") });
 function failureText(card) {
   const raw = typeof card.error === "string" ? card.error : card.error?.message;
-  const text = typeof raw === "string" ? raw.trim() : "";
-  return text !== "" ? hostText(text) : t("Could not answer.");
+  const text3 = typeof raw === "string" ? raw.trim() : "";
+  return text3 !== "" ? hostText(text3) : t("Could not answer.");
 }
 function stampOf(card) {
   const time = Number.isFinite(card.finishedAt) ? card.finishedAt : card.createdAt;
@@ -6512,11 +6512,11 @@ function Bubbles({ texts: texts2, roster, selfId, actions, streaming, sessionId,
   return (0, import_react17.createElement)(
     "div",
     { className: "bt-astack", "data-lead": lead ? "" : void 0, onClickCapture: onClick },
-    texts2.map((text, index) => {
+    texts2.map((text3, index) => {
       const last = index === texts2.length - 1;
       return (0, import_react17.createElement)(Bubble, {
         key: index,
-        text,
+        text: text3,
         index,
         roster,
         selfId,
@@ -6554,8 +6554,8 @@ var foldArea = (body, code, codeHead, actions) => code === void 0 ? body : (0, i
   (0, import_react17.createElement)("pre", { className: "bt-fold-pre" }, (0, import_react17.createElement)("code", null, codeHead)),
   (0, import_react17.createElement)(FoldCodeCopy, { code, actions })
 );
-function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, mentions, fold, picked, live, lead, whole }) {
-  const { shown, folded, control, code, codeHead } = useFold(text, { limit: fold, whole, live });
+function Bubble({ text: text3, index, roster, selfId, actions, sessionId, msgKey, mentions, fold, picked, live, lead, whole }) {
+  const { shown, folded, control, code, codeHead } = useFold(text3, { limit: fold, whole, live });
   const key = msgKey ? `${msgKey}:${index}` : void 0;
   const body = shown === "" ? null : (0, import_react17.createElement)(import_dsh_client_ui_primitives.MarkdownText, { text: linkMentions(shown, roster.bots, selfId), streaming: live, labels: mdLabels3(), variant: "compact", fileMentions: mentions });
   const row = (0, import_react17.useRef)(null);
@@ -6579,7 +6579,7 @@ function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, menti
         control ? (0, import_react17.createElement)("div", { className: "bt-fold-body" }, area) : area,
         control
       ),
-      live ? null : (0, import_react17.createElement)(MessageTools, { text: folded ? text : shown, name: roster.byId[selfId]?.name ?? t("Bot"), sessionId, react: key ? (emoji) => actions.toggleReaction(msgKey, index, emoji) : void 0, actions, open: toolsOpen })
+      live ? null : (0, import_react17.createElement)(MessageTools, { text: folded ? text3 : shown, name: roster.byId[selfId]?.name ?? t("Bot"), sessionId, react: key ? (emoji) => actions.toggleReaction(msgKey, index, emoji) : void 0, actions, open: toolsOpen })
     ),
     picked.length ? (0, import_react17.createElement)("div", { className: "bt-reacts" }, picked.map((emoji) => (0, import_react17.createElement)("button", {
       key: emoji,
@@ -6615,7 +6615,7 @@ function useDismiss(open, close, refs) {
     };
   }, [open]);
 }
-function MessageTools({ text, name, sessionId, react, actions, open: tapped }) {
+function MessageTools({ text: text3, name, sessionId, react, actions, open: tapped }) {
   const [panel, setPanel] = (0, import_react17.useState)(null);
   const [copied, setCopied] = (0, import_react17.useState)(false);
   const tools = (0, import_react17.useRef)(null);
@@ -6637,26 +6637,26 @@ function MessageTools({ text, name, sessionId, react, actions, open: tapped }) {
     return panel.kind === "react" ? { left: Math.min(Math.max(rect.left + rect.width / 2, STRIP_HALF), scopedWindow.innerWidth - STRIP_HALF), top: rect.top - 6, "--bt-origin": "bottom center" } : { left: Math.min(rect.left, scopedWindow.innerWidth - 208), ...below ? { top: rect.bottom + 4 } : { bottom: viewBottom() - rect.top + 4, "--bt-origin": "bottom left" } };
   }, [panel, tick]);
   const copy3 = () => {
-    void navigator.clipboard?.writeText(text).then(() => {
+    void navigator.clipboard?.writeText(text3).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1e3);
     });
   };
   const download2 = () => {
-    const url = URL.createObjectURL(new Blob([text], { type: "text/markdown" }));
+    const url = URL.createObjectURL(new Blob([text3], { type: "text/markdown" }));
     const link = Object.assign(scopedDocument.createElement("a"), { href: url, download: `${name}-message.md` });
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1e3);
   };
-  const item = (label2, Icon, run2) => (0, import_react17.createElement)("button", { key: label2, type: "button", role: "menuitem", onClick: () => {
+  const item = (label3, Icon, run2) => (0, import_react17.createElement)("button", { key: label3, type: "button", role: "menuitem", onClick: () => {
     close();
     run2();
-  } }, (0, import_react17.createElement)(Icon), label2);
+  } }, (0, import_react17.createElement)(Icon), label3);
   return (0, import_react17.createElement)(
     "div",
     { ref: tools, className: "bt-tools", "data-open": panel !== null || tapped || void 0 },
     react ? (0, import_react17.createElement)("button", { type: "button", className: "bt-tool", "aria-label": t("Add reaction"), title: t("Add reaction"), "aria-expanded": panel?.kind === "react", onClick: (event) => open("react", event) }, (0, import_react17.createElement)(SmileIcon)) : null,
-    sessionId ? (0, import_react17.createElement)("button", { type: "button", className: "bt-tool", "aria-label": t("Reply"), title: t("Reply"), onClick: () => actions.quote(sessionId, text) }, (0, import_react17.createElement)(ReplyIcon)) : null,
+    sessionId ? (0, import_react17.createElement)("button", { type: "button", className: "bt-tool", "aria-label": t("Reply"), title: t("Reply"), onClick: () => actions.quote(sessionId, text3) }, (0, import_react17.createElement)(ReplyIcon)) : null,
     (0, import_react17.createElement)("button", { type: "button", className: "bt-tool", "aria-label": t("More message actions"), title: t("More"), "aria-haspopup": "menu", "aria-expanded": panel?.kind === "more", onClick: (event) => open("more", event) }, copied ? (0, import_react17.createElement)(CheckIcon) : (0, import_react17.createElement)(DotsIcon)),
     panel?.kind === "react" ? createPortal((0, import_react17.createElement)(
       "div",
@@ -6694,7 +6694,7 @@ function useThinkingMs({ sessionId, turn, settledSteps, skip }) {
   return ms;
 }
 var rowViews = /* @__PURE__ */ new Map();
-function ThinkingRow({ text, live, at, ms, viewKey }) {
+function ThinkingRow({ text: text3, live, at, ms, viewKey }) {
   const box = (0, import_react17.useRef)(null);
   const view = (0, import_react17.useRef)(rowViews.get(viewKey));
   const atEnd = (0, import_react17.useRef)(view.current?.atEnd ?? true);
@@ -6724,7 +6724,7 @@ function ThinkingRow({ text, live, at, ms, viewKey }) {
     if (atEnd.current) el.scrollTop = el.scrollHeight;
     else if (restore?.top !== void 0) el.scrollTop = restore.top;
     measure();
-  }, [text, open]);
+  }, [text3, open]);
   const title = live ? t("Thinking") : t("Thought it through");
   return (0, import_react17.createElement)(
     "details",
@@ -6736,7 +6736,7 @@ function ThinkingRow({ text, live, at, ms, viewKey }) {
       live && at !== void 0 ? (0, import_react17.createElement)(Elapsed, { at, className: "bt-think-time" }) : null,
       !live && ms !== void 0 ? (0, import_react17.createElement)("span", { className: "bt-think-time" }, `· ${elapsedLabel(Math.max(1e3, ms))}`) : null
     ),
-    (0, import_react17.createElement)("div", { ref: box, className: "bt-think-text", role: "region", "aria-label": title, tabIndex: 0, "data-fade": fade, onScroll: measure }, text)
+    (0, import_react17.createElement)("div", { ref: box, className: "bt-think-text", role: "region", "aria-label": title, tabIndex: 0, "data-fade": fade, onScroll: measure }, text3)
   );
 }
 function useFileMentions({ node, openFile, fileMentions, useTurnData }) {
@@ -6834,7 +6834,7 @@ function SpeakerHead({ bot, time }) {
     Number.isFinite(time) ? (0, import_react17.createElement)("span", { className: "bt-group-time", title: clockLabel(time) }, messageClock(time)) : null
   );
 }
-function GroupMessage({ bot, text, texts: texts2 = [text], room: room2, roster, actions, msgKey, useUi, whole, time, duration }) {
+function GroupMessage({ bot, text: text3, texts: texts2 = [text3], room: room2, roster, actions, msgKey, useUi, whole, time, duration }) {
   const lead = (0, import_react17.createElement)(
     "button",
     { type: "button", className: "bt-lead", "aria-label": t("Open {name}'s chat", { name: bot.name }), onClick: () => actions.openSession(bot.id) },
@@ -6902,19 +6902,19 @@ function MemoryEvent({ sessionId, scope, tool, result, failed, code, roster, act
   }
   if (!failed && MEMORY_SAVED.test(result)) {
     if (!target) return (0, import_react17.createElement)(CellEmpty);
-    const label3 = team ? t("Team memory updated") : target === self ? t("Memory updated") : t("Updated {name}'s memory", { name: target.name });
+    const label4 = team ? t("Team memory updated") : target === self ? t("Memory updated") : t("Updated {name}'s memory", { name: target.name });
     return (0, import_react17.createElement)(
       "div",
       { className: "bt-event" },
-      (0, import_react17.createElement)("button", { type: "button", title: result, onClick: () => actions.openMemory(target.id) }, (0, import_react17.createElement)(MemoryIcon), label3)
+      (0, import_react17.createElement)("button", { type: "button", title: result, onClick: () => actions.openMemory(target.id) }, (0, import_react17.createElement)(MemoryIcon), label4)
     );
   }
   const reason = memoryFailure(code);
-  const label2 = failed ? tool === "forget" ? t("Couldn't remove from memory") : t("Couldn't save to memory") : t("Memory not changed");
+  const label3 = failed ? tool === "forget" ? t("Couldn't remove from memory") : t("Couldn't save to memory") : t("Memory not changed");
   return (0, import_react17.createElement)(
     "div",
     { className: "bt-event bt-event-error", role: "status", title: code },
-    (0, import_react17.createElement)("span", null, (0, import_react17.createElement)(MemoryIcon), label2),
+    (0, import_react17.createElement)("span", null, (0, import_react17.createElement)(MemoryIcon), label3),
     reason ? (0, import_react17.createElement)("span", null, ` · ${reason}`) : null,
     panel === void 0 ? null : (0, import_react17.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: () => actions.openMemory(panel) }, t("Manage"))
   );
@@ -7148,10 +7148,10 @@ function TriggerCell({ node, sessionId, useRoster, useSessions, useTurnClock, us
         const room2 = roster.roomsById[sessionId];
         const poster = roster.byId[source.senderSessionId] ?? { id: source.senderSessionId, name: source.senderName ?? t("a Bot"), color: "gray" };
         const file = source.length === void 0 ? void 0 : (data.content ?? []).find((block) => block?.type === "file")?.attachment;
-        const text = stripHeader(contentText(data.content));
+        const text3 = stripHeader(contentText(data.content));
         return (0, import_react17.createElement)(GroupMessage, {
           bot: poster,
-          text: file ? stripLongNote(text) : text,
+          text: file ? stripLongNote(text3) : text3,
           room: room2,
           roster,
           actions,
@@ -7243,7 +7243,7 @@ function TurnTailCell({ turn: location2, sessionId, useTurnClock, useUi, actions
   (0, import_react17.useEffect)(() => {
     actions.noteTurnTime(sessionId, turn, "end", time);
   }, [sessionId, turn, time]);
-  const label2 = useTurnClock((state) => {
+  const label3 = useTurnClock((state) => {
     const start = nextTurnStart(state[sessionId] ?? {}, turn);
     return start !== void 0 && start - time >= SEPARATOR_GAP_MS ? clockLabel(start) : "";
   });
@@ -7253,11 +7253,11 @@ function TurnTailCell({ turn: location2, sessionId, useTurnClock, useUi, actions
     const start = nextTurnStart(state[sessionId] ?? {}, turn);
     return start !== void 0 && start > visit.seen && start <= visit.entered;
   });
-  if (!label2 && !fresh) return null;
+  if (!label3 && !fresh) return null;
   return (0, import_react17.createElement)(
     import_react17.Fragment,
     null,
-    label2 ? (0, import_react17.createElement)("div", { className: "bt-time-sep", role: "separator" }, label2) : null,
+    label3 ? (0, import_react17.createElement)("div", { className: "bt-time-sep", role: "separator" }, label3) : null,
     fresh ? (0, import_react17.createElement)(NewDivider) : null
   );
 }
@@ -7342,8 +7342,8 @@ function workPhrase(doing) {
   const own = (said || note)?.replace(/[\s.。…]+$/u, "");
   if (own) return own;
   if (!tool) return t("Thinking about it");
-  const label2 = toolActivity(tool, () => void 0, () => void 0)?.label ?? t("On it");
-  return target ? `${label2} · ${target}` : label2;
+  const label3 = toolActivity(tool, () => void 0, () => void 0)?.label ?? t("On it");
+  return target ? `${label3} · ${target}` : label3;
 }
 function useLiveNote(actions, sessionId, id, entry) {
   const key = entry ? JSON.stringify(entry) : "";
@@ -7414,10 +7414,10 @@ function RelayEvent({ reply, bot, sessionId, actions }) {
   }
   return null;
 }
-function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi, useWork, showActivity = true }) {
+function GroupReplies({ sessionId, callId, done: done2, content, roster, actions, useUi, useWork, showActivity = true }) {
   const [live, setLive] = (0, import_react17.useState)({ replies: [], speaking: [] });
   (0, import_react17.useEffect)(() => {
-    if (done) return void 0;
+    if (done2) return void 0;
     let stop = false;
     let timer;
     let seen = "";
@@ -7437,15 +7437,15 @@ function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi
       stop = true;
       clearTimeout(timer);
     };
-  }, [done, sessionId, callId]);
+  }, [done2, sessionId, callId]);
   let replies = live.replies;
   let broken = false;
-  if (done) {
+  if (done2) {
     const parsed = parseReplies(contentText(content));
     replies = parsed.replies.length ? parsed.replies : live.replies;
     broken = parsed.broken;
   }
-  const pending = !showActivity || done ? [] : live.speaking;
+  const pending = !showActivity || done2 ? [] : live.speaking;
   const doing = JSON.parse(useWork?.((work) => JSON.stringify(pending.map((id) => {
     const tool = work.bots?.[id]?.tool;
     return tool ? [tool, workPhrase(work.bots[id])] : [];
@@ -7511,31 +7511,31 @@ function useShownCards(actions, sessionId, callIds) {
 }
 function renderCall(call2, { sessionId, roster, actions, useUi, useWork, findBot, heldCards, hooks }) {
   const tool = toolName(call2);
-  const done = call2.kind === "tool-result";
+  const done2 = call2.kind === "tool-result";
   const { text: arg, value: argValue } = toolArgs(call2);
   const self = roster.byId[sessionId];
   switch (tool) {
     case "message_bot": {
       const target = findBot(arg("to")) ?? { name: arg("to") ?? "…", color: "gray" };
-      if (done && call2.isError) return (0, import_react17.createElement)("div", { className: "bt-event" }, t("Couldn't message {name}", { name: target.name }));
+      if (done2 && call2.isError) return (0, import_react17.createElement)("div", { className: "bt-event" }, t("Couldn't message {name}", { name: target.name }));
       return (0, import_react17.createElement)(EventLine, { prefix: t("Messaged"), bots: [target], onOpen: (bot) => bot.id && actions.openExchange(self?.id ?? sessionId, bot.id), whole: true });
     }
     case "stop_bot": {
       const target = findBot(arg("bot")) ?? { name: arg("bot") ?? "…", color: "gray" };
-      if (done && call2.isError) return (0, import_react17.createElement)("div", { className: "bt-event" }, t("Couldn't stop {name}", { name: target.name }));
+      if (done2 && call2.isError) return (0, import_react17.createElement)("div", { className: "bt-event" }, t("Couldn't stop {name}", { name: target.name }));
       return (0, import_react17.createElement)(EventLine, { prefix: t("Stopped"), bots: [target], onOpen: (bot) => bot.id && actions.openExchange(self?.id ?? sessionId, bot.id), whole: true });
     }
     case "create_bot": {
       const created = findBot(arg("name"));
-      if (!done || created === void 0) return (0, import_react17.createElement)(CellEmpty);
+      if (!done2 || created === void 0) return (0, import_react17.createElement)(CellEmpty);
       return (0, import_react17.createElement)(EventLine, { prefix: t("Created"), bots: [created], onOpen: (bot) => actions.openSession(bot.id) });
     }
     case "update_bot": {
       const target = findBot(arg("name")) ?? findBot(arg("bot")) ?? (arg("bot") ? void 0 : self);
-      return done && target ? (0, import_react17.createElement)(EventLine, { prefix: t("Updated"), bots: [target], onOpen: (bot) => actions.openSession(bot.id) }) : (0, import_react17.createElement)(CellEmpty);
+      return done2 && target ? (0, import_react17.createElement)(EventLine, { prefix: t("Updated"), bots: [target], onOpen: (bot) => actions.openSession(bot.id) }) : (0, import_react17.createElement)(CellEmpty);
     }
     case "group_relay":
-      return (0, import_react17.createElement)(GroupReplies, { sessionId, callId: call2.callId, done, content: call2.content, roster, actions, useUi, useWork });
+      return (0, import_react17.createElement)(GroupReplies, { sessionId, callId: call2.callId, done: done2, content: call2.content, roster, actions, useUi, useWork });
     case "create_group":
     case "update_group":
     case "delete_group":
@@ -7546,7 +7546,7 @@ function renderCall(call2, { sessionId, roster, actions, useUi, useWork, findBot
         delete_group: ["Deleted group", "Couldn't delete the group"],
         post_to_group: ["Posted in", "Couldn't post in the group"]
       }[tool];
-      if (!done) return (0, import_react17.createElement)(CellEmpty);
+      if (!done2) return (0, import_react17.createElement)(CellEmpty);
       const result = contentText(call2.content);
       const named = /^(Created group|Updated|Nothing changed in|Deleted|Posted in) "([^"]+)"/.exec(result);
       if (call2.isError || !named) return (0, import_react17.createElement)("div", { className: "bt-event", title: result }, t(verbs[1]));
@@ -7561,13 +7561,13 @@ function renderCall(call2, { sessionId, roster, actions, useUi, useWork, findBot
       return (0, import_react17.createElement)(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true });
     }
     case "show_view":
-      return (0, import_react17.createElement)(WidgetCell, { sessionId, callId: call2.callId, args: { text: arg, value: argValue }, done, isError: call2.isError, roster, actions, heldCards });
+      return (0, import_react17.createElement)(WidgetCell, { sessionId, callId: call2.callId, args: { text: arg, value: argValue }, done: done2, isError: call2.isError, roster, actions, heldCards });
     case "request_secret":
-      return (0, import_react17.createElement)(SecretToolCell, { sessionId, callId: call2.callId, name: arg("name"), done, content: call2.content, roster, actions, heldCards });
+      return (0, import_react17.createElement)(SecretToolCell, { sessionId, callId: call2.callId, name: arg("name"), done: done2, content: call2.content, roster, actions, heldCards });
     case "browser_handoff":
       return (0, import_react17.createElement)(HandoffCall, { sessionId, callId: call2.callId, roster, actions, heldCards, hooks });
     case "ask_user_question": {
-      if (!done) return (0, import_react17.createElement)(CellEmpty);
+      if (!done2) return (0, import_react17.createElement)(CellEmpty);
       let parsed = null;
       try {
         parsed = JSON.parse(contentText(call2.content));
@@ -7580,13 +7580,13 @@ function renderCall(call2, { sessionId, roster, actions, useUi, useWork, findBot
       return (0, import_react17.createElement)("div", { className: "bt-q-inline" }, (0, import_react17.createElement)(SettledQuestion, { question, answer }));
     }
     case "read_group_chat": {
-      if (!done) return (0, import_react17.createElement)(CellEmpty);
+      if (!done2) return (0, import_react17.createElement)(CellEmpty);
       const room2 = roster.rooms.find((entry) => entry.name === arg("group"));
       return room2 ? (0, import_react17.createElement)(GroupEvent, { prefix: t("Read"), room: room2, roster, actions }) : (0, import_react17.createElement)(CellEmpty);
     }
     case "remember":
     case "forget":
-      return done ? (0, import_react17.createElement)(MemoryEvent, { sessionId, scope: arg("scope"), tool, result: contentText(call2.content), failed: call2.isError === true, code: call2.error?.code, roster, actions, findBot }) : (0, import_react17.createElement)(CellEmpty);
+      return done2 ? (0, import_react17.createElement)(MemoryEvent, { sessionId, scope: arg("scope"), tool, result: contentText(call2.content), failed: call2.isError === true, code: call2.error?.code, roster, actions, findBot }) : (0, import_react17.createElement)(CellEmpty);
     default:
       return (0, import_react17.createElement)(CellEmpty);
   }
@@ -7812,7 +7812,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
       return value;
     },
     sideCall: (name, body) => after(call2(name, body)),
-    askSide: (sessionId, chatId, text) => after(call2("side-ask", { sessionId, chatId, text })),
+    askSide: (sessionId, chatId, text3) => after(call2("side-ask", { sessionId, chatId, text: text3 })),
     cancelSide: (chatId, entryId) => after(call2("side-cancel", { chatId, entryId })),
     closeSideChat: (chatId) => {
       ui2.set((state) => state.details && state.view === "side" && state.side === chatId ? { ...state, view: "details", side: null } : state);
@@ -7821,7 +7821,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     closePanel: () => {
       ui2.set((state) => state.details ? { ...state, details: null, view: "details", renaming: false, tab: null, side: null } : state);
     },
-    quote: (sessionId, text) => ui2.set((state) => ({ ...state, quote: { sessionId, text, token: Date.now() } })),
+    quote: (sessionId, text3) => ui2.set((state) => ({ ...state, quote: { sessionId, text: text3, token: Date.now() } })),
     clearQuote: (token) => ui2.set((state) => state.quote?.token === token ? { ...state, quote: null } : state),
     setFlags: (id, flags) => after(call2("set-flags", { id, ...flags })),
     deleteRoom: (id) => after(call2("delete-room", { id })),
@@ -7855,7 +7855,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     setMain: (id, main = true, options = {}) => after(call2("set-main", { id, main, ...options })),
     updateRoom: (id, patch) => after(call2("update-room", { id, ...patch })),
     continueRoom: (roomId) => after(call2("room-continue", { roomId })),
-    send: (sessionId, text, images = [], requestId2) => after(call2("send", { sessionId: partFor(sessionId), text, ...images.length ? { images } : {}, ...requestId2 ? { requestId: requestId2 } : {} })),
+    send: (sessionId, text3, images = [], requestId2) => after(call2("send", { sessionId: partFor(sessionId), text: text3, ...images.length ? { images } : {}, ...requestId2 ? { requestId: requestId2 } : {} })),
     readImage: (sessionId, attachment) => call2("image", { sessionId, attachment }),
     answerQuestion: (sessionId, questionId, answer) => after(call2("answer-question", { sessionId: partFor(sessionId), questionId, answer })),
     dismissQuestion: (sessionId) => after(call2("dismiss-question", { sessionId })),
@@ -7890,7 +7890,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     usage: () => call2("usage", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     // `summarize` starts a summary when the entries changed; `regenerate` always does.
     memoryView: (id, flags = {}) => call2("memory-view", { ...memoryOf(id), ...flags }),
-    memoryAsk: (id, text) => call2("memory-ask", { ...memoryOf(id), text }),
+    memoryAsk: (id, text3) => call2("memory-ask", { ...memoryOf(id), text: text3 }),
     memoryForget: (id, entry) => call2("memory-forget", { ...memoryOf(id), scope: entry.scope, topic: entry.topic, text: entry.text }),
     diagnostics: (payload) => call2("diagnostics", payload),
     diagnosticsLog: () => call2("diagnostics-log"),
@@ -7978,8 +7978,8 @@ function openFeed(onEvent) {
         const decoder = new TextDecoder();
         let buffer = "";
         for (; ; ) {
-          const { value, done } = await reader.read();
-          if (done) break;
+          const { value, done: done2 } = await reader.read();
+          if (done2) break;
           buffer += decoder.decode(value, { stream: true });
           for (let end = buffer.indexOf("\n\n"); end >= 0; end = buffer.indexOf("\n\n")) {
             const parsed = parseEvent(buffer.slice(0, end));
@@ -8281,12 +8281,12 @@ function createTeam() {
   const onFeed = (event, data) => {
     if (event === "message" && data?.sessionId && data.item) {
       const { sessionId, item } = data;
-      const text = item.kind === "bot" || item.kind === "user" ? item.text : "";
+      const text3 = item.kind === "bot" || item.kind === "user" ? item.text : "";
       editRow(sessionId, (row) => ({
         ...row,
         updatedAt: Math.max(row.updatedAt ?? 0, item.time ?? 0),
         // The sidebar's preview line; turn -1 is never a hidden exchange turn.
-        projectionValues: text ? { turnOutline: [{ turn: -1, [item.kind === "bot" ? "response" : "prompt"]: text }] } : row.projectionValues
+        projectionValues: text3 ? { turnOutline: [{ turn: -1, [item.kind === "bot" ? "response" : "prompt"]: text3 }] } : row.projectionValues
       }));
       if (item.kind === "bot" && shown.getSnapshot() !== sessionId) setStatus(sessionId, { completionUnread: true });
       if (item.kind === "user") sent.set((state) => state[sessionId]?.length ? { ...state, [sessionId]: state[sessionId].slice(1) } : state);
@@ -8372,10 +8372,10 @@ function useDictation(onText) {
       let interim = "";
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
-        const text = result[0]?.transcript ?? "";
+        const text3 = result[0]?.transcript ?? "";
         if (result.isFinal) {
-          if (text.trim()) latest.current(text, true);
-        } else interim += text;
+          if (text3.trim()) latest.current(text3, true);
+        } else interim += text3;
       }
       if (interim) latest.current(interim, false);
     };
@@ -8402,8 +8402,8 @@ function useDictation(onText) {
   return { listening, note, start, stop };
 }
 function ComposerVoice({ sessionId, inputActions, actions, useUi }) {
-  const dictation = useDictation((text, final) => {
-    if (final && inputActions) inputActions.insertText(text, inputActions.captureInsertion());
+  const dictation = useDictation((text3, final) => {
+    if (final && inputActions) inputActions.insertText(text3, inputActions.captureInsertion());
   });
   const quote = useUi((state) => state.quote?.sessionId === sessionId ? state.quote : null);
   (0, import_react19.useEffect)(() => {
@@ -8807,8 +8807,8 @@ function ModelChoiceDock({ sessionId, useRoster, actions }) {
       void actions.refreshModels?.();
     }).finally(() => setBusy(""));
   };
-  const text = lost ? t("{model} is not available anymore. Pick another model for me.", { model: bot.model.split("/").slice(1).join("/") }) : keyFor ? t("Hi, I'm {name}. I need a {provider} API key before I can start.", { name: bot.name, provider: keyFor.providerName ?? keyFor.provider }) : usable.length === 0 ? t("Hi, I'm {name}. I don't have a model yet. How do you want to set one up?", { name: bot.name }) : t("Hi, I'm {name}. Pick a model for me first. You can change it later in my details.", { name: bot.name });
-  const choices = usable.length === 0 ? setupChoices(actions).map(([label2, run2]) => (0, import_react20.createElement)("button", { key: label2, type: "button", className: "bt-model-chip", onClick: run2 }, label2)) : [
+  const text3 = lost ? t("{model} is not available anymore. Pick another model for me.", { model: bot.model.split("/").slice(1).join("/") }) : keyFor ? t("Hi, I'm {name}. I need a {provider} API key before I can start.", { name: bot.name, provider: keyFor.providerName ?? keyFor.provider }) : usable.length === 0 ? t("Hi, I'm {name}. I don't have a model yet. How do you want to set one up?", { name: bot.name }) : t("Hi, I'm {name}. Pick a model for me first. You can change it later in my details.", { name: bot.name });
+  const choices = usable.length === 0 ? setupChoices(actions).map(([label3, run2]) => (0, import_react20.createElement)("button", { key: label3, type: "button", className: "bt-model-chip", onClick: run2 }, label3)) : [
     ...groupModels(usable).map(([provider, list]) => (0, import_react20.createElement)(
       "div",
       { key: list[0].provider ?? provider, className: "bt-model-choice-group", role: "group", "aria-label": provider },
@@ -8839,7 +8839,7 @@ function ModelChoiceDock({ sessionId, useRoster, actions }) {
           "div",
           { className: "bt-msg-line" },
           (0, import_react20.createElement)(BotMark, { bot, size: 22 }),
-          (0, import_react20.createElement)("div", { className: "bt-bubble" }, text)
+          (0, import_react20.createElement)("div", { className: "bt-bubble" }, text3)
         )
       )
     ),
@@ -8851,7 +8851,7 @@ function ModelKeyCard({ model, actions }) {
   const [value, setValue] = (0, import_react20.useState)("");
   const [busy, setBusy] = (0, import_react20.useState)(false);
   const [error, setError] = (0, import_react20.useState)("");
-  const label2 = t("{provider} API key", { provider: model.providerName ?? model.provider });
+  const label3 = t("{provider} API key", { provider: model.providerName ?? model.provider });
   const ready = value.trim() !== "" && !busy;
   const save = () => {
     if (!ready) return;
@@ -8861,9 +8861,9 @@ function ModelKeyCard({ model, actions }) {
   };
   return (0, import_react20.createElement)(
     "div",
-    { className: "bt-q bt-model-key", role: "group", "aria-label": label2 },
-    (0, import_react20.createElement)("div", { className: "bt-model-key-title" }, (0, import_react20.createElement)(KeyIcon), label2),
-    (0, import_react20.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react20.createElement)(MaskedInput, { value, onChange: setValue, onEnter: save, label: label2, autoFocus: true })),
+    { className: "bt-q bt-model-key", role: "group", "aria-label": label3 },
+    (0, import_react20.createElement)("div", { className: "bt-model-key-title" }, (0, import_react20.createElement)(KeyIcon), label3),
+    (0, import_react20.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react20.createElement)(MaskedInput, { value, onChange: setValue, onEnter: save, label: label3, autoFocus: true })),
     error ? (0, import_react20.createElement)("div", { className: "bt-secret-error", role: "alert" }, error) : null,
     (0, import_react20.createElement)(
       "div",
@@ -8985,11 +8985,11 @@ function chatRows(roster, list, sessionId) {
   const others = (list?.ids ?? []).map((id) => byId[id]).filter((row) => row !== void 0 && row.id !== sessionId && !team.has(row.id) && row.origin !== "subagent" && row.blank !== true).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)).slice(0, OTHER_CHATS_MAX).map((row) => ({ sessionId: row.id, label: row.displayTitle || row.title || row.id, updatedAt: row.updatedAt }));
   return [...bots, ...others];
 }
-function sessionMention(sessionId, label2) {
+function sessionMention(sessionId, label3) {
   let binary2 = "";
   for (const byte of new TextEncoder().encode(JSON.stringify(sessionId))) binary2 += String.fromCharCode(byte);
   const payload = btoa(binary2).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  return `@[${label2.replace(/[\\\]]/g, (mark) => `\\${mark}`)}](dsh-session:${payload})`;
+  return `@[${label3.replace(/[\\\]]/g, (mark) => `\\${mark}`)}](dsh-session:${payload})`;
 }
 function atSources({ roster, sessions, launched, iconFor }) {
   const bots = {
@@ -9025,9 +9025,9 @@ function atSources({ roster, sessions, launched, iconFor }) {
       }));
     },
     onPick({ candidate }) {
-      const { sessionId, label: label2 } = JSON.parse(candidate.value);
-      const mention = sessionMention(sessionId, label2);
-      return { insert: { source: CHATS_SOURCE, ref: mention, label: label2, appearance: "session", clipboardText: mention } };
+      const { sessionId, label: label3 } = JSON.parse(candidate.value);
+      const mention = sessionMention(sessionId, label3);
+      return { insert: { source: CHATS_SOURCE, ref: mention, label: label3, appearance: "session", clipboardText: mention } };
     },
     codec: { clipboardText: (ref) => ref, serialize: (ref) => Promise.resolve(ref) }
   };
@@ -9036,12 +9036,12 @@ function atSources({ roster, sessions, launched, iconFor }) {
 
 // src/client/composer-mentions.js
 var import_react21 = require("react");
-function mentionAt(text, caret) {
-  if (!Number.isInteger(caret) || caret < 0 || caret > text.length) return null;
-  const match = /(?:^|[^\p{L}\p{N}_.])@([^@\n]{0,80})$/u.exec(text.slice(0, caret));
+function mentionAt(text3, caret) {
+  if (!Number.isInteger(caret) || caret < 0 || caret > text3.length) return null;
+  const match = /(?:^|[^\p{L}\p{N}_.])@([^@\n]{0,80})$/u.exec(text3.slice(0, caret));
   return match ? { start: caret - match[1].length - 1, end: caret, query: match[1] } : null;
 }
-function useComposerMentions({ text, setText, field, sessionId, useRoster, disabled }) {
+function useComposerMentions({ text: text3, setText, field, sessionId, useRoster, disabled }) {
   const roster = useRoster((value) => value);
   const [caret, setCaret] = (0, import_react21.useState)(0);
   const [selected, setSelected] = (0, import_react21.useState)(0);
@@ -9049,7 +9049,7 @@ function useComposerMentions({ text, setText, field, sessionId, useRoster, disab
   const restore = (0, import_react21.useRef)(null);
   const menu = (0, import_react21.useRef)(null);
   const id = (0, import_react21.useId)();
-  const token = disabled ? null : mentionAt(text, caret);
+  const token = disabled ? null : mentionAt(text3, caret);
   const identity = token ? `${token.start}:${token.query}` : null;
   const rows2 = token && identity !== dismissed ? mentionRows(roster, sessionId, token.query) ?? [] : [];
   const active = Math.min(selected, Math.max(0, rows2.length - 1));
@@ -9062,12 +9062,12 @@ function useComposerMentions({ text, setText, field, sessionId, useRoster, disab
       const node = field.current;
       setCaret(node.selectionStart === node.selectionEnd ? node.selectionStart : -1);
     }
-  }, [text, field]);
+  }, [text3, field]);
   (0, import_react21.useLayoutEffect)(() => {
     menu.current?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: "nearest" });
   }, [active, identity]);
   const pick2 = (row) => {
-    const next = text.slice(0, token.start) + row.text + text.slice(token.end);
+    const next = text3.slice(0, token.start) + row.text + text3.slice(token.end);
     restore.current = token.start + row.text.length;
     setCaret(restore.current);
     setDismissed(`${token.start}:${row.text.slice(1)}`);
@@ -9185,12 +9185,12 @@ function useChat(botId, part, feed) {
       else setStream((current) => current?.attemptId === data.attemptId ? { ...current, text: current.text + data.text } : current);
     }
   }), [feed, botId, load]);
-  const send = async (text, actions, sessionId, images, id) => {
-    const entry = { kind: "user", text, time: Date.now(), imagePreviews: images.map((image) => `data:${image.mediaType};base64,${image.data}`) };
+  const send = async (text3, actions, sessionId, images, id) => {
+    const entry = { kind: "user", text: text3, time: Date.now(), imagePreviews: images.map((image) => `data:${image.mediaType};base64,${image.data}`) };
     setPending((list) => [...list, entry]);
     actions.noteSent(sessionId);
     try {
-      await actions.send(sessionId, text, images, id);
+      await actions.send(sessionId, text3, images, id);
     } catch (error) {
       setPending((list) => list.filter((item) => item !== entry));
       throw error;
@@ -9208,7 +9208,7 @@ function useInput(field, setText) {
   }), [field, setText]);
 }
 function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, useRoster }) {
-  const [text, setText] = (0, import_react22.useState)("");
+  const [text3, setText] = (0, import_react22.useState)("");
   const [error, setError] = (0, import_react22.useState)(null);
   const [images, setImages] = (0, import_react22.useState)([]);
   const [preparing, setPreparing] = (0, import_react22.useState)(false);
@@ -9222,7 +9222,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
   const attempt = (0, import_react22.useRef)(null);
   const field = (0, import_react22.useRef)(null);
   const inputActions = useInput(field, setText);
-  const mentions = useComposerMentions({ text, setText, field, sessionId, useRoster, disabled: disabled || sending });
+  const mentions = useComposerMentions({ text: text3, setText, field, sessionId, useRoster, disabled: disabled || sending });
   (0, import_react22.useEffect)(() => {
     active.current = true;
     return () => {
@@ -9253,12 +9253,12 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
     const node = field.current;
     node.style.height = "auto";
     node.style.height = `${node.scrollHeight}px`;
-  }, [text]);
+  }, [text3]);
   (0, import_react22.useEffect)(() => {
     if (!disabled) field.current?.focus();
   }, [sessionId, disabled]);
   const submit = async () => {
-    const value = text.trim();
+    const value = text3.trim();
     if (value === "" && keptImages.current.length === 0 || disabled || locked.current || pending.current > 0) return;
     const selected = keptImages.current;
     const key = JSON.stringify([value, selected.map((image) => image.id)]);
@@ -9296,8 +9296,8 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
       {
         className: "dsb-composer",
         "data-composer-card": "",
-        "data-multiline": text.includes("\n") || void 0,
-        "data-has-content": text.trim() || images.length || preparing ? "" : void 0,
+        "data-multiline": text3.includes("\n") || void 0,
+        "data-has-content": text3.trim() || images.length || preparing ? "" : void 0,
         "aria-busy": sending || preparing,
         onDragOver: (event) => {
           if (!disabled && !sending && [...event.dataTransfer?.types ?? []].includes("Files")) event.preventDefault();
@@ -9322,7 +9322,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
         (0, import_react22.createElement)("textarea", {
           ref: field,
           rows: 1,
-          value: text,
+          value: text3,
           disabled: disabled || sending,
           placeholder,
           "aria-label": placeholder,
@@ -9353,7 +9353,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
         "div",
         { className: "dsb-composer-trailing" },
         (0, import_react22.createElement)(ComposerVoice, { sessionId, inputActions, actions, useUi }),
-        (0, import_react22.createElement)("button", { type: "button", className: "dsb-send", disabled: disabled || sending || preparing || text.trim() === "" && images.length === 0, "aria-label": t("Send message"), title: t("Send message"), onClick: () => {
+        (0, import_react22.createElement)("button", { type: "button", className: "dsb-send", disabled: disabled || sending || preparing || text3.trim() === "" && images.length === 0, "aria-label": t("Send message"), title: t("Send message"), onClick: () => {
           void submit();
         } }, (0, import_react22.createElement)(ArrowUpIcon))
       )
@@ -9425,7 +9425,7 @@ function Chat({ sessionId, team, children }) {
         sessionId,
         disabled: waiting,
         placeholder: waiting ? t("Pick a model and {name} can start.", { name }) : name ? t("Message {name}", { name }) : t("Message"),
-        onSend: (text, images, id) => send(text, actions, sessionId, images, id),
+        onSend: (text3, images, id) => send(text3, actions, sessionId, images, id),
         actions,
         useUi: hooks.useUi,
         useRoster: hooks.useRoster
@@ -9740,14 +9740,14 @@ function useMemoryNotice(ids, useMemoryNews) {
 function MemoryNotice({ shown }) {
   const inner = (0, import_react24.useRef)(null);
   const [width, setWidth] = (0, import_react24.useState)(0);
-  const label2 = t("Memory updated");
+  const label3 = t("Memory updated");
   (0, import_react24.useLayoutEffect)(() => {
     if (shown) setWidth(inner.current?.scrollWidth ?? 0);
-  }, [label2, shown]);
+  }, [label3, shown]);
   return (0, import_react24.createElement)(
     "span",
     { className: "bt-pill-mem", "aria-hidden": true, style: { "--bt-mem-w": `${width}px` } },
-    (0, import_react24.createElement)("span", { className: "bt-pill-mem-in", ref: inner }, (0, import_react24.createElement)("span", { className: "bt-pill-mem-ico" }, (0, import_react24.createElement)(MemoryIcon)), label2)
+    (0, import_react24.createElement)("span", { className: "bt-pill-mem-in", ref: inner }, (0, import_react24.createElement)("span", { className: "bt-pill-mem-ico" }, (0, import_react24.createElement)(MemoryIcon)), label3)
   );
 }
 function HeaderPill({ sessionId, useRoster, useSessions, useSessionStatus, useSession, useActivity, useMemoryNews, useTurnClock, useUi, useLive, useWork, useStore, useConversationViews, selectView, actions, showTitle = true }) {
@@ -9912,7 +9912,7 @@ function NewMessagePills({ sessionId, useSessions, useUi, useTurnClock }) {
     return () => scroller.removeAttribute("data-bt-news");
   }, [showDown]);
   if (!view || !showDown && !showUp) return null;
-  const label2 = (count) => count === 1 ? t("1 new message") : count > 0 ? t("{count} new messages", { count }) : t("New messages");
+  const label3 = (count) => count === 1 ? t("1 new message") : count > 0 ? t("{count} new messages", { count }) : t("New messages");
   const pill = (direction, count, style, onJump, onDismiss) => (0, import_react24.createElement)(
     "div",
     { className: "bt-news", "data-direction": direction, style },
@@ -9920,7 +9920,7 @@ function NewMessagePills({ sessionId, useSessions, useUi, useTurnClock }) {
       "button",
       { type: "button", className: "bt-news-jump", onClick: onJump },
       (0, import_react24.createElement)("span", { className: "bt-news-ico" }, (0, import_react24.createElement)(direction === "up" ? ArrowUpIcon : ArrowDownIcon)),
-      label2(count)
+      label3(count)
     ),
     (0, import_react24.createElement)("button", {
       type: "button",
@@ -10019,11 +10019,11 @@ function CommandPalette({ start, token, roster, actions, useSessions }) {
         const entry = outline[index2];
         if (hidden.includes(entry.turn)) continue;
         for (const raw of [entry.response, entry.prompt]) {
-          const text = stripHeader(raw ?? "").replace(/\s+/g, " ").trim();
-          const at = text.toLowerCase().indexOf(wanted);
+          const text3 = stripHeader(raw ?? "").replace(/\s+/g, " ").trim();
+          const at = text3.toLowerCase().indexOf(wanted);
           if (at < 0) continue;
           const from = Math.max(0, at - 24);
-          hits.push([id, entry.turn, (from > 0 ? "…" : "") + text.slice(from, at + wanted.length + 60)]);
+          hits.push([id, entry.turn, (from > 0 ? "…" : "") + text3.slice(from, at + wanted.length + 60)]);
           break;
         }
       }
@@ -10402,8 +10402,8 @@ function timingText(task) {
       return `${t("Every day at {time}", { time: clock2(task.time) })}${zone}`;
     case "weekly": {
       const days = (task.weekdays ?? []).join();
-      const text = days === "1,2,3,4,5" ? t("Every weekday at {time}", { time: clock2(task.time) }) : days === "6,7" ? t("Every weekend at {time}", { time: clock2(task.time) }) : days === "1,2,3,4,5,6,7" ? t("Every day at {time}", { time: clock2(task.time) }) : t("Every {days} at {time}", { days: weekdayNames(task.weekdays ?? []), time: clock2(task.time) });
-      return `${text}${zone}`;
+      const text3 = days === "1,2,3,4,5" ? t("Every weekday at {time}", { time: clock2(task.time) }) : days === "6,7" ? t("Every weekend at {time}", { time: clock2(task.time) }) : days === "1,2,3,4,5,6,7" ? t("Every day at {time}", { time: clock2(task.time) }) : t("Every {days} at {time}", { days: weekdayNames(task.weekdays ?? []), time: clock2(task.time) });
+      return `${text3}${zone}`;
     }
     case "cron":
       return `${t("On the schedule {expression}", { expression: task.expression })}${zone}`;
@@ -10526,7 +10526,7 @@ function TaskForm({ roster, actions, start, onDone, onCancel }) {
       "div",
       { className: "bt-set-row bt-bs-row bt-bs-stack" },
       (0, import_react28.createElement)("span", { className: "bt-set-copy" }, (0, import_react28.createElement)("span", { className: "bt-bs-label" }, t("When"))),
-      (0, import_react28.createElement)(Segmented2, { label: t("When"), value: kind }, KINDS.map(([id, label2]) => (0, import_react28.createElement)("button", { key: id, type: "button", "aria-pressed": kind === id, onClick: () => setKind(id) }, t(label2)))),
+      (0, import_react28.createElement)(Segmented2, { label: t("When"), value: kind }, KINDS.map(([id, label3]) => (0, import_react28.createElement)("button", { key: id, type: "button", "aria-pressed": kind === id, onClick: () => setKind(id) }, t(label3)))),
       (0, import_react28.createElement)(
         "div",
         { key: kind, className: "bt-task-when bt-veil" },
@@ -10547,7 +10547,7 @@ function TaskForm({ roster, actions, start, onDone, onCancel }) {
           (0, import_react28.createElement)(
             "select",
             { className: "bt-select bt-task-unit", value: unit, "aria-label": t("Unit"), onChange: (event) => setUnit(event.target.value) },
-            UNITS.map(([id, , label2]) => (0, import_react28.createElement)("option", { key: id, value: id }, t(label2)))
+            UNITS.map(([id, , label3]) => (0, import_react28.createElement)("option", { key: id, value: id }, t(label3)))
           )
         ) : null
       )
@@ -10682,27 +10682,27 @@ var SCHEDULE_CSS = `
 // src/client/capability-settings.js
 var import_react29 = require("react");
 var blank = () => ({ name: "", kind: "mcp", description: "", transport: "stdio", command: "", argsText: "", envText: "{}", url: "", headersText: "{}", content: "", items: [] });
-var parseMap = (text, label2) => {
+var parseMap = (text3, label3) => {
   let value;
   try {
-    value = JSON.parse(text || "{}");
+    value = JSON.parse(text3 || "{}");
   } catch {
-    throw new Error(t("{label} must be valid JSON.", { label: label2 }));
+    throw new Error(t("{label} must be valid JSON.", { label: label3 }));
   }
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(t("{label} must be a JSON object.", { label: label2 }));
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(t("{label} must be a JSON object.", { label: label3 }));
   return value;
 };
 var statusText = (status) => !status ? void 0 : status.state === "ready" ? t("Ready") : status.state === "needs-approval" ? t("Needs approval") : status.state === "error" ? t("Could not connect: {error}", { error: status.error ?? "" }) : t("Connecting…");
-function Field({ label: label2, value, onChange, multiline = false, disabled = false, placeholder }) {
+function Field({ label: label3, value, onChange, multiline = false, disabled = false, placeholder }) {
   return (0, import_react29.createElement)(
     "label",
     { className: "bt-set-row bt-bs-row bt-bs-stack" },
-    (0, import_react29.createElement)("span", { className: "bt-set-copy" }, (0, import_react29.createElement)("span", { className: "bt-bs-label" }, t(label2))),
+    (0, import_react29.createElement)("span", { className: "bt-set-copy" }, (0, import_react29.createElement)("span", { className: "bt-bs-label" }, t(label3))),
     (0, import_react29.createElement)(multiline ? "textarea" : "input", {
       className: multiline ? "bt-input bt-input-area" : "bt-input",
       value,
       disabled,
-      maxLength: label2 === "Name" ? 32 : void 0,
+      maxLength: label3 === "Name" ? 32 : void 0,
       placeholder,
       spellCheck: false,
       onChange: (event) => onChange(event.target.value)
@@ -11100,7 +11100,7 @@ function useMemoryCount(id, actions) {
 }
 function MemoryRow({ owner, actions }) {
   const count = useMemoryCount(owner.id, actions);
-  const label2 = count === null ? t("Loading…") : count === 0 ? t("Nothing saved yet") : count === 1 ? t("1 entry") : t("{count} entries", { count });
+  const label3 = count === null ? t("Loading…") : count === 0 ? t("Nothing saved yet") : count === 1 ? t("1 entry") : t("{count} entries", { count });
   return (0, import_react31.createElement)(
     "div",
     null,
@@ -11109,7 +11109,7 @@ function MemoryRow({ owner, actions }) {
       "button",
       { type: "button", className: "bt-mem-row", "aria-label": t("Manage {name}'s memory", { name: owner.name }), onClick: () => actions.openMemory(owner.id) },
       (0, import_react31.createElement)(MemoryIcon),
-      (0, import_react31.createElement)("span", { className: "bt-mem-row-copy" }, label2),
+      (0, import_react31.createElement)("span", { className: "bt-mem-row-copy" }, label3),
       (0, import_react31.createElement)("span", { className: "bt-mem-row-go" }, t("Manage"), (0, import_react31.createElement)(ChevronRightIcon))
     )
   );
@@ -11124,7 +11124,7 @@ function ago(at, now) {
   if (hours < 24) return format.format(-hours, "hour");
   return format.format(-Math.round(hours / 24), "day");
 }
-function Skeleton({ label: label2 }) {
+function Skeleton({ label: label3 }) {
   return (0, import_react31.createElement)(
     "div",
     { className: "bt-mem-skel", "aria-busy": true },
@@ -11136,7 +11136,7 @@ function Skeleton({ label: label2 }) {
       (0, import_react31.createElement)("span", null),
       (0, import_react31.createElement)("span", { style: { width: block === 0 ? "62%" : "48%" } })
     )),
-    label2 ? (0, import_react31.createElement)("div", { className: "bt-mem-skel-label" }, label2) : null
+    label3 ? (0, import_react31.createElement)("div", { className: "bt-mem-skel-label" }, label3) : null
   );
 }
 function Summary({ owner, view, regenerate }) {
@@ -11241,11 +11241,11 @@ function Entries({ owner, view, remove }) {
   );
 }
 function changeLine(change) {
-  const text = change.text.length > 120 ? `${change.text.slice(0, 120)}…` : change.text;
-  if (!change.ok) return t("Not changed: {text} ({reason})", { text, reason: hostText(change.error ?? "") });
-  if (change.op === "remove") return change.scope === "team" ? t("Removed from team memory: {text}", { text }) : t("Removed: {text}", { text });
-  if (change.op === "edit") return t("Updated: {text}", { text });
-  return change.scope === "team" ? t("Added to team memory: {text}", { text }) : t("Added: {text}", { text });
+  const text3 = change.text.length > 120 ? `${change.text.slice(0, 120)}…` : change.text;
+  if (!change.ok) return t("Not changed: {text} ({reason})", { text: text3, reason: hostText(change.error ?? "") });
+  if (change.op === "remove") return change.scope === "team" ? t("Removed from team memory: {text}", { text: text3 }) : t("Removed: {text}", { text: text3 });
+  if (change.op === "edit") return t("Updated: {text}", { text: text3 });
+  return change.scope === "team" ? t("Added to team memory: {text}", { text: text3 }) : t("Added: {text}", { text: text3 });
 }
 function Reply({ answer, dismiss }) {
   return (0, import_react31.createElement)(
@@ -11316,7 +11316,7 @@ function MemoryDialog({ owner, actions, leaving = false }) {
   const [page, setPage] = (0, import_react31.useState)("summary");
   const [menu, setMenu] = (0, import_react31.useState)(false);
   const [menuShown, menuLeaving] = useLinger(menu, MENU_EXIT_MS2);
-  const [text, setText] = (0, import_react31.useState)("");
+  const [text3, setText] = (0, import_react31.useState)("");
   const [answer, setAnswer] = (0, import_react31.useState)(null);
   const menuRef = (0, import_react31.useRef)(null);
   const dotsRef = (0, import_react31.useRef)(null);
@@ -11368,7 +11368,7 @@ function MemoryDialog({ owner, actions, leaving = false }) {
   };
   const ask = async (event) => {
     event.preventDefault();
-    const asked = text.trim();
+    const asked = text3.trim();
     if (asked === "" || answer?.pending) return;
     setText("");
     setAnswer({ asked, pending: true });
@@ -11434,7 +11434,7 @@ function MemoryDialog({ owner, actions, leaving = false }) {
           (0, import_react31.createElement)("input", {
             ref: inputRef,
             className: "bt-mem-input",
-            value: text,
+            value: text3,
             maxLength: 2e3,
             disabled: view === null,
             placeholder: t("Ask or update"),
@@ -11443,7 +11443,7 @@ function MemoryDialog({ owner, actions, leaving = false }) {
           }),
           (0, import_react31.createElement)(
             "button",
-            { type: "submit", className: "bt-mem-send", disabled: busy || text.trim() === "", "aria-label": t("Send") },
+            { type: "submit", className: "bt-mem-send", disabled: busy || text3.trim() === "", "aria-label": t("Send") },
             busy ? (0, import_react31.createElement)("span", { className: "bt-mem-spin", "aria-hidden": true }) : (0, import_react31.createElement)(ArrowUpIcon)
           )
         )
@@ -11455,7 +11455,7 @@ function MemoryDialog({ owner, actions, leaving = false }) {
 // src/client/bot-settings.js
 var import_react32 = require("react");
 var capitalize = (word) => word[0].toUpperCase() + word.slice(1);
-function InlineText({ label: label2, value, placeholder, required = false, maxLength, multiline = false, onSave }) {
+function InlineText({ label: label3, value, placeholder, required = false, maxLength, multiline = false, onSave }) {
   const [draft, setDraft] = (0, import_react32.useState)(null);
   const reverting = (0, import_react32.useRef)(false);
   const commit = () => {
@@ -11474,7 +11474,7 @@ function InlineText({ label: label2, value, placeholder, required = false, maxLe
     placeholder,
     maxLength,
     required,
-    "aria-label": label2,
+    "aria-label": label3,
     spellCheck: false,
     onChange: (event) => setDraft(event.target.value),
     onBlur: commit,
@@ -11488,30 +11488,30 @@ function InlineText({ label: label2, value, placeholder, required = false, maxLe
     }
   });
 }
-function Row({ label: label2, hint, stack = false, children }) {
+function Row({ label: label3, hint, stack = false, children }) {
   return (0, import_react32.createElement)(
     "label",
     { className: stack ? "bt-set-row bt-bs-row bt-bs-stack" : "bt-set-row bt-bs-row" },
-    (0, import_react32.createElement)("span", { className: "bt-set-copy" }, (0, import_react32.createElement)("span", { className: "bt-bs-label" }, label2), hint ? (0, import_react32.createElement)("span", { className: "bt-set-hint" }, hint) : null),
+    (0, import_react32.createElement)("span", { className: "bt-set-copy" }, (0, import_react32.createElement)("span", { className: "bt-bs-label" }, label3), hint ? (0, import_react32.createElement)("span", { className: "bt-set-hint" }, hint) : null),
     children
   );
 }
 function Card2({ title, children }) {
   return (0, import_react32.createElement)("section", { className: "bt-set-section" }, title ? (0, import_react32.createElement)("h3", null, title) : null, (0, import_react32.createElement)("div", { className: "bt-set-card" }, children));
 }
-function Switch({ on, label: label2, disabled, onChange }) {
+function Switch({ on, label: label3, disabled, onChange }) {
   return (0, import_react32.createElement)(
     "button",
-    { type: "button", role: "switch", className: "bt-switch", "aria-checked": on, "aria-label": label2, disabled, onClick: () => onChange(!on) },
+    { type: "button", role: "switch", className: "bt-switch", "aria-checked": on, "aria-label": label3, disabled, onClick: () => onChange(!on) },
     (0, import_react32.createElement)("span", { className: "bt-switch-knob", "aria-hidden": true })
   );
 }
-function SwitchRow({ label: label2, hint, on, disabled, onChange }) {
+function SwitchRow({ label: label3, hint, on, disabled, onChange }) {
   return (0, import_react32.createElement)(
     "div",
     { className: "bt-set-row bt-bs-row" },
-    (0, import_react32.createElement)("span", { className: "bt-set-copy" }, (0, import_react32.createElement)("span", { className: "bt-bs-label" }, label2), hint ? (0, import_react32.createElement)("span", { className: "bt-set-hint" }, hint) : null),
-    (0, import_react32.createElement)(Switch, { on, label: label2, disabled, onChange })
+    (0, import_react32.createElement)("span", { className: "bt-set-copy" }, (0, import_react32.createElement)("span", { className: "bt-bs-label" }, label3), hint ? (0, import_react32.createElement)("span", { className: "bt-set-hint" }, hint) : null),
+    (0, import_react32.createElement)(Switch, { on, label: label3, disabled, onChange })
   );
 }
 function modelHint(bot, roster) {
@@ -11608,7 +11608,7 @@ function AvatarEditor({ bot, actions, run: run2, onClose }) {
         "div",
         { ref: glide.box, role: "tablist", "aria-label": t("Avatar source"), className: "bt-avedit-tabs" },
         (0, import_react32.createElement)("span", { ref: glide.thumb, className: "bt-thumb", "aria-hidden": true }),
-        [["bot", "Bot"], ["upload", "Upload"], ["library", "Library"]].map(([id, label2]) => (0, import_react32.createElement)("button", { key: id, type: "button", role: "tab", className: "bt-avedit-tab", "aria-selected": tab === id, onClick: () => setTab(id) }, t(label2)))
+        [["bot", "Bot"], ["upload", "Upload"], ["library", "Library"]].map(([id, label3]) => (0, import_react32.createElement)("button", { key: id, type: "button", role: "tab", className: "bt-avedit-tab", "aria-selected": tab === id, onClick: () => setTab(id) }, t(label3)))
       ),
       (0, import_react32.createElement)("button", {
         type: "button",
@@ -11663,14 +11663,14 @@ function AvatarEditor({ bot, actions, run: run2, onClose }) {
 }
 function MemoryCard({ bot, actions }) {
   const count = useMemoryCount(bot.id, actions);
-  const label2 = count === null ? t("Loading…") : count === 0 ? t("Nothing saved yet") : count === 1 ? t("1 entry") : t("{count} entries", { count });
+  const label3 = count === null ? t("Loading…") : count === 0 ? t("Nothing saved yet") : count === 1 ? t("1 entry") : t("{count} entries", { count });
   return (0, import_react32.createElement)(
     Card2,
     { title: t("Memory") },
     (0, import_react32.createElement)(
       "button",
       { type: "button", className: "bt-set-row bt-bs-row", "aria-label": t("Manage {name}'s memory", { name: bot.name }), onClick: () => actions.openMemory(bot.id) },
-      (0, import_react32.createElement)("span", { className: "bt-set-copy" }, (0, import_react32.createElement)("span", { className: "bt-bs-label" }, label2)),
+      (0, import_react32.createElement)("span", { className: "bt-set-copy" }, (0, import_react32.createElement)("span", { className: "bt-bs-label" }, label3)),
       (0, import_react32.createElement)("span", { className: "bt-mem-row-go" }, t("Manage"), (0, import_react32.createElement)(ChevronRightIcon))
     )
   );
@@ -12099,28 +12099,28 @@ function NewChat({ mode, roster, actions }) {
   };
   const makeGroup = async () => {
     if (admin === null || picked.length === 0) return;
-    const text = message.trim();
-    const room2 = await actions.createRoom([admin, ...picked], { admin, ...text ? {} : { greet: true } });
-    if (text) await actions.send(room2.id, text);
+    const text3 = message.trim();
+    const room2 = await actions.createRoom([admin, ...picked], { admin, ...text3 ? {} : { greet: true } });
+    if (text3) await actions.send(room2.id, text3);
     actions.openSession(room2.id);
     close();
   };
   const createGroup = () => run2(makeGroup);
   const sendMessage = () => run2(async () => {
-    const text = message.trim();
+    const text3 = message.trim();
     if (group && admin !== null) {
       await makeGroup();
       return;
     }
-    if (text === "" || picked.length === 0) return;
+    if (text3 === "" || picked.length === 0) return;
     if (picked.length === 1) {
-      await actions.send(picked[0], text);
+      await actions.send(picked[0], text3);
       actions.openSession(picked[0]);
       close();
       return;
     }
     const room2 = await actions.createRoom(picked);
-    await actions.send(room2.id, text);
+    await actions.send(room2.id, text3);
     actions.openSession(room2.id);
     close();
   });
@@ -12404,8 +12404,8 @@ function preparationStep(catalog) {
 function waveBytes(samples, rate = 16e3) {
   const bytes = new Uint8Array(44 + samples.length * 2);
   const view = new DataView(bytes.buffer);
-  const ascii = (at, text) => {
-    for (let index = 0; index < text.length; index += 1) bytes[at + index] = text.charCodeAt(index);
+  const ascii = (at, text3) => {
+    for (let index = 0; index < text3.length; index += 1) bytes[at + index] = text3.charCodeAt(index);
   };
   ascii(0, "RIFF");
   view.setUint32(4, 36 + samples.length * 2, true);
@@ -12426,9 +12426,9 @@ function waveBytes(samples, rate = 16e3) {
   return bytes;
 }
 function base64Of(bytes) {
-  let text = "";
-  for (let index = 0; index < bytes.length; index += 32768) text += String.fromCharCode(...bytes.subarray(index, index + 32768));
-  return btoa(text);
+  let text3 = "";
+  for (let index = 0; index < bytes.length; index += 32768) text3 += String.fromCharCode(...bytes.subarray(index, index + 32768));
+  return btoa(text3);
 }
 var captureError = (kind, cause) => Object.assign(new Error(kind), { kind, cause });
 async function openCapture() {
@@ -12527,7 +12527,7 @@ function turnDetector({ loud = 0.12, quiet = 0.06, quietMs = 1200 } = {}) {
 
 // src/client/voice.js
 var import_react36 = require("react");
-var plainSpeech = (text) => stripHeader(text).replace(/```[\s\S]*?```/g, " ").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`#>|~-]+/g, " ").replace(/\s+/g, " ").trim();
+var plainSpeech = (text3) => stripHeader(text3).replace(/```[\s\S]*?```/g, " ").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`#>|~-]+/g, " ").replace(/\s+/g, " ").trim();
 var VOICE_LABELS = {
   listening: "Listening",
   thinking: "Thinking",
@@ -12544,11 +12544,11 @@ function watchReply(read2, watch, consume) {
   let consumed = false;
   const attempt = () => {
     if (consumed) return;
-    const text = read2();
-    if (text === void 0) return;
+    const text3 = read2();
+    if (text3 === void 0) return;
     consumed = true;
     off();
-    consume(text);
+    consume(text3);
   };
   off = watch(attempt);
   attempt();
@@ -12628,17 +12628,17 @@ function VoiceMode({ sessionId, roster, actions, useSessions, useSessionStatus }
     actions.closeVoice();
   };
   useEscape(close);
-  const submit = (text) => {
-    setHeard(text);
+  const submit = (text3) => {
+    setHeard(text3);
     setPhase("thinking");
     waiting.current = reply.current.split("|")[0];
-    void actions.send(sessionId, text.trim()).catch(() => setPhase("listening"));
+    void actions.send(sessionId, text3.trim()).catch(() => setPhase("listening"));
   };
-  const dictation = useDictation((text, final) => {
-    setHeard(text);
+  const dictation = useDictation((text3, final) => {
+    setHeard(text3);
     if (!final) return;
     dictation.stop();
-    submit(text);
+    submit(text3);
   });
   (0, import_react36.useEffect)(() => {
     if (!note) return void 0;
@@ -12682,9 +12682,9 @@ function VoiceMode({ sessionId, roster, actions, useSessions, useSessionStatus }
       setPhase("transcribing");
       try {
         const wave = await current.finish(catalog.maxDurationSeconds);
-        const text = wave ? await transcribeWave(speech, catalog, wave, new AbortController().signal) : "";
+        const text3 = wave ? await transcribeWave(speech, catalog, wave, new AbortController().signal) : "";
         if (turn.current !== own) return;
-        if (text) submit(text);
+        if (text3) submit(text3);
         else setPhase("listening");
       } catch (error) {
         if (turn.current !== own) return;
@@ -12736,9 +12736,9 @@ function VoiceMode({ sessionId, roster, actions, useSessions, useSessionStatus }
     const count = lastReply.slice(0, lastReply.indexOf("|"));
     const turn2 = Number(lastReply.slice(lastReply.indexOf("|") + 1));
     if (count === waiting.current) return void 0;
-    const speak = (text) => {
+    const speak = (text3) => {
       waiting.current = null;
-      const spoken = plainSpeech(text);
+      const spoken = plainSpeech(text3);
       setSaid(spoken);
       setHeard("");
       if (!scopedWindow.speechSynthesis || !spoken) {
@@ -12756,13 +12756,13 @@ function VoiceMode({ sessionId, roster, actions, useSessions, useSessionStatus }
     return watchReply(
       () => actions.closingReply(sessionId, turn2),
       (listener) => actions.watchTurns(sessionId, listener),
-      (text) => {
-        if (text === null) {
+      (text3) => {
+        if (text3 === null) {
           waiting.current = null;
           setPhase("listening");
           return;
         }
-        speak(text);
+        speak(text3);
       }
     );
   }, [phase, running, lastReply]);
@@ -12886,7 +12886,7 @@ function PermissionPicker({ catalog, saved, onPick, repick = false }) {
   }, [pending, saved]);
   const send = (value) => {
     flight.current.value = value;
-    void Promise.resolve(onPick(value)).then((done) => done !== false, () => false).then((ok) => {
+    void Promise.resolve(onPick(value)).then((done2) => done2 !== false, () => false).then((ok) => {
       const wanted = flight.current.latest;
       flight.current.latest = void 0;
       if (wanted !== void 0 && !(wanted === value && ok)) {
@@ -12974,8 +12974,8 @@ function GroupSettingsForm({ room: room2, roster, actions, run: run2, onDeleted 
       setConfirming(true);
       return;
     }
-    void Promise.resolve(run2(actions.deleteRoom(room2.id))).then((done) => {
-      if (done) onDeleted?.();
+    void Promise.resolve(run2(actions.deleteRoom(room2.id))).then((done2) => {
+      if (done2) onDeleted?.();
     });
   };
   return (0, import_react38.createElement)(
@@ -13012,7 +13012,7 @@ function GroupSettingsForm({ room: room2, roster, actions, run: run2, onDeleted 
       (0, import_react38.createElement)(
         "div",
         { className: "bt-set-row bt-bs-row bt-bs-stack" },
-        (0, import_react38.createElement)(Segmented2, { label: t("Who answers"), value: mode }, ROOM_MODES.map(([id, label2]) => (0, import_react38.createElement)("button", {
+        (0, import_react38.createElement)(Segmented2, { label: t("Who answers"), value: mode }, ROOM_MODES.map(([id, label3]) => (0, import_react38.createElement)("button", {
           key: id,
           type: "button",
           "aria-pressed": mode === id,
@@ -13021,7 +13021,7 @@ function GroupSettingsForm({ room: room2, roster, actions, run: run2, onDeleted 
           onClick: () => {
             if (mode !== id) void update({ mode: id });
           }
-        }, t(label2)))),
+        }, t(label3)))),
         (0, import_react38.createElement)("span", { key: mode, className: "bt-set-hint bt-veil" }, `${t(modeHint)} ${t("@mentions always pick who answers.")}`)
       )
     ),
@@ -13112,10 +13112,10 @@ function NewGroupForm({ roster, actions, run: run2, onCreated, onCancel }) {
     if (busy || admin === null || members.length === 0) return;
     setBusy(true);
     let room2;
-    const done = await run2(actions.createRoom([admin, ...members], { admin, greet: true, ...name.trim() ? { name: name.trim() } : {} }).then((value) => {
+    const done2 = await run2(actions.createRoom([admin, ...members], { admin, greet: true, ...name.trim() ? { name: name.trim() } : {} }).then((value) => {
       room2 = value;
     }));
-    if (done && room2) onCreated(room2);
+    if (done2 && room2) onCreated(room2);
     else setBusy(false);
   };
   const chip = (bot, on, onClick, role) => (0, import_react38.createElement)("button", {
@@ -13333,8 +13333,8 @@ function summarize(view, range, keep = () => true, seriesOf = () => "all") {
   return result;
 }
 function trimmed(value) {
-  const text = value >= 100 ? value.toFixed(0) : value >= 10 ? value.toFixed(1) : value.toFixed(2);
-  return text.includes(".") ? text.replace(/\.?0+$/, "") : text;
+  const text3 = value >= 100 ? value.toFixed(0) : value >= 10 ? value.toFixed(1) : value.toFixed(2);
+  return text3.includes(".") ? text3.replace(/\.?0+$/, "") : text3;
 }
 function compact(count) {
   for (const [size, unit] of [[1e9, "B"], [1e6, "M"], [1e3, "K"]]) {
@@ -13465,21 +13465,21 @@ function kindLabel(kind, botFocus) {
   const labels = { chat: botFocus ? t("Own chat") : t("Conversations"), group: t("Group chats"), compaction: t("Compaction and handoff"), image: t("Image reading"), memory: t("Memory"), "session-title": t("Titles"), btw: t("Side chat"), side: t("Side chat"), other: t("Other") };
   return labels[kind] ?? kind;
 }
-function Tabs({ label: label2, value, options, onChange, boxRef }) {
-  const names = options.map(([, text]) => text).join("\n");
+function Tabs({ label: label3, value, options, onChange, boxRef }) {
+  const names = options.map(([, text3]) => text3).join("\n");
   const glide = useGlide(`${value}
 ${names}`, { box: boxRef });
   return (0, import_react40.createElement)(
     "div",
-    { ref: glide.box, className: "bt-us-tabs", role: "group", "aria-label": label2 },
+    { ref: glide.box, className: "bt-us-tabs", role: "group", "aria-label": label3 },
     (0, import_react40.createElement)("span", { ref: glide.thumb, className: "bt-thumb", "aria-hidden": true }),
-    options.map(([id, text, icon2]) => (0, import_react40.createElement)("button", { key: id, type: "button", "aria-pressed": value === id, onClick: () => onChange(id) }, icon2 ? (0, import_react40.createElement)(icon2) : null, text))
+    options.map(([id, text3, icon2]) => (0, import_react40.createElement)("button", { key: id, type: "button", "aria-pressed": value === id, onClick: () => onChange(id) }, icon2 ? (0, import_react40.createElement)(icon2) : null, text3))
   );
 }
 function Stats({ range, total, previous }) {
   const shown = useTween(total.total);
   const change = previous > 0 ? Math.round((total.total - previous) / previous * 100) : null;
-  const cell = (label2, value) => (0, import_react40.createElement)("div", { className: "bt-us-stat" }, (0, import_react40.createElement)("span", { className: "bt-us-stat-label" }, label2), (0, import_react40.createElement)("span", { className: "bt-us-stat-value" }, value));
+  const cell = (label3, value) => (0, import_react40.createElement)("div", { className: "bt-us-stat" }, (0, import_react40.createElement)("span", { className: "bt-us-stat-label" }, label3), (0, import_react40.createElement)("span", { className: "bt-us-stat-value" }, value));
   return (0, import_react40.createElement)(
     "section",
     { className: "bt-us-stats", style: { "--i": 0 } },
@@ -13732,12 +13732,12 @@ function SpanPicker({ span, today, oldest, active, near, onPick, onClose }) {
     (0, import_react40.createElement)(
       "div",
       { className: "bt-us-pick-quick" },
-      shortcuts.map(([id, label2, from, to]) => (0, import_react40.createElement)("button", {
+      shortcuts.map(([id, label3, from, to]) => (0, import_react40.createElement)("button", {
         key: id,
         type: "button",
         "aria-pressed": span?.from === from && span?.to === to,
         onClick: () => onPick(from, to)
-      }, label2))
+      }, label3))
     ),
     (0, import_react40.createElement)("div", { className: "bt-us-pick-months" }, month(addMonths(right, -1), "left"), month(right, "right")),
     (0, import_react40.createElement)(
@@ -14325,7 +14325,7 @@ function grantTime(grant) {
 }
 function grantKinds(grant) {
   if (grant.kinds.includes("*")) return [t("All four")];
-  return ACTIONS.filter(([kind]) => grant.kinds.includes(kind)).map(([, label2]) => t(label2));
+  return ACTIONS.filter(([kind]) => grant.kinds.includes(kind)).map(([, label3]) => t(label3));
 }
 function BrowserPage({ roster, actions, run: run2, Section, Row: Row3 }) {
   const bots = roster.bots ?? [];
@@ -14395,7 +14395,7 @@ function BrowserPage({ roster, actions, run: run2, Section, Row: Row3 }) {
           "div",
           { className: "bt-browser-grant-meta" },
           (0, import_react42.createElement)("span", { className: "bt-browser-grant-site" }, grant.site === "*" ? t("All sites") : grant.site),
-          (0, import_react42.createElement)("div", { className: "bt-browser-grant-kinds" }, grantKinds(grant).map((label2) => (0, import_react42.createElement)("span", { key: label2, className: "bt-chip" }, label2))),
+          (0, import_react42.createElement)("div", { className: "bt-browser-grant-kinds" }, grantKinds(grant).map((label3) => (0, import_react42.createElement)("span", { key: label3, className: "bt-chip" }, label3))),
           (0, import_react42.createElement)("span", { className: "bt-set-hint" }, grantTime(grant))
         ),
         (0, import_react42.createElement)("button", {
@@ -14438,7 +14438,7 @@ function BrowserPage({ roster, actions, run: run2, Section, Row: Row3 }) {
           (0, import_react42.createElement)(
             "div",
             { className: "bt-browser-action-list" },
-            ACTIONS.map(([kind, label2]) => (0, import_react42.createElement)(
+            ACTIONS.map(([kind, label3]) => (0, import_react42.createElement)(
               "label",
               { key: kind, className: "bt-browser-action-choice" },
               (0, import_react42.createElement)("input", {
@@ -14446,7 +14446,7 @@ function BrowserPage({ roster, actions, run: run2, Section, Row: Row3 }) {
                 checked: kinds.includes(kind),
                 onChange: (event) => toggleKind(kind, event.target.checked)
               }),
-              t(label2)
+              t(label3)
             ))
           )
         ),
@@ -14456,13 +14456,13 @@ function BrowserPage({ roster, actions, run: run2, Section, Row: Row3 }) {
           (0, import_react42.createElement)(
             "div",
             { className: "bt-browser-duration", role: "group", "aria-label": t("Duration") },
-            DURATIONS.map(([key, label2]) => (0, import_react42.createElement)("button", {
+            DURATIONS.map(([key, label3]) => (0, import_react42.createElement)("button", {
               key,
               type: "button",
               className: "bt-browser-duration-choice",
               "aria-pressed": duration === key,
               onClick: () => setDuration(key)
-            }, t(label2)))
+            }, t(label3)))
           )
         ),
         (0, import_react42.createElement)(
@@ -14487,15 +14487,15 @@ var FeedbackIcon = () => (0, import_react43.createElement)(
   (0, import_react43.createElement)("path", { d: "M4 4.5h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H9l-3.5 3v-3H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z" }),
   (0, import_react43.createElement)("path", { d: "M10 7v2.6M10 11.4h.01" })
 );
-function download(name, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+function download(name, text3) {
+  const url = URL.createObjectURL(new Blob([text3], { type: "text/plain;charset=utf-8" }));
   const anchor = scopedDocument.createElement("a");
   anchor.href = url;
   anchor.download = name;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1e3);
 }
-var copy = (text) => navigator.clipboard === void 0 ? Promise.resolve(false) : navigator.clipboard.writeText(text).then(() => true, () => false);
+var copy = (text3) => navigator.clipboard === void 0 ? Promise.resolve(false) : navigator.clipboard.writeText(text3).then(() => true, () => false);
 function whenText(time) {
   const date = new Date(time);
   const today = (/* @__PURE__ */ new Date()).toDateString() === date.toDateString();
@@ -14556,8 +14556,8 @@ function FeedbackPage({ actions, run: run2, Section, Row: Row3 }) {
       if (!inline && !copied) setPreview(true);
     }));
   };
-  const downloadLog = () => run2(actions.diagnosticsLog().then((text) => {
-    download("ds-bot-diagnostics.log", text || "No entries.\n");
+  const downloadLog = () => run2(actions.diagnosticsLog().then((text3) => {
+    download("ds-bot-diagnostics.log", text3 || "No entries.\n");
     setNote(t("Downloaded the log. Keys, tokens, and your home folder are hidden in it."));
   }));
   const clearLog = () => run2(actions.diagnosticsClear().then(clearClientErrors).then(load).then(() => setNote(t("Cleared the error log."))));
@@ -14756,9 +14756,9 @@ function AboutPage({ useUpdate, actions, run: run2, Section, Row: Row3 }) {
   }, [cheer]);
   const check = () => {
     setChecking(true);
-    void run2(actions.checkUpdate()).then((done) => {
+    void run2(actions.checkUpdate()).then((done2) => {
       setChecking(false);
-      if (done) setCheer(true);
+      if (done2) setCheer(true);
     });
   };
   const phase = update.phase ?? "idle";
@@ -14961,7 +14961,7 @@ function KeyEditor({ provider, apply: apply2, actions }) {
     setValue(next);
     setSaved(false);
   };
-  const label2 = t("{provider} API key", { provider: provider.name });
+  const label3 = t("{provider} API key", { provider: provider.name });
   return (0, import_react45.createElement)(
     "div",
     { className: "bt-secret-edit-block" },
@@ -14969,7 +14969,7 @@ function KeyEditor({ provider, apply: apply2, actions }) {
     (0, import_react45.createElement)(
       "div",
       { className: "bt-secret-inline" },
-      (0, import_react45.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react45.createElement)(KeyIcon), (0, import_react45.createElement)(MaskedInput, { value, onChange: edit, onEnter: save, label: label2 })),
+      (0, import_react45.createElement)("label", { className: "bt-q-field bt-secret-field" }, (0, import_react45.createElement)(KeyIcon), (0, import_react45.createElement)(MaskedInput, { value, onChange: edit, onEnter: save, label: label3 })),
       (0, import_react45.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !ready, onClick: save }, t("Save")),
       provider.key.configured ? (0, import_react45.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm bt-secret-danger", onClick: () => apply2(actions.setProviderKey(provider.id, null)) }, t("Remove key")) : null
     ),
@@ -14984,13 +14984,13 @@ function AddProvider({ view, apply: apply2, actions, onDone }) {
     (0, import_react45.createElement)(
       Segmented2,
       { label: t("Kind of provider"), value: mode },
-      [["known", t("Known provider")], ["custom", t("Custom API")]].map(([id, label2]) => (0, import_react45.createElement)("button", {
+      [["known", t("Known provider")], ["custom", t("Custom API")]].map(([id, label3]) => (0, import_react45.createElement)("button", {
         key: id,
         type: "button",
         "aria-pressed": mode === id,
         disabled: id === "known" && view.addable.length === 0,
         onClick: () => setMode(id)
-      }, label2))
+      }, label3))
     ),
     // Both forms stay mounted, so switching keeps what is typed in the other.
     (0, import_react45.createElement)("div", { hidden: mode !== "known" }, (0, import_react45.createElement)(KnownForm, { view, apply: apply2, actions, onDone })),
@@ -15043,9 +15043,9 @@ function CustomForm({ view, apply: apply2, actions, onDone }) {
       if (ok) onDone();
     });
   };
-  const input = (field, label2, placeholder) => (0, import_react45.createElement)("input", {
+  const input = (field, label3, placeholder) => (0, import_react45.createElement)("input", {
     className: "bt-input",
-    "aria-label": label2,
+    "aria-label": label3,
     placeholder,
     value: draft[field],
     spellCheck: false,
@@ -15137,26 +15137,26 @@ var PAGE_ICONS = { ...SETTINGS_ICONS, team: PeopleIcon, models: SlidersIcon, con
 function SetSection({ title, className = "", children }) {
   return (0, import_react46.createElement)("section", { className: `bt-set-section ${className}`.trim() }, (0, import_react46.createElement)("h3", null, title), (0, import_react46.createElement)("div", { className: "bt-set-card" }, children));
 }
-function SetRow({ label: label2, hint, children, className = "" }) {
+function SetRow({ label: label3, hint, children, className = "" }) {
   return (0, import_react46.createElement)(
     "div",
     { className: `bt-set-row ${className}`.trim() },
-    (0, import_react46.createElement)("div", { className: "bt-set-copy" }, (0, import_react46.createElement)("span", null, label2), hint ? (0, import_react46.createElement)("span", { className: "bt-set-hint" }, hint) : null),
+    (0, import_react46.createElement)("div", { className: "bt-set-copy" }, (0, import_react46.createElement)("span", null, label3), hint ? (0, import_react46.createElement)("span", { className: "bt-set-hint" }, hint) : null),
     children ? (0, import_react46.createElement)("div", { className: "bt-set-control" }, children) : null
   );
 }
 var LAYOUTS = [["bubble", "Bubble"], ["flat", "Flat"]];
-function Choice({ label: label2, value, options, pick: pick2 }) {
-  return (0, import_react46.createElement)(Segmented2, { label: label2, value, className: "bt-look-seg" }, options.map(([id, text]) => (0, import_react46.createElement)("button", {
+function Choice({ label: label3, value, options, pick: pick2 }) {
+  return (0, import_react46.createElement)(Segmented2, { label: label3, value, className: "bt-look-seg" }, options.map(([id, text3]) => (0, import_react46.createElement)("button", {
     key: id,
     type: "button",
     "aria-pressed": value === id,
     onClick: () => {
       if (value !== id) pick2(id);
     }
-  }, t(text))));
+  }, t(text3))));
 }
-function WidthSlider({ label: label2, value, save }) {
+function WidthSlider({ label: label3, value, save }) {
   const [width, setWidth] = (0, import_react46.useState)(value);
   const pending = (0, import_react46.useRef)(null);
   const timer = (0, import_react46.useRef)(0);
@@ -15184,7 +15184,7 @@ function WidthSlider({ label: label2, value, save }) {
   return (0, import_react46.createElement)(
     "div",
     { className: "bt-range", style: { "--bt-fill": `${(width - min) / (max - min) * 100}%` } },
-    (0, import_react46.createElement)("input", { type: "range", min, max, step, value: width, "aria-label": label2, "aria-valuetext": `${width}%`, onChange: (event) => pick2(Number(event.target.value)) }),
+    (0, import_react46.createElement)("input", { type: "range", min, max, step, value: width, "aria-label": label3, "aria-valuetext": `${width}%`, onChange: (event) => pick2(Number(event.target.value)) }),
     (0, import_react46.createElement)("output", null, `${width}%`)
   );
 }
@@ -15345,14 +15345,14 @@ function MotionSection({ roster, actions, run: run2 }) {
     (0, import_react46.createElement)(
       SetRow,
       { label: t("Bot animation") },
-      (0, import_react46.createElement)(Segmented2, { label: t("Bot animation"), value: motion, className: "bt-motion-seg" }, MOTIONS.map(([id, label2]) => (0, import_react46.createElement)("button", {
+      (0, import_react46.createElement)(Segmented2, { label: t("Bot animation"), value: motion, className: "bt-motion-seg" }, MOTIONS.map(([id, label3]) => (0, import_react46.createElement)("button", {
         key: id,
         type: "button",
         "aria-pressed": motion === id,
         onClick: () => {
           if (motion !== id) run2(actions.setPrefs({ motion: id }));
         }
-      }, t(label2))))
+      }, t(label3))))
     )
   );
 }
@@ -15434,7 +15434,7 @@ function SettingsDialog({ page, id, roster, actions, useUpdate, TeamOverview: Te
   const pages = SETTINGS_PAGES.flatMap((entry) => entry[0] === "usage" && TeamOverview2 ? [entry, ["team", "Team overview"]] : [entry]).filter(([key]) => (key !== "models" || actions.providers !== void 0) && (key !== "schedules" || actions.schedules !== void 0));
   const shown = pages.some(([key]) => key === page) ? page : "general";
   const usageFocus = shown === "usage" && id ? id : null;
-  const label2 = t(pages.find(([key]) => key === shown)[1]);
+  const label3 = t(pages.find(([key]) => key === shown)[1]);
   const back = bot ? t("Back to Bots") : room2 ? t("Back to group chats") : usageFocus ? t("All usage") : null;
   const nav = useGlide(shown, { axis: "y" });
   const pageKey = `${shown}:${bot?.id ?? room2?.id ?? ""}`;
@@ -15457,13 +15457,13 @@ function SettingsDialog({ page, id, roster, actions, useUpdate, TeamOverview: Te
         "nav",
         { ref: nav.box, className: "bt-settings-nav", "aria-label": t("Settings pages") },
         (0, import_react46.createElement)("span", { ref: nav.thumb, className: "bt-thumb", "aria-hidden": true }),
-        pages.map(([key, text]) => (0, import_react46.createElement)("button", {
+        pages.map(([key, text3]) => (0, import_react46.createElement)("button", {
           key,
           type: "button",
           className: "bt-settings-item",
           "aria-current": shown === key ? "page" : void 0,
           onClick: () => actions.openSettings(key)
-        }, (0, import_react46.createElement)(PAGE_ICONS[key]), t(text))),
+        }, (0, import_react46.createElement)(PAGE_ICONS[key]), t(text3))),
         actions.openHarnessSettings ? (0, import_react46.createElement)("button", {
           type: "button",
           className: "bt-settings-item bt-settings-shell",
@@ -15481,7 +15481,7 @@ function SettingsDialog({ page, id, roster, actions, useUpdate, TeamOverview: Te
           "div",
           { className: "bt-settings-head" },
           back ? (0, import_react46.createElement)("button", { type: "button", className: "bt-icon-btn", "aria-label": back, title: back, onClick: () => actions.openSettings(shown) }, (0, import_react46.createElement)(ChevronLeftIcon)) : null,
-          (0, import_react46.createElement)("h2", { key: bot?.id ?? room2?.id ?? shown }, bot?.name ?? room2?.name ?? label2)
+          (0, import_react46.createElement)("h2", { key: bot?.id ?? room2?.id ?? shown }, bot?.name ?? room2?.name ?? label3)
         ),
         shown === "usage" ? null : (0, import_react46.createElement)(
           "div",
@@ -15571,8 +15571,8 @@ function ContextMenu({ menu, roster, actions, leaving = false }) {
       import_react47.Fragment,
       { key: index },
       index > 0 ? (0, import_react47.createElement)("div", { className: "bt-menu-sep", role: "separator" }) : null,
-      group.map(([label2, Icon, run2, danger]) => (0, import_react47.createElement)("button", {
-        key: label2,
+      group.map(([label3, Icon, run2, danger]) => (0, import_react47.createElement)("button", {
+        key: label3,
         type: "button",
         role: "menuitem",
         className: danger ? "bt-danger" : void 0,
@@ -15580,7 +15580,7 @@ function ContextMenu({ menu, roster, actions, leaving = false }) {
           actions.closeMenu();
           void Promise.resolve(run2()).catch((error) => actions.reportError(error, "menu"));
         }
-      }, (0, import_react47.createElement)(Icon), label2))
+      }, (0, import_react47.createElement)(Icon), label3))
     ))
   );
 }
@@ -15617,8 +15617,8 @@ function AgentMenu({ menu, roster, actions, leaving }) {
       import_react47.Fragment,
       { key: index },
       index > 0 ? (0, import_react47.createElement)("div", { className: "bt-menu-sep", role: "separator" }) : null,
-      group.map(([label2, Icon, run2, danger]) => (0, import_react47.createElement)("button", {
-        key: label2,
+      group.map(([label3, Icon, run2, danger]) => (0, import_react47.createElement)("button", {
+        key: label3,
         type: "button",
         role: "menuitem",
         className: danger ? "bt-danger" : void 0,
@@ -15626,7 +15626,7 @@ function AgentMenu({ menu, roster, actions, leaving }) {
           actions.closeMenu();
           void Promise.resolve(run2()).catch((error) => console.warn("[ds-bot]", error));
         }
-      }, (0, import_react47.createElement)(Icon), label2))
+      }, (0, import_react47.createElement)(Icon), label3))
     ))
   );
 }
@@ -16876,11 +16876,11 @@ div:has(> nav [class*="_marks"]){display:none!important}
 @media (prefers-reduced-motion:reduce){.bt-btw-chevron{transition:none}}
 `;
 var PLUGIN_ID = "ds-bot";
-function installStyles(text, tag) {
+function installStyles(text3, tag) {
   const style = scopedDocument.createElement("style");
   style.dataset.dshBot = tag;
   style.dataset.plugin = PLUGIN_ID;
-  style.textContent = text;
+  style.textContent = text3;
   scopedDocument.head.appendChild(style);
   return style;
 }
@@ -16900,9 +16900,9 @@ function sheetClassNames(sheet) {
   }
   return names;
 }
-function compileFragmentSelectors(text, names) {
+function compileFragmentSelectors(text3, names) {
   const compiled2 = /* @__PURE__ */ new Map();
-  return text.replace(FRAGMENT_SELECTOR, (whole, fragment) => {
+  return text3.replace(FRAGMENT_SELECTOR, (whole, fragment) => {
     if (!compiled2.has(fragment)) {
       const exact = [];
       for (const name of names) if (name.includes(fragment)) exact.push(`.${name}`);
@@ -16911,7 +16911,7 @@ function compileFragmentSelectors(text, names) {
     return compiled2.get(fragment);
   });
 }
-function installCompiledStyles(text, tag) {
+function installCompiledStyles(text3, tag) {
   const style = installStyles("", tag);
   let disposed = false;
   const cache = /* @__PURE__ */ new WeakMap();
@@ -16928,7 +16928,7 @@ function installCompiledStyles(text, tag) {
       }
       for (const name of list) names.add(name);
     }
-    const next = compileFragmentSelectors(text, names);
+    const next = compileFragmentSelectors(text3, names);
     if (style.textContent !== next) style.textContent = next;
   };
   render();
@@ -17162,11 +17162,11 @@ async function matchSideEnter(roster, sessionId, line, envelope, signal) {
   return { claim: true };
 }
 async function submitSide({ call: call2, roster, sessionId, args, attachments, open }) {
-  const text = String(args ?? "").trim();
+  const text3 = String(args ?? "").trim();
   if (sideSurface(roster, sessionId) === "group") throw new Error(t(GROUP_REFUSAL));
   if (Array.isArray(attachments) && attachments.length > 0) throw new Error(t(ATTACHMENT_REFUSAL));
-  if (text === "") throw new Error(t(EMPTY_REFUSAL));
-  const value = await call2("side-ask", { sessionId, recent: true, text });
+  if (text3 === "") throw new Error(t(EMPTY_REFUSAL));
+  const value = await call2("side-ask", { sessionId, recent: true, text: text3 });
   open?.(value?.chatId);
   return { kind: "success" };
 }
@@ -17279,21 +17279,21 @@ function MemberDock({ sessionId, useRoster, useWork, actions }) {
   const width = useFitWidth(inner, kept);
   if (!model) return null;
   const faces = model.faces.map((face) => ({ ...face, bot: roster.byId[face.id] })).filter((face) => face.bot);
-  const label2 = [model.waiting, model.doing].filter(Boolean).join(" · ");
+  const label3 = [model.waiting, model.doing].filter(Boolean).join(" · ");
   const open = () => model.open.details ? actions.showDetails(model.open.details) : actions.openSession(model.open.session);
   return (0, import_react48.createElement)(
     "div",
     { className: "bt-mw-dock", "data-leaving": leaving || void 0 },
     (0, import_react48.createElement)(
       "button",
-      { type: "button", className: "bt-mw-pill", "aria-label": label2, onClick: open, disabled: leaving, style: width ? { width } : void 0 },
+      { type: "button", className: "bt-mw-pill", "aria-label": label3, onClick: open, disabled: leaving, style: width ? { width } : void 0 },
       (0, import_react48.createElement)(
         "span",
         { ref: inner, className: "bt-mw-pill-in" },
         (0, import_react48.createElement)("span", { className: "bt-mw-faces", "aria-hidden": true }, faces.map((face) => (0, import_react48.createElement)(Face, { key: face.id, ...face }))),
         (0, import_react48.createElement)(
           "span",
-          { key: label2, className: "bt-mw-label", "aria-hidden": true },
+          { key: label3, className: "bt-mw-label", "aria-hidden": true },
           model.waiting ? (0, import_react48.createElement)("span", { className: "bt-mw-ask" }, model.waiting) : null,
           model.waiting && model.doing ? (0, import_react48.createElement)("span", { className: "bt-mw-dot" }, "·") : null,
           model.doing ? (0, import_react48.createElement)("span", { className: "bt-mw-doing" }, (0, import_react48.createElement)(Shimmer, null, model.doing)) : null
@@ -17354,8 +17354,8 @@ function StopRoomWork({ room: room2, entries: entries2, actions }) {
     setStopping(true);
     void Promise.resolve(actions.stopRoomWork(room2.id)).catch((error) => actions.reportError(error, "stop")).finally(() => setStopping(false));
   };
-  const label2 = t("Stop all work in this group");
-  return (0, import_react48.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: stopping, "aria-label": label2, title: label2, onClick: stop }, t("Stop all"));
+  const label3 = t("Stop all work in this group");
+  return (0, import_react48.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: stopping, "aria-label": label3, title: label3, onClick: stop }, t("Stop all"));
 }
 function MemberApprovals({ entry, bot, actions }) {
   if (entry?.state !== "ask") return null;
@@ -17523,19 +17523,19 @@ function BrowserCards({ bot, sessionId, roster, actions, useBrowserTabs, useBrow
     { className: "bt-bcards" },
     state.ids.map((tabId, index) => {
       const page = pages[tabId] ?? {};
-      const label2 = page.title || shortUrl(page.url) || t("New tab");
+      const label3 = page.title || shortUrl(page.url) || t("New tab");
       return (0, import_react49.createElement)(
         "div",
         { key: tabId, className: "bt-bcard", "data-active": state.active === tabId || void 0, style: { animationDelay: `${index * 30}ms` } },
         (0, import_react49.createElement)(
           "button",
-          { type: "button", className: "bt-bcard-shot", "aria-label": t("Open {title}", { title: label2 }), title: page.url, onClick: () => actions.browserPick(sessionId, tabId) },
+          { type: "button", className: "bt-bcard-shot", "aria-label": t("Open {title}", { title: label3 }), title: page.url, onClick: () => actions.browserPick(sessionId, tabId) },
           page.excerpt ? (0, import_react49.createElement)(
             "span",
             { className: "bt-bcard-preview" },
-            (0, import_react49.createElement)("span", { className: "bt-bcard-ptitle" }, label2),
+            (0, import_react49.createElement)("span", { className: "bt-bcard-ptitle" }, label3),
             (0, import_react49.createElement)("span", { className: "bt-bcard-excerpt" }, page.excerpt)
-          ) : (0, import_react49.createElement)("span", { className: "bt-bcard-blank" }, (0, import_react49.createElement)(GlobeIcon2), (0, import_react49.createElement)("span", null, label2))
+          ) : (0, import_react49.createElement)("span", { className: "bt-bcard-blank" }, (0, import_react49.createElement)(GlobeIcon2), (0, import_react49.createElement)("span", null, label3))
         ),
         (0, import_react49.createElement)("button", {
           type: "button",
@@ -17550,7 +17550,7 @@ function BrowserCards({ bot, sessionId, roster, actions, useBrowserTabs, useBrow
           "div",
           { className: "bt-bcard-row" },
           (0, import_react49.createElement)(Favicon, { src: page.favicon, className: "bt-bcard-fav" }),
-          (0, import_react49.createElement)("span", { className: "bt-bcard-title" }, label2),
+          (0, import_react49.createElement)("span", { className: "bt-bcard-title" }, label3),
           page.url ? (0, import_react49.createElement)("span", { className: "bt-bcard-host" }, hostOf2(page.url)) : null
         )
       );
@@ -17558,16 +17558,16 @@ function BrowserCards({ bot, sessionId, roster, actions, useBrowserTabs, useBrow
     (0, import_react49.createElement)("button", { type: "button", className: "bt-bcard-new", style: { animationDelay: `${state.ids.length * 30}ms` }, onClick: () => actions.browserNewTab(sessionId) }, (0, import_react49.createElement)(PlusIcon), t("New tab"))
   );
 }
-function About({ text, title = "About" }) {
+function About({ text: text3, title = "About" }) {
   const [open, setOpen] = (0, import_react49.useState)(false);
-  const long = text.split("\n").length > 5 || text.length > 240;
+  const long = text3.split("\n").length > 5 || text3.length > 240;
   const body = (0, import_react49.useRef)(null);
   useMorph(body, open);
   return (0, import_react49.createElement)(
     "div",
     null,
     (0, import_react49.createElement)("div", { className: "bt-section-title" }, t(title)),
-    (0, import_react49.createElement)("div", { ref: body, className: "bt-about", "data-open": open || void 0 }, text),
+    (0, import_react49.createElement)("div", { ref: body, className: "bt-about", "data-open": open || void 0 }, text3),
     long ? (0, import_react49.createElement)("button", { type: "button", className: "bt-more", onClick: () => setOpen((value) => !value) }, open ? t("Show less") : t("Show more")) : null
   );
 }
@@ -17861,12 +17861,12 @@ function SideChatView({ subject, chat, actions }) {
   }, [chat?.id, entries2.length, last?.status]);
   if (!chat) return null;
   const ask = () => {
-    const text = draft.trim();
-    if (text === "" || busy || typeof actions?.askSide !== "function") return;
+    const text3 = draft.trim();
+    if (text3 === "" || busy || typeof actions?.askSide !== "function") return;
     setDraft("");
     setFail(null);
-    Promise.resolve(actions.askSide(subject, chat.id, text)).catch((error) => {
-      setDraft((value) => value === "" ? text : value);
+    Promise.resolve(actions.askSide(subject, chat.id, text3)).catch((error) => {
+      setDraft((value) => value === "" ? text3 : value);
       setFail(hostText(error?.message ?? ""));
     });
   };
@@ -18028,7 +18028,7 @@ var fitWidth = (width, [low, high]) => Math.round(Math.max(low, Math.min(width, 
 var shortAddress = (url) => String(url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
 var reducedMotion2 = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 var tabLabel = (page) => page.title || shortAddress(page.url) || t("New tab");
-function PanelMenu({ items, className, "aria-label": label2 }) {
+function PanelMenu({ items, className, "aria-label": label3 }) {
   const [open, setOpen] = (0, import_react51.useState)(false);
   const wrap = (0, import_react51.useRef)(null);
   (0, import_react51.useEffect)(() => {
@@ -18055,8 +18055,8 @@ function PanelMenu({ items, className, "aria-label": label2 }) {
     (0, import_react51.createElement)("button", {
       type: "button",
       className,
-      "aria-label": label2,
-      title: label2,
+      "aria-label": label3,
+      title: label3,
       "aria-haspopup": "menu",
       "aria-expanded": open,
       onClick: () => setOpen((value) => !value)
@@ -18366,11 +18366,11 @@ function BrowserView({ bot, tabId, leaving, landed, actions, useBrowserPages, ho
   }, [tabId, landed]);
   const go = (event) => {
     event.preventDefault();
-    const text = draft ?? "";
-    if (text.trim() === "") return;
+    const text3 = draft ?? "";
+    if (text3.trim() === "") return;
     setDraft(null);
     input.current?.blur();
-    void actions.browserNavigate(tabId, text).then((opened) => {
+    void actions.browserNavigate(tabId, text3).then((opened) => {
       if (opened) actions.browserFocus(tabId);
     });
   };
@@ -19074,7 +19074,7 @@ var nameIfCut = (event) => {
 };
 var useApproval = (useWork, match) => useWork ? useWork((work) => (work.approvals ?? []).some(match)) : false;
 var useGroupWork = (useWork, pick2) => useWork ? useWork((work) => JSON.stringify(pick2(work.rooms ?? {}))) : "[]";
-var workKeys = (text) => JSON.parse(text);
+var workKeys = (text3) => JSON.parse(text3);
 var doingOf = ({ tool, said, note, target, switching }) => ({ tool, said, note, target, switching });
 var workLine = (lead, doing, more) => (0, import_react53.createElement)(Shimmer, null, `${lead} · ${workPhrase(doing)}…${more > 0 ? ` +${more}` : ""}`);
 var doingLine = (doing) => (0, import_react53.createElement)(Shimmer, null, `${workPhrase(doing)}…`);
@@ -19108,14 +19108,14 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
     actions.openMenu({ kind: "bot", id, x: scopedPoint(event).x, y: scopedPoint(event).y });
   };
   const pinned = bot.pinned === true && !tile;
-  const label2 = [bot.name, main ? t("Main Bot") : "", pinned ? t("Pinned") : "", running || away ? t("Working") : "", waitsFor, approval ? t("Waiting for your approval") : alert ? t("Waiting for your answer") : "", unread ? t("Unread activity") : ""].filter(Boolean).join(", ");
+  const label3 = [bot.name, main ? t("Main Bot") : "", pinned ? t("Pinned") : "", running || away ? t("Working") : "", waitsFor, approval ? t("Waiting for your approval") : alert ? t("Waiting for your answer") : "", unread ? t("Unread activity") : ""].filter(Boolean).join(", ");
   if (tile && wide && !navigation) {
     return (0, import_react53.createElement)("div", { className: "bt-tile-wrap" }, (0, import_react53.createElement)(
       "button",
       {
         type: "button",
         className: "bt-tile",
-        "aria-label": label2,
+        "aria-label": label3,
         "aria-current": active ? "page" : void 0,
         "data-bot-id": id,
         title: preview || bot.name,
@@ -19132,7 +19132,7 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
     {
       type: "button",
       className: "bt-row",
-      "aria-label": label2,
+      "aria-label": label3,
       "aria-current": active ? "page" : void 0,
       "aria-expanded": navigation && active ? details === part : void 0,
       "data-bot-id": id,
@@ -19167,13 +19167,13 @@ function RoomRow({ room: room2, roster, actions, useSessions, useSessionStatus, 
   const workingLine = first ? workLine(first.name, members[0], members.length - 1) : null;
   if (room2.hidden && !active) return null;
   const pinned = room2.pinned === true;
-  const label2 = [room2.name, pinned ? t("Pinned") : "", members.length > 0 ? t("Working") : "", approval ? t("Waiting for your approval") : ""].filter(Boolean).join(", ");
+  const label3 = [room2.name, pinned ? t("Pinned") : "", members.length > 0 ? t("Working") : "", approval ? t("Waiting for your approval") : ""].filter(Boolean).join(", ");
   return (0, import_react53.createElement)(
     "button",
     {
       type: "button",
       className: "bt-row",
-      "aria-label": label2,
+      "aria-label": label3,
       "aria-current": active ? "page" : void 0,
       "aria-expanded": navigation && active ? details === id : void 0,
       "data-room-id": id,
@@ -19284,7 +19284,7 @@ function AgentRow({ agent, actions, useSessions, useSessionStatus, useUi, wide, 
   const unread = sessions.some((session) => session.unread) || marked && !active;
   useMarkedUnread(agent.id, active, marked, actions);
   const preview = sessions[0]?.title ?? t("New session");
-  const label2 = ["DSH Agent", running ? t("Working") : "", unread ? t("Unread activity") : ""].filter(Boolean).join(", ");
+  const label3 = ["DSH Agent", running ? t("Working") : "", unread ? t("Unread activity") : ""].filter(Boolean).join(", ");
   const open = active && wide;
   return (0, import_react53.createElement)(
     "div",
@@ -19294,7 +19294,7 @@ function AgentRow({ agent, actions, useSessions, useSessionStatus, useUi, wide, 
       {
         type: "button",
         className: "bt-row",
-        "aria-label": label2,
+        "aria-label": label3,
         "aria-current": active ? "page" : void 0,
         "data-agent-id": agent.id,
         title: wide ? void 0 : "DSH Agent",
@@ -19371,12 +19371,12 @@ function TitleToggle({ hidden, onToggle }) {
   if (typeof scopedDocument === "undefined") return null;
   const titlebar = scopedDocument.documentElement.hasAttribute("data-windows-titlebar");
   if (!titlebar && !hidden) return null;
-  const label2 = t(hidden ? "Expand sidebar" : "Collapse sidebar");
+  const label3 = t(hidden ? "Expand sidebar" : "Collapse sidebar");
   return createPortal((0, import_react53.createElement)("button", {
     type: "button",
     className: titlebar ? "bt-title-toggle" : "bt-round bt-title-toggle",
-    "aria-label": label2,
-    title: label2,
+    "aria-label": label3,
+    title: label3,
     onClick: onToggle
   }, (0, import_react53.createElement)(SidebarIcon)), scopedDocument.body);
 }
@@ -19447,7 +19447,7 @@ function TeamSidebar(props) {
     const offLeft = frameSnap.collapsedWidth ?? 0;
     let last = null;
     let liveLeft = mode;
-    let done = false;
+    let done2 = false;
     const write2 = (at) => {
       const width = at.left === "rail" ? RAIL_WIDTH : at.width;
       column.style.width = `${width}px`;
@@ -19491,8 +19491,8 @@ function TeamSidebar(props) {
     };
     const ends = ["pointerup", "pointercancel", "lostpointercapture"];
     const onEnd = (end) => {
-      if (done) return;
-      done = true;
+      if (done2) return;
+      done2 = true;
       if (end.type === "pointerup") track(scopedPoint(end).x);
       grip.removeEventListener("pointermove", onMove);
       for (const name of ends) grip.removeEventListener(name, onEnd);
@@ -19708,7 +19708,7 @@ function UpdateButton({ useUpdate, actions }) {
     setDshError("");
     void actions.installDshUpdate().catch((failure) => setDshError(hostText(failure?.message ?? String(failure))));
   };
-  const label2 = phase === "installing" ? t("Updating DS Bot…") : dshPhase === "installing" ? t("Updating DSH…") : phase === "installed" ? t("DS Bot {version} is installed. Restart DSH to use it.", { version: update.installed ?? update.latest }) : phase === "updated" ? t("DS Bot {version} is installed.", { version: update.installed ?? update.latest }) : dshPhase === "installed" ? t("Restart DSH to start using DSH {version}.", { version: dsh.installed ?? dsh.verified }) : update?.available ? t("DS Bot {version} is available", { version: update.latest }) : t("DSH {version} is available", { version: dsh?.verified });
+  const label3 = phase === "installing" ? t("Updating DS Bot…") : dshPhase === "installing" ? t("Updating DSH…") : phase === "installed" ? t("DS Bot {version} is installed. Restart DSH to use it.", { version: update.installed ?? update.latest }) : phase === "updated" ? t("DS Bot {version} is installed.", { version: update.installed ?? update.latest }) : dshPhase === "installed" ? t("Restart DSH to start using DSH {version}.", { version: dsh.installed ?? dsh.verified }) : update?.available ? t("DS Bot {version} is available", { version: update.latest }) : t("DSH {version} is available", { version: dsh?.verified });
   const message = error || (phase === "failed" ? update.error : "");
   const dshMessage = dshError || (dshPhase === "failed" ? dsh?.error : "");
   const dshText = dshPhase === "installed" ? t("Restart DSH to start using DSH {version}.", { version: dsh.installed ?? dsh.verified }) : dsh?.available === false && dsh?.blockedBy ? t("Update DS Bot {version} first.", { version: dsh.blockedBy }) : t("You have {version}.", { version: dsh?.current });
@@ -19720,8 +19720,8 @@ function UpdateButton({ useUpdate, actions }) {
       type: "button",
       className: "bt-round bt-update",
       "data-phase": cloudPhase,
-      "aria-label": label2,
-      title: label2,
+      "aria-label": label3,
+      title: label3,
       "aria-haspopup": "dialog",
       "aria-expanded": open,
       onClick: toggle
@@ -19979,15 +19979,15 @@ function AccountLauncher({ seat = true, settingsOpen, openSettings, openOnboardi
         import_react53.Fragment,
         { key: index },
         index > 0 ? (0, import_react53.createElement)("div", { className: "bt-menu-sep", role: "separator" }) : null,
-        group.map(([label2, Icon, run2, hint, stay]) => (0, import_react53.createElement)("button", {
-          key: label2,
+        group.map(([label3, Icon, run2, hint, stay]) => (0, import_react53.createElement)("button", {
+          key: label3,
           type: "button",
           role: "menuitem",
           onClick: () => {
             if (stay !== true) setOpen(false);
             void Promise.resolve(run2()).catch((error) => actions.reportError(error, "menu"));
           }
-        }, (0, import_react53.createElement)(Icon), (0, import_react53.createElement)("span", { className: "bt-menu-label" }, label2), hint ? (0, import_react53.createElement)("span", { className: "bt-menu-hint" }, hint) : null))
+        }, (0, import_react53.createElement)(Icon), (0, import_react53.createElement)("span", { className: "bt-menu-label" }, label3), hint ? (0, import_react53.createElement)("span", { className: "bt-menu-hint" }, hint) : null))
       ))
     ), scopedDocument.body) : null
   );
@@ -20140,20 +20140,20 @@ function mentionableBots(roster, sessionId) {
   if (room2) return room2.members.map((id) => roster.byId[id]).filter(Boolean);
   return roster.byId[sessionId] ? roster.bots : [];
 }
-function userTextParts(text, bots, referenceLabels = []) {
+function userTextParts(text3, bots, referenceLabels = []) {
   const parts = [];
   let cursor = 0;
-  for (const span of mentionSpans(text, bots, { references: referenceLabels })) {
+  for (const span of mentionSpans(text3, bots, { references: referenceLabels })) {
     if (!span.bot) continue;
-    if (span.start > cursor) parts.push({ text: text.slice(cursor, span.start) });
-    parts.push({ bot: span.bot, label: text.slice(span.start + 1, span.end) });
+    if (span.start > cursor) parts.push({ text: text3.slice(cursor, span.start) });
+    parts.push({ bot: span.bot, label: text3.slice(span.start + 1, span.end) });
     cursor = span.end;
   }
-  if (cursor < text.length) parts.push({ text: text.slice(cursor) });
+  if (cursor < text3.length) parts.push({ text: text3.slice(cursor) });
   return parts;
 }
-function UserText({ text, bots, referenceLabels, skillNames, references, actions }) {
-  return userTextParts(text, bots, referenceLabels).map((part, index) => part.bot ? (0, import_react54.createElement)(
+function UserText({ text: text3, bots, referenceLabels, skillNames, references, actions }) {
+  return userTextParts(text3, bots, referenceLabels).map((part, index) => part.bot ? (0, import_react54.createElement)(
     "button",
     { key: index, type: "button", className: "bt-umention", title: `@${part.bot.name}`, onClick: () => actions.openSession(part.bot.id) },
     (0, import_react54.createElement)(BotMark, { bot: part.bot, size: 16 }),
@@ -20176,10 +20176,10 @@ function Attachments({ attachments, renderMessageImages }) {
     );
   }));
 }
-function CopyButton({ text }) {
+function CopyButton({ text: text3 }) {
   const [copied, setCopied] = (0, import_react54.useState)(false);
   const copy3 = () => {
-    void navigator.clipboard?.writeText(text).then(() => {
+    void navigator.clipboard?.writeText(text3).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1e3);
     });
@@ -20190,12 +20190,12 @@ var clock3 = (time) => typeof time === "number" ? new Date(time).toLocaleTimeStr
 function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageImages, openFile, openSkill }) {
   const roster = useRoster((value) => value);
   const data = node.data ?? {};
-  const { text, attachments, rest } = contentParts(data.content);
+  const { text: text3, attachments, rest } = contentParts(data.content);
   const referenceLabels = data.referenceLabels ?? [];
   const references = openFile && openSkill ? { openFile, openSkill } : void 0;
   const steering = node.kind === "steering";
   const groupTime = roster.roomsById?.[sessionId] && Number.isFinite(data.time) ? messageClock(data.time) : void 0;
-  const { shown, folded, control } = useFold(text, { markdown: false });
+  const { shown, folded, control } = useFold(text3, { markdown: false });
   const body = (0, import_react54.createElement)(UserText, { text: shown, bots: mentionableBots(roster, sessionId), referenceLabels, skillNames: data.skillNames ?? [], references, actions });
   const row = (0, import_react54.useRef)(null);
   const [toolsOpen, setToolsOpen] = (0, import_react54.useState)(false);
@@ -20222,7 +20222,7 @@ function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageIma
       "div",
       { className: "bt-ustack" },
       attachments.length > 0 ? (0, import_react54.createElement)(Attachments, { attachments, renderMessageImages }) : null,
-      text !== "" || rest.length > 0 ? (0, import_react54.createElement)(
+      text3 !== "" || rest.length > 0 ? (0, import_react54.createElement)(
         "div",
         { className: "bt-ubody", title: clock3(data.time), "data-folded": folded || void 0, onClick: tapTools },
         control ? (0, import_react54.createElement)("div", { className: "bt-fold-body" }, body) : body,
@@ -20232,7 +20232,7 @@ function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageIma
       referenceLabels.length > 0 ? (0, import_react54.createElement)("div", { className: "bt-urefs" }, t("Referenced {labels}", { labels: referenceLabels.join(t(", ")) })) : null,
       groupTime ? (0, import_react54.createElement)("div", { className: "bt-utime", title: clockLabel(data.time) }, groupTime) : null
     ),
-    text === "" ? null : (0, import_react54.createElement)("div", { className: "bt-utools", "data-open": toolsOpen || void 0 }, (0, import_react54.createElement)(CopyButton, { text }))
+    text3 === "" ? null : (0, import_react54.createElement)("div", { className: "bt-utools", "data-open": toolsOpen || void 0 }, (0, import_react54.createElement)(CopyButton, { text: text3 }))
   );
 }
 var USER_MESSAGE_CSS = `
@@ -20255,7 +20255,7 @@ var USER_MESSAGE_CSS = `
 `;
 
 // ../app/ui/src/locale.js
-var fill2 = (text, params) => params ? text.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match) : text;
+var fill2 = (text3, params) => params ? text3.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match) : text3;
 function createLocale(tag) {
   const active = /^zh\b/i.test(tag) ? "zh" : "en";
   const dictionaries = /* @__PURE__ */ new Map();
@@ -20586,7 +20586,8 @@ function TaskProgress({ team, sessionId, ctx, all = false }) {
   };
   const owner = roster.byId[sessionId]?.id;
   const known = all ? [...new Map([...history, ...roster.tasks ?? []].map((task) => [task.id, task])).values()] : roster.tasks ?? [];
-  const owned = known.filter((task) => all || task.owner === owner);
+  const planned = new Set((roster.todos ?? []).map((task) => task.executionId).filter(Boolean));
+  const owned = known.filter((task) => !planned.has(task.id) && (all || task.owner === owner));
   const tasks = owned.filter((task) => !all || (filter === "all" || (filter === "open" ? !["completed", "cancelled"].includes(task.status) : task.status === filter)) && `${task.summary ?? ""} ${roster.byId[task.owner]?.name ?? ""}`.toLowerCase().includes(search.toLowerCase()));
   const expanded = all || folds[owner] !== true;
   const toggleTasks = () => setFolds((previous) => {
@@ -20666,9 +20667,9 @@ function BrowserWorkspace({ roster, initialBotId }) {
     if (!roster.bots.some((bot) => bot.id === botId)) setBotId(roster.bots[0]?.id ?? "");
   }, [roster.bots, botId]);
   const sendInput = () => {
-    const text = input;
+    const text3 = input;
     setInput("");
-    void request("type", { text });
+    void request("type", { text: text3 });
   };
   return /* @__PURE__ */ import_react57.default.createElement("section", { className: "mek-browser-workspace" }, /* @__PURE__ */ import_react57.default.createElement("h2", null, copy2("Bot browser", "Bot 浏览器")), !capability?.available ? /* @__PURE__ */ import_react57.default.createElement("p", null, copy2("Browser control is not enabled on this host. Enable a supported Bot browser plugin before opening pages. Existing DSH browser tools are unchanged.", "此主机尚未启用 Bot 浏览器控制。启用支持的 Bot 浏览器插件后即可查看和接管页面。现有 DSH 浏览器工具保持原样。")) : /* @__PURE__ */ import_react57.default.createElement(import_react57.default.Fragment, null, /* @__PURE__ */ import_react57.default.createElement("p", null, copy2("View an already open browser. Take over before interacting; the Bot waits until you return control.", "查看已打开的浏览器。接管后可操作，交还前 Bot 会等待。")), /* @__PURE__ */ import_react57.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react57.default.createElement("label", null, copy2("Bot", "Bot"), /* @__PURE__ */ import_react57.default.createElement("select", { value: botId, onChange: (event) => setBotId(event.target.value) }, roster.bots.map((bot) => /* @__PURE__ */ import_react57.default.createElement("option", { key: bot.id, value: bot.id }, bot.name)))), /* @__PURE__ */ import_react57.default.createElement("button", { disabled: busy || !botId, onClick: () => void request() }, copy2("Refresh view", "刷新画面")), page?.open && /* @__PURE__ */ import_react57.default.createElement("button", { disabled: busy, onClick: () => void request(held ? "release" : "take") }, held ? copy2("Return control", "交还控制") : copy2("Take over", "接管"))), page && !page.open && /* @__PURE__ */ import_react57.default.createElement("p", null, copy2("No browser is open for this Bot. Ask it to open the page in its conversation first.", "这个 Bot 尚未打开浏览器。请先在对话中让它打开所需页面。")), page?.open && /* @__PURE__ */ import_react57.default.createElement(import_react57.default.Fragment, null, /* @__PURE__ */ import_react57.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react57.default.createElement("input", { "aria-label": copy2("Page address", "页面地址"), value: address, onChange: (event) => setAddress(event.target.value), disabled: !held || busy }), /* @__PURE__ */ import_react57.default.createElement("button", { disabled: !held || busy, onClick: () => void request("navigate", { url: address }) }, copy2("Open", "打开"))), /* @__PURE__ */ import_react57.default.createElement("div", { className: "mek-browser-tabs", role: "group", "aria-label": copy2("Browser tabs", "浏览器标签页") }, page.tabs?.map((tab) => /* @__PURE__ */ import_react57.default.createElement("button", { key: tab.index, disabled: !held || busy, "aria-pressed": tab.active, onClick: () => void request("tab", { index: tab.index }) }, tab.title || tab.url || copy2("Page", "页面")))), /* @__PURE__ */ import_react57.default.createElement("p", { role: "status" }, held ? copy2("You are in control. Click the picture to focus a field or button.", "当前由你控制。点击画面定位输入框或按钮。") : page.hold?.note || copy2("Viewing only. The Bot remains in control.", "仅查看画面，Bot 仍可操作。")), page.image ? /* @__PURE__ */ import_react57.default.createElement("button", { className: "mek-browser-image", disabled: !held || busy, "aria-label": copy2("Click in the browser screenshot", "点击浏览器画面"), onClick: (event) => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -20679,9 +20680,9 @@ var BROWSER_WORKSPACE_CSS = `.mek-browser-image{display:block!important;width:10
 
 // src/client/mek/overview.jsx
 var import_react58 = __toESM(require("react"), 1);
-var array = (text) => text.split("\n").map((value) => value.trim()).filter(Boolean);
-function BotSelect({ roster, value, onChange, label: label2 = copy2("Bot", "Bot"), blank: blank3 = false }) {
-  return /* @__PURE__ */ import_react58.default.createElement("label", null, label2, /* @__PURE__ */ import_react58.default.createElement("select", { value: value ?? "", onChange: (event) => onChange(event.target.value || null) }, blank3 && /* @__PURE__ */ import_react58.default.createElement("option", { value: "" }, copy2("None", "无")), roster.bots.map((bot) => /* @__PURE__ */ import_react58.default.createElement("option", { key: bot.id, value: bot.id }, bot.name))));
+var array = (text3) => text3.split("\n").map((value) => value.trim()).filter(Boolean);
+function BotSelect({ roster, value, onChange, label: label3 = copy2("Bot", "Bot"), blank: blank3 = false }) {
+  return /* @__PURE__ */ import_react58.default.createElement("label", null, label3, /* @__PURE__ */ import_react58.default.createElement("select", { value: value ?? "", onChange: (event) => onChange(event.target.value || null) }, blank3 && /* @__PURE__ */ import_react58.default.createElement("option", { value: "" }, copy2("None", "无")), roster.bots.map((bot) => /* @__PURE__ */ import_react58.default.createElement("option", { key: bot.id, value: bot.id }, bot.name))));
 }
 function Check({ children, checked, onChange, disabled }) {
   return /* @__PURE__ */ import_react58.default.createElement("label", { className: "mek-check" }, /* @__PURE__ */ import_react58.default.createElement("input", { type: "checkbox", checked: Boolean(checked), disabled, onChange: (event) => onChange(event.target.checked) }), children);
@@ -20908,7 +20909,7 @@ function TeamHeader({ team, views }) {
   return /* @__PURE__ */ import_react59.default.createElement("header", { className: "mek-team-header" }, /* @__PURE__ */ import_react59.default.createElement("nav", { ref: list, className: "mek-team-center", "aria-label": t("Bot list") }, /* @__PURE__ */ import_react59.default.createElement(TeamSidebar, { ...views, actions, wide: true, navigation: true })), /* @__PURE__ */ import_react59.default.createElement("div", { ref: more, className: "mek-team-tools" }, /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", className: "bt-round", "aria-label": t("Search"), title: t("Search"), onClick: () => {
     setOpen(false);
     team.actions.openPalette();
-  } }, /* @__PURE__ */ import_react59.default.createElement(SearchIcon, null)), /* @__PURE__ */ import_react59.default.createElement("button", { ref: trigger, type: "button", className: "bt-round", "aria-label": t("More"), title: t("More"), "aria-expanded": open, "aria-haspopup": "menu", onClick: () => setOpen((value) => !value) }, /* @__PURE__ */ import_react59.default.createElement(DotsIcon, null)), menu && /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu mek-team-menu", role: "menu", "data-leaving": leaving ? "" : void 0, inert: leaving ? "" : void 0, onKeyDown: menuKeys }, /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", role: "menuitem", onClick: () => run2(() => team.actions.openNewChat("new")) }, /* @__PURE__ */ import_react59.default.createElement(PlusIcon, null), t("New…")), /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu-sep", role: "separator" }), [[t("Usage"), "usage"], [t("Connectors"), "connectors"], [t("Bot settings"), "general"]].map(([label2, page]) => /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", role: "menuitem", key: page, onClick: () => run2(() => team.actions.openSettings(page)) }, label2)))));
+  } }, /* @__PURE__ */ import_react59.default.createElement(SearchIcon, null)), /* @__PURE__ */ import_react59.default.createElement("button", { ref: trigger, type: "button", className: "bt-round", "aria-label": t("More"), title: t("More"), "aria-expanded": open, "aria-haspopup": "menu", onClick: () => setOpen((value) => !value) }, /* @__PURE__ */ import_react59.default.createElement(DotsIcon, null)), menu && /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu mek-team-menu", role: "menu", "data-leaving": leaving ? "" : void 0, inert: leaving ? "" : void 0, onKeyDown: menuKeys }, /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", role: "menuitem", onClick: () => run2(() => team.actions.openNewChat("new")) }, /* @__PURE__ */ import_react59.default.createElement(PlusIcon, null), t("New…")), /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu-sep", role: "separator" }), [[t("Usage"), "usage"], [t("Connectors"), "connectors"], [t("Bot settings"), "general"]].map(([label3, page]) => /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", role: "menuitem", key: page, onClick: () => run2(() => team.actions.openSettings(page)) }, label3)))));
 }
 var TEAM_HEADER_CSS = `
 .dsb-frame.mek-team-frame{grid-template-columns:minmax(0,1fr);grid-template-rows:40px minmax(0,1fr)}
@@ -21021,10 +21022,10 @@ function GroupChat({ sessionId, team }) {
     follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
   } }, /* @__PURE__ */ import_react60.default.createElement("div", { className: "dsb-column" }, /* @__PURE__ */ import_react60.default.createElement("div", { className: "dsb-flow", role: "feed", "aria-label": room2?.name, "aria-busy": view.loading }, view.cursor !== null && /* @__PURE__ */ import_react60.default.createElement("button", { className: "bt-soft", onClick: () => refresh.current?.(view.cursor) }, t("Load earlier")), view.items.map((item) => item.kind === "group" ? /* @__PURE__ */ import_react60.default.createElement(GroupReplies, { key: item.key, sessionId, callId: item.callId, done: true, content: item.content, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork, showActivity: false }) : item.kind === "post" ? /* @__PURE__ */ import_react60.default.createElement(GroupMessage, { key: item.key, bot: roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: "gray" }, text: stripHeader(contentText(item.content)), room: room2, roster, actions, time: item.time }) : /* @__PURE__ */ import_react60.default.createElement(ChatRows, { key: item.key, items: [item], sessionId: item.sessionId, roster, actions, useUi: hooks.useUi, clock: true })), view.progress.filter((id) => !view.items.some((item) => item.callId === id)).map((id) => /* @__PURE__ */ import_react60.default.createElement(GroupReplies, { key: id, sessionId, callId: id, done: false, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork, showActivity: false })), error && /* @__PURE__ */ import_react60.default.createElement("button", { className: "bt-soft", role: "alert", onClick: () => refresh.current?.() }, error, " · ", t("Try again")), /* @__PURE__ */ import_react60.default.createElement("div", { "data-group-running": "", hidden: active.length === 0 }, active.map((entry) => {
     const bot = roster.byId[entry.id];
-    const label2 = entry.state === "ask" ? t("Waiting for your approval") : workPhrase(entry.doing);
-    return /* @__PURE__ */ import_react60.default.createElement("div", { key: entry.id, className: "bt-typing", "data-running-bot": entry.id, role: "status" }, /* @__PURE__ */ import_react60.default.createElement(BotMark, { bot, size: 22, state: entry.state === "ask" ? "alert" : workState(entry.doing) }), /* @__PURE__ */ import_react60.default.createElement("span", { className: "bt-typing-text" }, /* @__PURE__ */ import_react60.default.createElement("span", { className: "bt-typing-label" }, /* @__PURE__ */ import_react60.default.createElement(Shimmer, null, bot.name, " · ", label2, "…")), /* @__PURE__ */ import_react60.default.createElement(Elapsed, { at: entry.doing.since, className: "bt-typing-time" })));
-  }))))), /* @__PURE__ */ import_react60.default.createElement("div", { className: "dsb-composer-root" }, /* @__PURE__ */ import_react60.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text, images, id) => {
-    await actions.send(sessionId, text, images, id);
+    const label3 = entry.state === "ask" ? t("Waiting for your approval") : workPhrase(entry.doing);
+    return /* @__PURE__ */ import_react60.default.createElement("div", { key: entry.id, className: "bt-typing", "data-running-bot": entry.id, role: "status" }, /* @__PURE__ */ import_react60.default.createElement(BotMark, { bot, size: 22, state: entry.state === "ask" ? "alert" : workState(entry.doing) }), /* @__PURE__ */ import_react60.default.createElement("span", { className: "bt-typing-text" }, /* @__PURE__ */ import_react60.default.createElement("span", { className: "bt-typing-label" }, /* @__PURE__ */ import_react60.default.createElement(Shimmer, null, bot.name, " · ", label3, "…")), /* @__PURE__ */ import_react60.default.createElement(Elapsed, { at: entry.doing.since, className: "bt-typing-time" })));
+  }))))), /* @__PURE__ */ import_react60.default.createElement("div", { className: "dsb-composer-root" }, /* @__PURE__ */ import_react60.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text3, images, id) => {
+    await actions.send(sessionId, text3, images, id);
     await refresh.current?.();
   }, actions, useUi: hooks.useUi, useRoster: hooks.useRoster })));
 }
@@ -21087,17 +21088,124 @@ function SessionPermissions({ ctx, sessionId }) {
 }
 var PERMISSION_CSS = `.mek-session-permissions{min-height:32px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.mek-session-permission-value{font-size:13px}.mek-session-permission-open{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:4px 10px;border:1px solid var(--bt-line);border-radius:999px;background:transparent;color:var(--bt-ink-2);font:inherit;font-size:12px;cursor:pointer}.mek-session-permission-open:hover:not(:disabled){background:var(--bt-hover);color:var(--bt-ink)}.mek-session-permission-open:disabled{opacity:.5;cursor:default}.mek-session-permission-open:focus-visible,.mek-permission-defaults summary:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-permission-defaults{margin-top:12px}.mek-permission-defaults>summary{cursor:pointer;color:var(--bt-ink-2);font-size:12px}.mek-permission-defaults .bt-note{margin:8px 0}`;
 
-// src/client/mek/view.jsx
+// src/client/mek/todo-schedules.jsx
 var import_react63 = __toESM(require("react"), 1);
+var text = (en, zh) => language().startsWith("zh") ? zh : en;
+function TodoSchedules({ team, target, value }) {
+  const [title, setTitle] = (0, import_react63.useState)(""), [time, setTime] = (0, import_react63.useState)("09:00"), [action, setAction] = (0, import_react63.useState)("reminder");
+  const [kind, setKind] = (0, import_react63.useState)("daily"), [date, setDate] = (0, import_react63.useState)(""), [error, setError] = (0, import_react63.useState)(""), [busy, setBusy] = (0, import_react63.useState)(false);
+  const sending = (0, import_react63.useRef)(false), request = (0, import_react63.useRef)(null);
+  const rules = (value?.rules ?? []).filter((item) => item.target === target);
+  const mutate = async (endpoint, body) => {
+    if (sending.current) return;
+    sending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await call(endpoint, body);
+      await team.refresh();
+      return result;
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  };
+  const create = async (event) => {
+    event.preventDefault();
+    request.current ??= crypto.randomUUID();
+    const when4 = kind === "at" ? { kind, at: `${date}:00+08:00` } : kind === "weekdays" ? { kind: "weekly", time, weekdays: [1, 2, 3, 4, 5], timeZone: "Asia/Shanghai" } : { kind, time, timeZone: "Asia/Shanghai" };
+    const result = await mutate("mek-todo-schedule-create", { target, requestId: request.current, title, instruction: title, action, when: when4 });
+    if (result) {
+      setTitle("");
+      request.current = null;
+    }
+  };
+  return /* @__PURE__ */ import_react63.default.createElement("details", { className: "mek-todo-schedules" }, /* @__PURE__ */ import_react63.default.createElement("summary", null, text("Scheduled", "定时"), " · ", rules.filter((rule) => rule.enabled).length), !value?.available && /* @__PURE__ */ import_react63.default.createElement("p", null, text("Durable DSH scheduling is unavailable.", "当前宿主未提供持久化定时能力。")), value?.available && /* @__PURE__ */ import_react63.default.createElement("form", { className: "mek-todo-schedule-form", onSubmit: create }, /* @__PURE__ */ import_react63.default.createElement("input", { required: true, maxLength: 120, value: title, "aria-label": text("Scheduled instructions", "定时事项"), placeholder: text("What should happen?", "要提醒或处理什么？"), onChange: (event) => {
+    setTitle(event.target.value);
+    request.current = null;
+  } }), /* @__PURE__ */ import_react63.default.createElement("select", { "aria-label": text("Scheduled action", "到时做什么"), value: action, onChange: (event) => {
+    setAction(event.target.value);
+    request.current = null;
+  } }, /* @__PURE__ */ import_react63.default.createElement("option", { value: "reminder" }, text("Remind", "提醒")), /* @__PURE__ */ import_react63.default.createElement("option", { value: "todo" }, text("Create a to-do", "生成待办")), /* @__PURE__ */ import_react63.default.createElement("option", { value: "execute" }, text("Arrange work", "自动安排执行"))), /* @__PURE__ */ import_react63.default.createElement("select", { "aria-label": text("Repeat", "重复方式"), value: kind, onChange: (event) => {
+    setKind(event.target.value);
+    request.current = null;
+  } }, /* @__PURE__ */ import_react63.default.createElement("option", { value: "at" }, text("Once", "单次")), /* @__PURE__ */ import_react63.default.createElement("option", { value: "daily" }, text("Daily", "每天")), /* @__PURE__ */ import_react63.default.createElement("option", { value: "weekdays" }, text("Weekdays", "工作日"))), kind === "at" ? /* @__PURE__ */ import_react63.default.createElement("input", { required: true, type: "datetime-local", "aria-label": text("Beijing date and time", "北京时间"), value: date, onChange: (event) => {
+    setDate(event.target.value);
+    request.current = null;
+  } }) : /* @__PURE__ */ import_react63.default.createElement("input", { required: true, type: "time", "aria-label": text("Beijing time", "北京时间"), value: time, onChange: (event) => {
+    setTime(event.target.value);
+    request.current = null;
+  } }), /* @__PURE__ */ import_react63.default.createElement("small", null, text("Asia/Shanghai", "北京时间")), /* @__PURE__ */ import_react63.default.createElement("button", { type: "submit", disabled: busy }, text("Save schedule", "保存定时"))), error && /* @__PURE__ */ import_react63.default.createElement("p", { role: "alert" }, error), rules.map((rule) => /* @__PURE__ */ import_react63.default.createElement("article", { key: rule.id, className: "mek-todo" }, /* @__PURE__ */ import_react63.default.createElement("div", { className: "mek-todo-content" }, /* @__PURE__ */ import_react63.default.createElement("p", null, rule.title, " · ", rule.state === "unknown" ? text("Needs checking", "待核对") : rule.state === "ended" ? text("Ended", "已结束") : rule.enabled ? text("Enabled", "已启用") : text("Paused", "已暂停")), rule.nextAt && /* @__PURE__ */ import_react63.default.createElement("small", null, text("Next: ", "下次："), new Date(rule.nextAt).toLocaleString(void 0, { timeZone: "Asia/Shanghai" }), " · Asia/Shanghai"), rule.error && /* @__PURE__ */ import_react63.default.createElement("p", { role: "alert" }, rule.error), rule.instances?.slice(-3).map((instance) => /* @__PURE__ */ import_react63.default.createElement("small", { key: instance.id }, new Date(instance.scheduledAt).toLocaleString(void 0, { timeZone: "Asia/Shanghai" }), " · ", instance.reason ?? instance.status, instance.notification === "unknown" ? text(" · delivery needs checking", " · 送达待核对") : "")), rule.state !== "ended" && /* @__PURE__ */ import_react63.default.createElement("button", { type: "button", disabled: busy, onClick: () => void mutate(`mek-todo-schedule-${rule.enabled ? "pause" : "resume"}`, { id: rule.id }) }, rule.enabled ? text("Pause schedule", "暂停定时") : text("Resume schedule", "恢复定时"))))));
+}
+var TODO_SCHEDULE_CSS = `.mek-todo-schedules{margin-top:12px;border-top:1px solid var(--bt-line);padding:8px 0}.mek-todo-schedules>summary{cursor:pointer}.mek-todo-schedule-form{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.mek-todo-schedule-form input,.mek-todo-schedule-form select{max-width:100%;min-width:0;padding:5px;border:1px solid var(--bt-line);border-radius:6px;background:var(--bt-card);color:inherit;font:inherit}.mek-todo-schedule-form input:first-child{flex-basis:100%;width:100%}.mek-todo-schedules button{padding:5px 8px;background:transparent;border:1px solid var(--bt-line);border-radius:6px}.mek-todo-schedules small{display:block;color:var(--bt-ink-2);overflow-wrap:anywhere}`;
+
+// src/client/mek/todos.jsx
+var import_react64 = __toESM(require("react"), 1);
+var text2 = (en, zh) => language().startsWith("zh") ? zh : en;
+var done = (task) => ["completed", "cancelled"].includes(task.status);
+var label2 = (task) => ({ pending: text2("To do", "待办"), waiting: text2("Waiting for predecessors", "等待前置"), paused: text2("Paused", "已暂停") })[task.status] ?? taskStatus(task.status);
+function ConversationTodos({ team, sessionId }) {
+  const roster = team.hooks.useRoster((value) => value);
+  const [open, setOpen] = (0, import_react64.useState)(false);
+  const [title, setTitle] = (0, import_react64.useState)("");
+  const [busy, setBusy] = (0, import_react64.useState)(false);
+  const [error, setError] = (0, import_react64.useState)("");
+  const [limit, setLimit] = (0, import_react64.useState)(8);
+  const requestId2 = (0, import_react64.useRef)(null), sending = (0, import_react64.useRef)(false);
+  const botId = roster.byId[sessionId]?.id ?? sessionId;
+  const target = roster.roomsById[sessionId]?.id ?? botId;
+  const tasks = roster.todos ?? [];
+  const scoped = tasks.filter((task) => task.roomId === target || task.botId === botId || !roster.roomsById[sessionId] && task.worker === botId);
+  const roots = scoped.filter((task) => !task.parentId || !scoped.some((root) => root.id === task.rootId));
+  const active = roots.filter((task) => !done(task)).length;
+  const mutate = async (endpoint, body) => {
+    if (sending.current) return;
+    sending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await call(endpoint, body);
+      await team.refresh();
+      return result;
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  };
+  const create = async (event) => {
+    event.preventDefault();
+    const id = requestId2.current ?? crypto.randomUUID();
+    requestId2.current = id;
+    const result = await mutate("mek-todo-plan", { target, title: title.trim(), requestId: id });
+    if (result) {
+      setTitle("");
+      requestId2.current = null;
+    }
+  };
+  const operation = (task, action) => void mutate(`mek-todo-${action}`, { id: task.id, revision: task.revision });
+  const render = (task, child = false) => /* @__PURE__ */ import_react64.default.createElement("details", { key: task.id, className: `mek-todo${child ? " mek-todo-child" : ""}`, "data-todo-id": task.id }, /* @__PURE__ */ import_react64.default.createElement("summary", null, /* @__PURE__ */ import_react64.default.createElement("span", { className: "mek-todo-title" }, task.title), /* @__PURE__ */ import_react64.default.createElement("span", null, label2(task))), /* @__PURE__ */ import_react64.default.createElement("div", { className: "mek-todo-content" }, task.parentId && /* @__PURE__ */ import_react64.default.createElement("small", null, text2("Assigned from a group task", "来自群任务的安排")), task.worker && /* @__PURE__ */ import_react64.default.createElement("small", null, roster.byId[task.worker]?.name ?? text2("Member unavailable", "成员不可用")), task.reason && /* @__PURE__ */ import_react64.default.createElement("p", { role: "status" }, task.reason), task.predecessors?.length > 0 && /* @__PURE__ */ import_react64.default.createElement("p", null, text2("After: ", "前置："), task.predecessors.map((item) => `${item.title} · ${label2(item)}`).join(" / ")), task.instruction !== task.title && /* @__PURE__ */ import_react64.default.createElement("p", null, task.instruction), task.assignment?.report && /* @__PURE__ */ import_react64.default.createElement("p", null, task.assignment.report.summary, /* @__PURE__ */ import_react64.default.createElement("br", null), task.assignment.report.evidence), task.acceptance && /* @__PURE__ */ import_react64.default.createElement("p", null, task.acceptance.summary, /* @__PURE__ */ import_react64.default.createElement("br", null), task.acceptance.evidence), tasks.filter((item) => item.parentId === task.id).map((item) => render(item, true)), !done(task) && /* @__PURE__ */ import_react64.default.createElement("div", { className: "mek-todo-actions" }, !task.startRequested && /* @__PURE__ */ import_react64.default.createElement("button", { type: "button", disabled: busy, onClick: () => operation(task, "start") }, text2("Start", "开始")), task.startRequested && /* @__PURE__ */ import_react64.default.createElement("button", { type: "button", disabled: busy, onClick: () => operation(task, task.paused ? "resume" : "pause") }, task.paused ? text2("Resume", "继续") : text2("Pause", "暂停")), !child && /* @__PURE__ */ import_react64.default.createElement("button", { type: "button", disabled: busy, onClick: () => operation(task, "cancel") }, text2("Cancel", "取消")))));
+  return /* @__PURE__ */ import_react64.default.createElement("section", { className: "mek-todos", "aria-label": text2("Conversation to-dos", "会话待办") }, /* @__PURE__ */ import_react64.default.createElement("button", { type: "button", className: "mek-todo-toggle", "aria-expanded": open, onClick: () => setOpen((value) => !value) }, text2("To-dos", "待办"), " · ", active, /* @__PURE__ */ import_react64.default.createElement("span", null, open ? text2("Collapse", "收起") : text2("Open", "展开"))), open && /* @__PURE__ */ import_react64.default.createElement("div", { className: "mek-todo-list" }, /* @__PURE__ */ import_react64.default.createElement("form", { className: "mek-todo-create", onSubmit: create }, /* @__PURE__ */ import_react64.default.createElement("input", { "aria-label": text2("New to-do", "新增待办"), value: title, maxLength: 240, required: true, placeholder: text2("Remember something to do…", "记下一件待办事项…"), onChange: (event) => {
+    setTitle(event.target.value);
+    requestId2.current = null;
+  } }), /* @__PURE__ */ import_react64.default.createElement("button", { type: "submit", disabled: busy || !title.trim() }, text2("Add", "添加"))), /* @__PURE__ */ import_react64.default.createElement("p", { className: "mek-todo-hint" }, text2("Tell the Bot when to start or how the work should be split. The group administrator arranges members.", "通过聊天说明何时开始或如何拆分，群管理员负责安排成员。")), error && /* @__PURE__ */ import_react64.default.createElement("p", { role: "alert" }, error), !roots.length && /* @__PURE__ */ import_react64.default.createElement("p", null, text2("No to-dos yet.", "暂无待办。")), roots.slice(0, limit).map((task) => render(task)), roots.length > limit && /* @__PURE__ */ import_react64.default.createElement("button", { type: "button", onClick: () => setLimit((value) => value + 8) }, text2("Show more", "显示更多")), /* @__PURE__ */ import_react64.default.createElement(TodoSchedules, { team, target: roster.roomsById[sessionId] ? roster.roomsById[sessionId].id : botId, value: roster.todoSchedules })));
+}
+var TODO_CSS = `.mek-todos{flex:none;font-size:12px;color:var(--bt-ink);padding:0 16px;min-width:0}.mek-todo-toggle{display:flex;justify-content:space-between;width:100%;max-width:900px;margin:auto;padding:6px 0;background:transparent;border:0;color:inherit;font:inherit;cursor:pointer}.mek-todo-toggle span,.mek-todo-hint{color:var(--bt-ink-2)}.mek-todo-list{max-height:38vh;overflow:auto;max-width:900px;margin:auto;padding-bottom:8px}.mek-todo-create{display:flex;gap:6px;margin:6px 0}.mek-todo-create input{flex:1;min-width:0;padding:7px;border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-card);color:inherit;font:inherit}.mek-todos button{font:inherit;color:inherit;cursor:pointer}.mek-todo-create button,.mek-todo-actions button{padding:5px 10px;border:1px solid var(--bt-line);border-radius:8px;background:transparent}.mek-todos button:disabled{opacity:.5;cursor:default}.mek-todos button:focus-visible,.mek-todos summary:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-todo{border:1px solid var(--bt-line);border-radius:10px;margin:5px 0;min-width:0}.mek-todo summary{display:flex;align-items:flex-start;gap:10px;padding:8px;cursor:pointer}.mek-todo summary>span:last-child{flex:none;color:var(--bt-ink-2)}.mek-todo-title{flex:1;min-width:0;overflow-wrap:anywhere}.mek-todo-content{padding:0 8px 8px;overflow-wrap:anywhere}.mek-todo-content p{white-space:pre-wrap}.mek-todo-content small{display:block;color:var(--bt-ink-2)}.mek-todo-actions{display:flex;flex-wrap:wrap;gap:6px}.mek-todo-child{margin-left:4px}`;
+
+// src/client/mek/view.jsx
+var import_react65 = __toESM(require("react"), 1);
 var STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS2 + HANDOFF_CSS + SIDE_CSS + app_default;
 function TeamView({ ctx, requests, viewport }) {
-  const team = (0, import_react63.useMemo)(() => {
+  const team = (0, import_react65.useMemo)(() => {
     const value = createTeam();
     value.actions.schedules = void 0;
     attachAgentActions(value, ctx);
     return value;
   }, [ctx]);
-  (0, import_react63.useEffect)(() => {
+  (0, import_react65.useEffect)(() => {
     const stopWatching = watchDeletedSubjects(team);
     const stopRemembering = rememberConversation(team);
     const stop = team.start();
@@ -21108,11 +21216,11 @@ function TeamView({ ctx, requests, viewport }) {
     };
   }, [team]);
   const { hooks, actions } = team;
-  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react63.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
+  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react65.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
   const shown = hooks.useShown((value) => value);
   const roster = hooks.useRoster((value) => value);
   const prefs = roster.prefs;
-  (0, import_react63.useEffect)(() => {
+  (0, import_react65.useEffect)(() => {
     const root = sceneRoot();
     if (!root) return;
     root.dataset.btMotion = prefs?.motion ?? "normal";
@@ -21120,7 +21228,7 @@ function TeamView({ ctx, requests, viewport }) {
     root.style.setProperty("--bt-msg-w", String(widthOf(prefs) / 100));
     root.style.setProperty("--bt-flat-w", String(flatWidthOf(prefs) / 100));
   }, [prefs]);
-  (0, import_react63.useEffect)(() => {
+  (0, import_react65.useEffect)(() => {
     if (!requests) return;
     const show2 = () => {
       const id = requests.getSnapshot();
@@ -21131,8 +21239,8 @@ function TeamView({ ctx, requests, viewport }) {
     show2();
     return requests.subscribe(show2);
   }, [team, requests]);
-  const OverviewPage = (0, import_react63.useMemo)(() => function OverviewPage2() {
-    return /* @__PURE__ */ import_react63.default.createElement(TeamOverview, { team, ctx, embedded: true });
+  const OverviewPage = (0, import_react65.useMemo)(() => function OverviewPage2() {
+    return /* @__PURE__ */ import_react65.default.createElement(TeamOverview, { team, ctx, embedded: true });
   }, [team, ctx]);
   const views = {
     ...hooks,
@@ -21140,18 +21248,18 @@ function TeamView({ ctx, requests, viewport }) {
     TeamOverview: OverviewPage,
     useFrame: (selector) => selector({ viewport, sidebarWidth: 0, collapsedWidth: 0 }),
     useSessions: (selector) => {
-      const host = (0, import_react63.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
+      const host = (0, import_react65.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
       return hooks.useSessions((own) => selector({ ...own, byId: Object.fromEntries([.../* @__PURE__ */ new Set([...Object.keys(host.byId), ...Object.keys(own.byId)])].map((id) => [id, { ...host.byId[id], retainedBy: {}, ...own.byId[id] }])) }));
     }
   };
   const themed = themeCss(allThemes()[prefs?.theme] ?? allThemes().deepseek, prefs?.accent);
-  return /* @__PURE__ */ import_react63.default.createElement(import_react63.default.Fragment, null, /* @__PURE__ */ import_react63.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react63.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react63.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react63.default.createElement(import_react63.default.Fragment, { key: shown }, /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react63.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react63.default.createElement(TaskProgress, { team, ctx, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react63.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react63.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react63.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react63.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react63.default.createElement(ErrorToast, { ...views })));
+  return /* @__PURE__ */ import_react65.default.createElement(import_react65.default.Fragment, null, /* @__PURE__ */ import_react65.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react65.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react65.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react65.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react65.default.createElement(import_react65.default.Fragment, { key: shown }, /* @__PURE__ */ import_react65.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react65.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react65.default.createElement(ConversationTodos, { key: shown, team, sessionId: shown }), /* @__PURE__ */ import_react65.default.createElement(TaskProgress, { team, ctx, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react65.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react65.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react65.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react65.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react65.default.createElement(ErrorToast, { ...views })));
 }
 function NativeBot({ ctx, requests }) {
-  const root = (0, import_react63.useRef)(null);
-  const [ready, setReady] = (0, import_react63.useState)(false);
-  const [viewport, setViewport] = (0, import_react63.useState)(0);
-  (0, import_react63.useLayoutEffect)(() => {
+  const root = (0, import_react65.useRef)(null);
+  const [ready, setReady] = (0, import_react65.useState)(false);
+  const [viewport, setViewport] = (0, import_react65.useState)(0);
+  (0, import_react65.useLayoutEffect)(() => {
     const release = mountScene(root.current);
     const measure = () => setViewport(root.current?.clientWidth ?? 0);
     const observer = new ResizeObserver(measure);
@@ -21170,7 +21278,7 @@ function NativeBot({ ctx, requests }) {
       release();
     };
   }, []);
-  return /* @__PURE__ */ import_react63.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react63.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + PERMISSION_CSS)), ready && /* @__PURE__ */ import_react63.default.createElement(TeamView, { ctx, requests, viewport }));
+  return /* @__PURE__ */ import_react65.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react65.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS)), ready && /* @__PURE__ */ import_react65.default.createElement(TeamView, { ctx, requests, viewport }));
 }
 
 // src/client/approval-notices.js
@@ -21280,7 +21388,7 @@ function startNativeNotices({ show: show2, shownSession = () => null }) {
 }
 
 // src/client/mek/index.jsx
-var import_react64 = __toESM(require("react"), 1);
+var import_react66 = __toESM(require("react"), 1);
 var inject = ["slots", "layout", "sessions", "uiWorkspace"];
 var PANEL = "mek-bot";
 function apply(ctx) {
@@ -21292,9 +21400,9 @@ function apply(ctx) {
     },
     shownSession: () => sceneRoot()?.querySelector("[data-mek-session]")?.dataset.mekSession ?? null
   }));
-  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react64.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react64.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react64.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
+  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react66.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react66.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react66.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
   ctx.slots.inject("main", () => {
-    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react64.default.createElement(NativeBot, { ctx, requests }));
+    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react66.default.createElement(NativeBot, { ctx, requests }));
     ctx.effect(() => rememberPanel(ctx.layout, PANEL));
   });
   ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));

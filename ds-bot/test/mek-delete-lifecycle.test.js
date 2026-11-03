@@ -37,6 +37,7 @@ let refuseSend=true
 let pendingPanel=null
 let doing=null
 let extraTasks=0
+let todoFixtures=[]
 let groupEnabled=false
 let groupHistory=null
 const imageReads=[]
@@ -50,7 +51,7 @@ const feedControllers=new Set()
 let nativeStatuses=new Map()
 const nativeListeners=new Set()
 const sessionStatus={getSnapshot:()=>nativeStatuses,subscribe:listener=>{nativeListeners.add(listener);return()=>nativeListeners.delete(listener)}}
-const roster = () => ({revision,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:groupEnabled?[{id:'group-fixture',name:'Fixture group',members:['main','keep'],admin:'main'},{id:'other-group',name:'Other group',members:['main','keep'],admin:'main'}]:[],agents:[],tasks:[{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]},...Array.from({length:extraTasks},(_,i)=>({id:`extra-${i}`,owner:'main',status:'completed',summary:`Archived fixture ${i}`,work:[],decisions:[],deliveries:[]}))],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:groupWork.length?{'group-fixture':groupWork}:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}},...(groupApproval?[{id:'group-approval',botId:'keep',roomId:'group-fixture',at:Date.now(),tool:'write_file'}]:[])]}})
+const roster = () => ({revision,todos:todoFixtures,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:groupEnabled?[{id:'group-fixture',name:'Fixture group',members:['main','keep'],admin:'main'},{id:'other-group',name:'Other group',members:['main','keep'],admin:'main'}]:[],agents:[],tasks:[{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]},...Array.from({length:extraTasks},(_,i)=>({id:`extra-${i}`,owner:'main',status:'completed',summary:`Archived fixture ${i}`,work:[],decisions:[],deliveries:[]}))],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:groupWork.length?{'group-fixture':groupWork}:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}},...(groupApproval?[{id:'group-approval',botId:'keep',roomId:'group-fixture',at:Date.now(),tool:'write_file'}]:[])]}})
 const fetch = async (url,options={}) => {
  if(url.endsWith('/feed')) return new Response(new ReadableStream({ start(controller) { feedControllers.add(controller);options.signal?.addEventListener('abort',()=>{feedControllers.delete(controller);controller.close()},{once:true}) } }))
  const {endpoint,payload} = JSON.parse(options.body)
@@ -100,6 +101,23 @@ try {
  // A navigation-only mount must not create either conversation-margin rule.
  assert.equal(document.querySelector('style[data-dsh-bot="chat-room"]'),null)
  await click('[data-bot-id="main"]')
+ todoFixtures=[
+  {id:'todo-root',rootId:'todo-root',botId:'main',title:'One complete request',instruction:'One complete request',status:'running',startRequested:true,revision:1,dependencies:[],predecessors:[]},
+  {id:'todo-child',rootId:'todo-root',parentId:'todo-root',botId:'main',worker:'keep',title:'Check after repair',instruction:'Check after repair',status:'waiting',revision:1,dependencies:['repair'],predecessors:[{id:'repair',title:'Repair',status:'running'}]},
+ ]
+ await refresh()
+ await click('.mek-todo-toggle')
+ assert.equal(document.querySelectorAll('.mek-todo-list > .mek-todo').length,1,'main work is one row, not one row per assignment')
+ await click('[data-todo-id="todo-root"] > summary')
+ assert.ok(document.querySelector('[data-todo-id="todo-root"] [data-todo-id="todo-child"]'),'child remains nested in the main task')
+ assert.match(document.querySelector('[data-todo-id="todo-child"]').textContent,/Repair/)
+ assert.equal(sends.length,0,'opening to-dos never sends chat messages')
+ await click('[data-bot-id="keep"]')
+ await click('.mek-todo-toggle')
+ assert.ok(document.querySelector('[data-todo-id="todo-child"]'),'assigned work references the same child in the member view')
+ assert.equal(document.querySelector('[data-todo-id="todo-root"]'),null,'a private main task is not copied into its worker view')
+ await click('[data-bot-id="main"]')
+ todoFixtures=[];await refresh()
  // The generated native bundle must keep transient activity in the chat outlet.
  doing={since:Date.now()};await refresh()
  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,70))})

@@ -63,7 +63,8 @@ export function TaskProgress({ team, sessionId, ctx, all = false }) {
   }
   const owner = roster.byId[sessionId]?.id
   const known = all ? [...new Map([...history,...(roster.tasks ?? [])].map(task => [task.id, task])).values()] : (roster.tasks ?? [])
-  const owned = known.filter(task => all || task.owner === owner)
+  const planned = new Set((roster.todos ?? []).map(task => task.executionId).filter(Boolean))
+  const owned = known.filter(task => !planned.has(task.id) && (all || task.owner === owner))
   const tasks = owned.filter(task => !all || (filter === 'all' || (filter === 'open' ? !['completed','cancelled'].includes(task.status) : task.status === filter)) && `${task.summary ?? ''} ${roster.byId[task.owner]?.name ?? ''}`.toLowerCase().includes(search.toLowerCase()))
   const expanded = all || folds[owner] !== true
   const toggleTasks = () => setFolds(previous => {

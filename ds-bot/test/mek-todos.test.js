@@ -1,0 +1,245 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { todoHost } from './todo-host.js'
+import { install as installPolicy } from '../src/host/mek-policy.js'
+
+const acceptance = { summary: 'Reviewed result', evidence: 'Verified the returned report.' }
+
+test('recording is quiet, duplicate creates are idempotent, edits require the current revision', async t => {
+  const h = await todoHost(t)
+  const a = await h.create({ target: 'r', title: 'Fix login', requestId: 'one' }, 'a')
+  const duplicate = await h.create({ target: 'r', title: 'Fix login', requestId: 'one' }, 'a')
+  assert.equal(a.id, duplicate.id)
+  await h.settle()
+  assert.equal(h.agent('gb').calls.length, 0)
+  assert.equal(h.rt.state.mekTasks, undefined)
+  await assert.rejects(h.action('start', a, {}, 'b'), /coordinator/)
+  await assert.rejects(h.rt.mekTodoAction('mek-todo-start', { id: a.id, revision: -1 }, 'a'), /changed/)
+  await assert.rejects(h.create({ target: 'r', title: 'Unauthorized' }, 'd'), /administrator/)
+  assert.equal(h.tasks().length, 1)
+})
+
+test('one group main task, two stable children, accepted dependencies drive the original coordinator', async t => {
+  const h = await todoHost(t)
+  const root = await h.create({ target: 'r', title: 'Fix login and verify registration' }, 'a')
+  const repair = await h.create({ parentId: root.id, title: 'Fix login', worker: 'b' }, 'a')
+  const verify = await h.create({ parentId: root.id, title: 'Check login and registration', worker: 'c', dependencies: [repair.id] }, 'a')
+  await h.action('start', root, {}, 'a'); await h.settle()
+  assert.equal(h.agent('gb').calls.length, 1, JSON.stringify(h.tasks()))
+  assert.equal(h.agent('gc').calls.length, 0)
+  assert.equal(h.get(verify.id).status, 'waiting')
+  const personal = await h.rt.mekTodoAction('mek-todo-list', { target: 'b' }, 'b')
+  assert.equal(personal.tasks[0].id, repair.id)
+  assert.equal(Object.keys(h.rt.state.mekTasks.roots).length, 1)
+  await h.finish(repair)
+  assert.equal(h.get(repair.id).status, 'review')
+  assert.equal(h.agent('gc').calls.length, 0, 'returned is not accepted')
+  await assert.rejects(h.action('accept', root, acceptance, 'a'), /child tasks/)
+  await h.action('accept', repair, acceptance, 'a'); await h.settle()
+  assert.equal(h.agent('gc').calls.length, 1)
+  assert.match(h.agent('gc').calls[0].content[0].text, /Verified the returned report/)
+  await h.rt.mekRecoverTasks(); await h.settle()
+  assert.equal(h.agent('gc').calls.length, 1)
+  await h.finish(verify)
+  await h.action('accept', verify, acceptance, 'a')
+  await h.action('accept', root, acceptance, 'a')
+  assert.equal(h.get(root.id).status, 'completed')
+  assert.equal(h.rt.mekTaskRoot(h.get(root.id).executionId).status, 'completed')
+  const saved = JSON.parse(readFileSync(join(h.home, 'state.json')))
+  assert.equal(saved.mekTodos.tasks[root.id].status, 'completed')
+})
+
+test('cycle detection includes parent completion, cross-conversation references and missing ids are rejected', async t => {
+  const h = await todoHost(t)
+  const root = await h.create({ target: 'r', title: 'Main' })
+  const a = await h.create({ parentId: root.id, title: 'A' })
+  const b = await h.create({ parentId: root.id, title: 'B', dependencies: [a.id] })
+  await assert.rejects(h.create({ id: a.id, revision: a.revision, title: 'A', dependencies: [b.id] }), /cycle/)
+  await assert.rejects(h.create({ parentId: root.id, title: 'C', dependencies: [root.id] }), /cycle/)
+  const privateTask = await h.create({ target: 'd', title: 'Private' })
+  await assert.rejects(h.create({ parentId: root.id, title: 'C', dependencies: [privateTask.id] }), /same conversation/)
+  await assert.rejects(h.create({ parentId: root.id, title: 'C', dependencies: ['missing'] }), /same conversation/)
+  const hidden = await h.rt.mekTodoAction('mek-todo-list', { target: 'd' }, 'b')
+  assert.deepEqual(hidden.tasks, [])
+})
+
+test('pause prevents subsequent dispatch, resume checks prerequisites, cancelled tasks never wake', async t => {
+  const h = await todoHost(t)
+  const root = await h.create({ target: 'r', title: 'Main' })
+  const a = await h.create({ parentId: root.id, title: 'A', worker: 'b' })
+  const b = await h.create({ parentId: root.id, title: 'B', worker: 'c', dependencies: [a.id] })
+  await h.action('start', root); await h.settle()
+  await h.action('pause', root)
+  await h.finish(a)
+  await assert.rejects(h.action('accept', a, acceptance), /Resume/)
+  assert.equal(h.agent('gc').calls.length, 0)
+  await h.action('resume', root); await h.action('accept', a, acceptance); await h.settle()
+  assert.equal(h.agent('gc').calls.length, 1)
+  await h.action('cancel', root)
+  await h.settle()
+  assert.equal(h.get(b.id).status, 'cancelled')
+  assert.equal(h.get(a.id).status, 'completed', 'cancellation preserves completed portions')
+  await assert.rejects(h.action('resume', root), /ended/)
+})
+
+test('returned revisions retain the child id and atomically link a new work exchange', async t => {
+  const h = await todoHost(t)
+  const task = await h.create({ target: 'a', title: 'Check implementation', worker: 'b' }, 'a')
+  await h.action('start', task, {}, 'a'); await h.settle()
+  const work = h.get(task.id).workId
+  await h.finish(task)
+  await h.action('revise', task, { feedback: 'Add the missing verification.' }, 'a')
+  await h.settle()
+  const next = h.get(task.id)
+  assert.equal(next.id, task.id)
+  assert.notEqual(next.workId, work)
+  assert.equal(h.rt.state.mekTasks.works[next.workId].previous, work)
+  assert.deepEqual(next.attempts, [work, next.workId])
+  assert.equal(h.tasks().length, 1)
+})
+
+test('accepted predecessor revisions invalidate an already running successor without repeating it', async t => {
+  const h = await todoHost(t)
+  const root = await h.create({ target: 'r', title: 'Main' })
+  const a = await h.create({ parentId: root.id, title: 'A', worker: 'b' })
+  const b = await h.create({ parentId: root.id, title: 'B', worker: 'c', dependencies: [a.id] })
+  await h.action('start', root); await h.settle(); await h.finish(a)
+  await h.action('accept', a, acceptance); await h.settle()
+  const running = h.get(b.id).workId
+  await h.action('revise', a, { feedback: 'Check the newly reported edge case.' })
+  await h.settle()
+  assert.equal(h.get(b.id).status, 'blocked')
+  assert.equal(h.get(b.id).workId, running)
+  assert.equal(h.agent('gc').calls.length, 1)
+  await h.finish(b)
+  await assert.rejects(h.action('accept', b, acceptance), /Predecessor/)
+  await h.finish(a); await h.action('accept', a, acceptance); await h.settle()
+  assert.equal(h.get(b.id).status, 'blocked', 'new success is not the version this attempt used')
+  assert.equal(h.agent('gc').calls.length, 1)
+})
+
+test('administrator handover preserves active work and sends its result to the new group coordinator', async t => {
+  const h = await todoHost(t)
+  const root = await h.create({ target: 'r', title: 'Group work', worker: 'b' })
+  await h.action('start', root); await h.settle()
+  const workId = h.get(root.id).workId
+  h.rt.state.rooms.r.admin = 'c'
+  await h.settle()
+  await h.rt.mekRecoverTasks()
+  assert.equal(h.get(root.id).workId, workId)
+  assert.equal(h.agent('gb').calls.length, 1)
+  await assert.rejects(h.action('pause', root, {}, 'a'), /coordinator/)
+  await h.finish(root)
+  assert.ok(h.agent('gc').calls.some(message => message.source.replyTo === workId))
+  assert.ok(!h.agent('ga').calls.some(message => message.source.replyTo === workId))
+  await h.action('accept', root, acceptance, 'c')
+  assert.equal(h.get(root.id).status, 'completed')
+})
+
+test('parallel limits leave unstarted children pending and cancellation survives the execution API', async t => {
+  const h = await todoHost(t, { policy: rt => { rt.config.taskPolicy = { maxParallel: 1 }; installPolicy(rt) } })
+  const root = await h.create({ target: 'r', title: 'Main' })
+  const a = await h.create({ parentId: root.id, title: 'A', worker: 'b' })
+  const b = await h.create({ parentId: root.id, title: 'B', worker: 'c' })
+  await h.action('start', root); await h.settle()
+  assert.ok(h.get(a.id).workId)
+  assert.equal(h.get(b.id).workId, undefined)
+  assert.match(h.get(b.id).reason, /parallel/)
+  await h.rt.mekCancelTask(h.get(root.id).executionId)
+  await h.settle()
+  assert.equal(h.get(root.id).status, 'cancelled')
+  assert.equal(h.agent('gc').calls.length, 0)
+})
+
+test('background plan dispatch does not claim an unrelated direct owner turn', async t => {
+  const h = await todoHost(t)
+  h.rt.live.set('a', { turn: 99, mekRoot: 'unrelated-turn', info: undefined })
+  const task = await h.create({ target: 'a', title: 'Separate planned work', worker: 'b' })
+  await h.action('start', task); await h.settle()
+  assert.equal(h.rt.live.get('a').mekRoot, 'unrelated-turn')
+  assert.ok(h.get(task.id).executionId)
+})
+
+test('starting an unassigned main task asks the group administrator to plan before creating work', async t => {
+  const h = await todoHost(t)
+  const root = await h.create({ target: 'r', title: 'Arrange the complete request' })
+  await h.action('start', root); await h.settle()
+  assert.equal(Object.keys(h.rt.state.mekTasks.works).length, 0)
+  assert.equal(h.agent('ga').calls.length, 1)
+  assert.match(h.agent('ga').calls[0].content[0].text, new RegExp(root.id))
+  const child = await h.create({ parentId: root.id, title: 'Implementation', worker: 'b' }, 'a')
+  await h.settle()
+  assert.ok(h.get(child.id).workId)
+  assert.equal(h.agent('gb').calls.length, 1)
+  assert.equal(h.agent('ga').calls.length, 1, 'the arrangement notice is not replayed')
+})
+
+test('main prerequisites constrain children and participate in cycle detection', async t => {
+  const h = await todoHost(t)
+  const before = await h.create({ target: 'r', title: 'Prepare input', worker: 'b' })
+  const root = await h.create({ target: 'r', title: 'Main', dependencies: [before.id] })
+  const child = await h.create({ parentId: root.id, title: 'Use input', worker: 'c' })
+  await assert.rejects(h.create({ id: before.id, revision: h.get(before.id).revision, title: before.title, dependencies: [child.id] }), /cycle/)
+  await h.action('start', root); await h.settle()
+  assert.equal(h.agent('gc').calls.length, 0)
+  assert.equal(h.get(child.id).status, 'waiting')
+  await h.action('start', before); await h.settle(); await h.finish(before)
+  await h.action('accept', before, acceptance); await h.settle()
+  assert.equal(h.agent('gc').calls.length, 1)
+  assert.equal(h.get(child.id).inputVersions[before.id], h.get(before.id).resultVersion)
+  assert.match(h.agent('gc').calls[0].content[0].text, /Prepare input/)
+})
+
+test('accepted stale successors cannot complete a main or unlock another task', async t => {
+  const h = await todoHost(t)
+  const root = await h.create({ target: 'r', title: 'Main' })
+  const a = await h.create({ parentId: root.id, title: 'A', worker: 'b' })
+  const b = await h.create({ parentId: root.id, title: 'B', worker: 'c', dependencies: [a.id] })
+  const next = await h.create({ target: 'r', title: 'Needs B', worker: 'a', dependencies: [b.id] })
+  await h.action('start', root); await h.settle(); await h.finish(a)
+  await h.action('accept', a, acceptance); await h.settle(); await h.finish(b)
+  await h.action('accept', b, acceptance)
+  const oldWork = h.get(b.id).workId
+  await h.action('revise', a, { feedback: 'Verify new input.' }); await h.settle()
+  assert.equal(h.get(b.id).status, 'blocked')
+  await assert.rejects(h.action('revise', b, { feedback: 'Use the newer A.' }), /prerequisites/)
+  await h.finish(a); await h.action('accept', a, acceptance); await h.settle()
+  await assert.rejects(h.action('accept', root, acceptance), /current accepted results/)
+  await assert.rejects(h.tool('ga', 'finish_bot_task', { task_id: h.get(root.id).executionId, summary: 'Old result' }), /current prerequisite/)
+  await h.action('start', next); await h.settle()
+  assert.equal(h.get(next.id).workId, undefined)
+  assert.equal(h.get(b.id).workId, oldWork)
+  await h.action('revise', b, { feedback: 'Check against accepted A again.' }); await h.settle()
+  assert.notEqual(h.get(b.id).workId, oldWork)
+  await h.finish(b); await h.action('accept', b, acceptance); await h.settle()
+  assert.ok(h.get(next.id).workId)
+  await h.action('accept', root, acceptance)
+  assert.equal(h.get(root.id).status, 'completed')
+})
+
+test('a group tool turn cannot control another conversation owned by the same administrator', async t => {
+  const h = await todoHost(t)
+  const task = await h.create({ target: 'a', title: 'Private work', worker: 'b' }, 'a')
+  await assert.rejects(h.tool('ga', 'control_todo', { id: task.id, revision: task.revision, action: 'start' }), /only control work in this group/)
+  assert.equal(h.get(task.id).startRequested, undefined)
+})
+
+test('a result arriving immediately after handover reaches the new group Session before the next pump', async t => {
+  const h = await todoHost(t)
+  const root = await h.create({ target: 'r', title: 'Immediate handover', worker: 'b' })
+  await h.action('start', root); await h.settle()
+  const prepare = h.rt.prepareGroupMemberTask
+  let changed = false
+  h.rt.prepareGroupMemberTask = async (...args) => {
+    if (!changed) { changed = true; h.rt.state.rooms.r.admin = 'c' }
+    return prepare(...args)
+  }
+  // Simulate the administrator changing between the durable report and delivery,
+  // without relying on the periodic recovery loop to move a pending reply.
+  await h.finish(root)
+  assert.ok(h.agent('gc').calls.some(message => message.source.replyTo === h.get(root.id).workId))
+  assert.ok(!h.agent('ga').calls.some(message => message.source.replyTo === h.get(root.id).workId))
+  assert.equal(h.rt.mekTaskRoot(h.get(root.id).executionId).owner, 'c')
+})

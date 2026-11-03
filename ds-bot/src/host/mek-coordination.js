@@ -44,6 +44,8 @@ export function install(rt) {
   const rootOf = id => own(data().roots, workOf(id)?.rootId ?? id)
   const currentWorks = root => Object.values(data().works).filter(work => work.rootId === root.id && work.status !== 'superseded')
   const reviewAdvice = work => {
+    const planned = rt.mekTodoReviewAdvice?.(work)
+    if (planned) return planned
     const root = rootOf(work.id)
     const missing = currentWorks(root).filter(needsReport)
     return `\n\n[Task review required]\nTask ${root.id}; returned work ${work.id}. Read the retained result with read_task. ${missing.length
@@ -137,6 +139,7 @@ export function install(rt) {
     if (stopped || sending.has(item.id) || final(rootOf(item.rootId)) || item.status === 'taken') return
     sending.add(item.id)
     try {
+      await rt.mekPrepareTodoDelivery?.(item.rootId, item.args)
       item.status = 'sending'
       await save()
       if (final(rootOf(item.rootId))) return
@@ -145,6 +148,7 @@ export function install(rt) {
       delete item.error
       await save()
     } catch (error) {
+      if (error.code === 'bot/todo-waiting') { item.status = 'pending'; await save(); return }
       if (item.status !== 'taken') { item.status = 'uncertain'; item.error = 'Delivery outcome needs reconciliation; work was not repeated.' }
       await save().catch(() => {})
       rt.warn('mek-bot: task delivery needs reconciliation: %s', error)
@@ -168,14 +172,14 @@ export function install(rt) {
     role: 'resume', work: work.id, text })
   const decisionArgs = (decision, work) => ({ fromId: work.to, toId: decision.owner, role: 'decision', exchangeId: decision.id,
     text: `Decision needed for task ${decision.rootId}; delegated work ${work.id}.\nQuestion ${decision.id}: ${decision.question}\nOptions: ${JSON.stringify(decision.options ?? [])}\n${decision.detail ?? ''}\nThe worker is paused, not finished. Resolve this from the user's instructions, conventions, and evidence, then call answer_bot_question. Ask the user here only for essential information or authorization. Do not send the user to another chat.` })
-  const createRoot = ({ owner, goal, projectId, criteria = [], sessionId, workflow }) => {
+  const createRoot = ({ owner, goal, projectId, criteria = [], sessionId, workflow, attach = true }) => {
     if (!rt.botOf(owner) || !String(goal ?? '').trim()) refuse('Choose an existing owner and a concrete goal.')
     const root = { id: randomUUID(), owner, originSessionId: sessionId ?? rt.chatOf(owner), status: 'running', goal: String(goal), summary: String(goal),
       criteria: criteria.map(String), ...(projectId ? { projectId } : {}), ...(workflow ? { workflow } : {}), createdAt: Date.now(), updatedAt: Date.now() }
     rt.mekPolicyGuard?.({ root, action: 'begin' })
     data().roots[root.id] = root
     const entry = rt.live.get(root.originSessionId)
-    if (entry) entry.mekRoot = root.id
+    if (entry && attach) entry.mekRoot = root.id
     return root
   }
   rt.mekBeginTask = async args => {
@@ -218,6 +222,45 @@ export function install(rt) {
     return { taskId: root.id, workId: id }
   }
 
+  // A planned child keeps its business id while each dispatch has an ordinary,
+  // independently reconciled work id. Link it before the first durable outbox write.
+  rt.mekArrangeTodo = async ({ rootId, owner, roomId, goal, criteria, taskId, noticeId, validate, prepared }) => {
+    let sessionId = rt.chatOf(owner)
+    if (roomId) sessionId = (await rt.prepareGroupMemberTask(rt.roomOf(roomId), rt.botOf(owner))).sessionId
+    if (roomId && rt.roomOf(roomId)?.admin !== owner) refuse('The group administrator changed before planning.')
+    validate()
+    const root = rootId ? rootOf(rootId) : createRoot({ owner, goal, criteria, sessionId, attach: false })
+    if (!root || final(root) || root.owner !== owner) refuse('The coordinator changed before planning.')
+    const item = prepare(root.id, { toId: owner, sessionId, role: 'notice', exchangeId: noticeId,
+      text: `Arrange existing main to-do ${taskId} in conversation ${roomId ?? owner}: ${goal}\nRead list_todos, then use plan_todo to add children with parent_id ${taskId}, select members and predecessors, or update this main task with yourself as worker for a small task. The user already asked to start. Do not create another main task. Report back in this original conversation.` })
+    prepared(root.id)
+    await save(); await send(item)
+  }
+  rt.mekDispatchTodo = async ({ rootId, owner, goal, criteria, roomId, worker, instruction, validate, prepared }) => {
+    let sessionId, files = []
+    if (roomId) {
+      const room = rt.roomOf(roomId)
+      if (!room || room.admin !== owner || !room.members.includes(worker)) refuse('The group administrator or member changed. Review the plan.')
+      await rt.prepareGroupMemberTask(room, rt.botOf(owner))
+      const target = await rt.prepareGroupMemberTask(room, rt.botOf(worker))
+      sessionId = target.sessionId; files = target.files
+      instruction = `${instruction}\n\nGroup context:\n${target.context}`
+    }
+    if (roomId && rt.roomOf(roomId)?.admin !== owner) refuse('The group administrator changed before dispatch.')
+    validate()
+    const root = rootId ? rootOf(rootId) : createRoot({ owner, goal, criteria, attach: false, ...(roomId ? { sessionId: rt.roomOf(roomId).sessions[owner] } : {}) })
+    if (!root || final(root) || root.owner !== owner) refuse('The task is no longer available to its coordinator.')
+    prepared({ rootId: root.id })
+    const id = randomUUID()
+    rt.openWork(id, { from: owner, to: worker, rootId: root.id, instruction, ...(sessionId ? { sessionId } : {}), ...(roomId ? { fromRoom: roomId } : {}) })
+    const item = prepare(root.id, { fromId: owner, toId: worker, role: 'request', exchangeId: id, text: instruction, files,
+      ...(sessionId ? { sessionId, fromRoomId: roomId } : {}) })
+    prepared({ rootId: root.id, workId: id })
+    await save()
+    await send(item)
+    return { rootId: root.id, workId: id }
+  }
+
   rt.mekSuspended = id => ['waiting_decision', 'waiting_secret', 'waiting_browser'].includes(workOf(id)?.status)
   rt.mekFailWork = (id, status) => {
     const work = workOf(id)
@@ -226,6 +269,8 @@ export function install(rt) {
   rt.mekAnswerSender = (sessionId, source, text, long) => {
     const work = workOf(source.exchangeId)
     if (!work) return false
+    const plannedReturn = rt.mekTodoReturnOwner?.(work.rootId)
+    if (plannedReturn) source = { ...source, senderSessionId: plannedReturn.botId, senderRoomId: plannedReturn.roomId }
     if (final(rootOf(work.rootId)) || ['cancelled', 'superseded'].includes(work.status) || (work.resultExchangeId && !own(state.works, work.id))) return true
     if (work.groupRoot && work.parent === work.groupRoot) {
       void completeGroupMember(work, sessionId, text).catch(error => rt.warn('mek-bot: group task result failed: %s', error))
@@ -267,6 +312,7 @@ export function install(rt) {
   const deliver = rt.deliver
   rt.deliver = async args => {
     const associated = workOf(args.work) ?? workOf(args.replyTo) ?? workOf(args.exchangeId)
+    if (associated && ['request', 'resume'].includes(args.role) && rt.mekTodoAllowsDelivery?.(associated.id) === false) throw Object.assign(new Error('The to-do is waiting or paused.'), { code: 'bot/todo-waiting' })
     if (associated && (['cancelled', 'superseded'].includes(associated.status) || rootOf(associated.rootId)?.status === 'cancelled')) return args.exchangeId
     const work = workOf(args.exchangeId)
     if (args.role === 'request' && work) {
@@ -560,13 +606,42 @@ export function install(rt) {
     if (final(root)) refuse('This task has already ended.')
     return root
   }
-  const register = (name, description, parameters, execute) => registerTeamTool(rt, defineTool({ name, description, parameters, output, async execute(args, exec) {
+  const commands = new Map()
+  rt.mekReassignTodoRoot = (rootId, botId, roomId, noticeId) => {
+    const root = rootOf(rootId)
+    if (!root || final(root) || root.owner === botId) return
+    const previous = root.owner, sessionId = rt.roomOf(roomId)?.sessions?.[botId]
+    if (!sessionId) refuse('Prepare the new administrator’s group Session before handover.')
+    root.owner = botId; root.originSessionId = sessionId
+    for (const item of Object.values(data().works)) if (item.rootId === rootId && item.from === previous) {
+      item.from = botId
+      if (own(state.works, item.id)) state.works[item.id].from = botId
+    }
+    for (const item of Object.values(data().outbox)) if (item.rootId === rootId && item.status === 'pending' && item.args) {
+      if (item.args.fromId === previous) item.args.fromId = botId
+      if (item.args.toId === previous) { item.args.toId = botId; item.args.sessionId = sessionId }
+    }
+    for (const decision of Object.values(data().decisions)) if (decision.rootId === rootId) decision.owner = botId
+    prepare(root.id, { toId: botId, sessionId, role: 'notice', exchangeId: noticeId,
+      text: `You are now this group’s administrator. Continue main task ${root.id} from list_todos and list_tasks. Retain active assignments and review pending questions and results; do not dispatch completed or uncertain work again.` })
+  }
+  rt.mekTaskCommand = async (name, args, self) => {
+    await rt.load()
+    if (rt.readOnly() !== undefined) refuse(rt.readOnly())
+    const execute = commands.get(name)
+    if (!execute || !rt.botOf(self)) refuse('Task operation is unavailable.')
+    return execute(args, { agent: { id: rt.chatOf(self) } }, self)
+  }
+  const register = (name, description, parameters, execute) => {
+    commands.set(name, execute)
+    return registerTeamTool(rt, defineTool({ name, description, parameters, output, async execute(args, exec) {
     await rt.load()
     if (rt.readOnly() !== undefined) refuse(rt.readOnly())
     const self = rt.selfOf(exec.agent?.id)
     if (!self) refuse('Only a team Bot can use this tool.')
     return execute(args, exec, self)
-  } }))
+    } }))
+  }
   const idParam = { type: 'string', required: true, description: 'Exact task id returned by list_tasks' }
   register('list_tasks', 'List your open tasks, delegated work, pending decisions, and results awaiting your review. Direct conversations with other Bots remain separate.', {}, (_args, _exec, self) => JSON.stringify(Object.values(data().roots).filter(root => canRead(root, self) && !final(root)).map(root => taskView(root, self))))
   register('read_task', 'Read one task and its result, including the full durable reply when its preview was cut. Read only tasks you own or participate in.', { task_id: idParam }, async ({ task_id }, _exec, self) => {
@@ -633,6 +708,7 @@ export function install(rt) {
     const root = rootOf(work.rootId)
     if (final(root)) refuse('This task has ended.')
     if (!String(feedback ?? '').trim()) refuse('Describe the required correction.')
+    rt.mekCanReviseTodo?.(work)
     if (work.to && work.groupRoot && workOf(work.groupRoot)?.resultAt) refuse(`Revise the returned group aggregate ${work.groupRoot}, so its original owner receives the new result.`)
     if (work.to ? !rt.botOf(work.to) : !rt.roomOf(work.room)) refuse('The worker or group no longer exists. Delegate the remaining work to an available Bot.')
     // A new exchange retains the task identity but cannot be confused with the
@@ -652,6 +728,7 @@ export function install(rt) {
       }
     }
     data().works[id] = next
+    rt.mekTodoRevised?.(work, next)
     touch(root)
     if (!next.to && next.room) {
       next.groupRoot = next.id
@@ -666,6 +743,7 @@ export function install(rt) {
     checks: { type: 'array', description: 'One passed check with evidence for each task criterion', items: { type: 'object', additionalProperties: false, properties: { criterion: { type: 'string', required: true }, evidence: { type: 'string', required: true }, passed: { type: 'boolean', required: true } } } },
   }, async ({ task_id, summary, checks = [] }, _exec, self) => {
     const root = requireOwner(task_id, self)
+    rt.mekCanFinishTodo?.(root.id)
     const work = Object.values(data().works).filter(item => item.rootId === root.id)
     if (work.some(item => ['queued', 'running', 'waiting_decision', 'waiting_secret', 'waiting_approval', 'waiting_browser', 'failed', 'blocked', 'unknown'].includes(item.status))) refuse('Work or a blocking result still needs attention. Resolve or revise it before accepting the task.')
     if (Object.values(data().decisions).some(item => item.rootId === root.id && item.status === 'open')) refuse('A worker question is still open.')
@@ -678,6 +756,7 @@ export function install(rt) {
     root.checks = checks
     for (const item of work) if (item.status === 'review') item.status = 'completed'
     root.status = 'completed'; root.summary = String(summary); root.updatedAt = Date.now()
+    rt.mekTodoEnded?.(root)
     await save()
     rt.mekPolicyEnded?.(root.id)
     announce('completed', root)
@@ -686,6 +765,7 @@ export function install(rt) {
 
   async function cancel(root) {
     root.status = 'cancelled'; root.updatedAt = Date.now()
+    rt.mekTodoEnded?.(root)
     const work = Object.values(data().works).filter(item => item.rootId === root.id)
     for (const item of work) item.status = 'cancelled'
     for (const decision of Object.values(data().decisions)) if (decision.rootId === root.id && decision.status === 'open') decision.status = 'cancelled'
