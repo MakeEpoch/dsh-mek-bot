@@ -201,6 +201,11 @@ var ZH = {
   "New Bot": "新 Bot",
   // Sidebar and account menu
   "Bot list": "Bot 列表",
+  "Favorite {name}": "收藏 {name}",
+  "Unfavorite {name}": "取消收藏 {name}",
+  "Add favorite": "收藏",
+  "Remove favorite": "取消收藏",
+  "No other conversations.": "暂无其他会话。",
   "Setting up your Main Bot…": "正在设置你的主 Bot…",
   "The Bot team could not start. The engine’s startup output — its console, or the app’s startup error box — has the cause.": "Bot 团队启动失败。原因在引擎的启动输出里——它的控制台，或应用的启动错误框。",
   "The Bot team could not start. {error}. The engine’s startup output — its console, or the app’s startup error box — has the cause.": "Bot 团队启动失败。{error}。原因在引擎的启动输出里——它的控制台，或应用的启动错误框。",
@@ -19106,7 +19111,7 @@ var waitingFor = (roster, waits) => {
   const names = [...(waits?.bots ?? []).map((id) => roster.byId[id]?.name), ...(waits?.rooms ?? []).map((id) => roster.roomsById[id]?.name)].filter(Boolean);
   return names.length === 0 ? "" : t("Waiting for {names}", { names: names.join(t(" and ")) });
 };
-function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessionRetainInfo, useActivity, useWork, wide, marked, navigation, details }) {
+function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessionRetainInfo, useActivity, useWork, wide, marked, navigation, details, showHidden }) {
   const id = bot.id;
   const part = currentPart(bot);
   const preview = useSessions((list) => previewOf(list, part, roster.exchangeTurns[part]));
@@ -19127,7 +19132,7 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
   const awayLine = away ? workLine(roster.roomsById[groups[0].id]?.name ?? t("a group chat"), groups[0], groups.length - 1) : null;
   const waits = workKeys(useWork ? useWork((work) => JSON.stringify(work.waiting?.[id] ?? null)) : "null");
   const waitsFor = state === "waiting" ? waitingFor(roster, waits) : "";
-  if (bot.hidden && !active && !main) return null;
+  if (bot.hidden && !active && !main && !showHidden) return null;
   const onContextMenu = (event) => {
     event.preventDefault();
     actions.openMenu({ kind: "bot", id, x: scopedPoint(event).x, y: scopedPoint(event).y });
@@ -19178,7 +19183,7 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
     navigation && active ? (0, import_react53.createElement)("span", { className: "bt-pill-go", "aria-hidden": true }, (0, import_react53.createElement)(GoArrow)) : null
   );
 }
-function RoomRow({ room: room2, roster, actions, useSessions, useSessionStatus, useSessionRetainInfo, useWork, wide, marked, navigation, details }) {
+function RoomRow({ room: room2, roster, actions, useSessions, useSessionStatus, useSessionRetainInfo, useWork, wide, marked, navigation, details, showHidden }) {
   const id = room2.id;
   const sessionId = room2.sessionId ?? id;
   const fallback = useSessions((list) => previewOf(list, sessionId));
@@ -19191,7 +19196,7 @@ function RoomRow({ room: room2, roster, actions, useSessions, useSessionStatus, 
   const members = workKeys(useGroupWork(useWork, (rooms) => (rooms[id] ?? []).filter((entry) => entry.botId !== void 0).map((entry) => ({ id: entry.botId, ...doingOf(entry) }))));
   const first = roster.byId[members[0]?.id];
   const workingLine = first ? workLine(first.name, members[0], members.length - 1) : null;
-  if (room2.hidden && !active) return null;
+  if (room2.hidden && !active && !showHidden) return null;
   const pinned = room2.pinned === true;
   const label3 = [room2.name, pinned ? t("Pinned") : "", members.length > 0 ? t("Working") : "", approval ? t("Waiting for your approval") : "", taskNews ? t("Unread tasks") : "", unread ? t("Unread activity") : ""].filter(Boolean).join(", ");
   return (0, import_react53.createElement)(
@@ -19443,8 +19448,8 @@ function TeamSidebar(props) {
       // The Agent sorts by its most recent Session, falling back to when it was added.
       ...(roster.agents ?? []).map((agent) => ({ kind: "agent", item: agent, at: Math.max(0, ...agent.sessions.map((id) => stamps[id] ?? 0)) || agent.createdAt }))
     ];
-    return entries2.sort((a, b) => Number(Boolean(b.item.pinned)) - Number(Boolean(a.item.pinned)) || b.at - a.at);
-  }, [roster, updated]);
+    return entries2.filter((entry) => !props.includeEntry || props.includeEntry(entry.item)).sort((a, b) => Number(Boolean(b.item.pinned)) - Number(Boolean(a.item.pinned)) || b.at - a.at);
+  }, [roster, updated, props.includeEntry]);
   const main = roster.byId[roster.mainBotId];
   useListGlide(listRef, wideContent, order.map((entry) => entry.item.id).join(","));
   useLandOnMainBot(roster, useSessions, actions);
@@ -19620,7 +19625,7 @@ function TeamSidebar(props) {
     openAgentSession: (id) => navigate(actions.openAgentSession, id),
     newAgentSession: (id) => navigate(actions.newAgentSession, id)
   };
-  const rowProps = { roster, actions: rowActions, useSessions, useUi, useSessionStatus: props.useSessionStatus, useSessionRetainInfo: props.useSessionRetainInfo, useActivity: props.useActivity, useWork: props.useWork, wide: wideContent, navigation, details };
+  const rowProps = { roster, actions: rowActions, useSessions, useUi, useSessionStatus: props.useSessionStatus, useSessionRetainInfo: props.useSessionRetainInfo, useActivity: props.useActivity, useWork: props.useWork, wide: wideContent, navigation, details, showHidden: props.showHidden };
   const typeToSearch = (event) => {
     if (event.defaultPrevented || event.key.length !== 1 || event.key === " " || event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing) return;
     if (event.target instanceof Element && event.target.closest("input,textarea,[contenteditable]")) return;
@@ -19673,8 +19678,11 @@ function TeamSidebar(props) {
     (0, import_react53.createElement)(
       "div",
       { ref: listRef, className: "bt-list", role: "region", "aria-label": t("Bot list") },
-      wideContent ? main ? (0, import_react53.createElement)(BotRow, { ...rowProps, bot: main, marked: markedUnread[main.id] === true }) : roster.ready ? null : (0, import_react53.createElement)("div", { className: "bt-hint" }, uiNow.bootFailed ? bootHint() : t("Setting up your Main Bot…")) : null,
-      order.map((entry) => entry.kind === "bot" ? (0, import_react53.createElement)(BotRow, { key: entry.item.id, ...rowProps, bot: entry.item, marked: markedUnread[entry.item.id] === true }) : entry.kind === "room" ? (0, import_react53.createElement)(RoomRow, { key: entry.item.id, ...rowProps, room: entry.item, marked: markedUnread[entry.item.id] === true }) : (0, import_react53.createElement)(AgentRow, { key: entry.item.id, ...rowProps, agent: entry.item, marked: markedUnread[entry.item.id] === true }))
+      wideContent ? main ? !props.includeEntry || props.includeEntry(main) ? (0, import_react53.createElement)(BotRow, { ...rowProps, bot: main, marked: markedUnread[main.id] === true }) : null : roster.ready ? null : (0, import_react53.createElement)("div", { className: "bt-hint" }, uiNow.bootFailed ? bootHint() : t("Setting up your Main Bot…")) : null,
+      order.map((entry) => {
+        const row = entry.kind === "bot" ? (0, import_react53.createElement)(BotRow, { key: entry.item.id, ...rowProps, bot: entry.item, marked: markedUnread[entry.item.id] === true }) : entry.kind === "room" ? (0, import_react53.createElement)(RoomRow, { key: entry.item.id, ...rowProps, room: entry.item, marked: markedUnread[entry.item.id] === true }) : (0, import_react53.createElement)(AgentRow, { key: entry.item.id, ...rowProps, agent: entry.item, marked: markedUnread[entry.item.id] === true });
+        return props.wrapEntry ? props.wrapEntry(entry, row) : row;
+      })
     ),
     foot
   );
@@ -20903,27 +20911,40 @@ function selectConversation(team, id) {
   else team.actions.openSession(id);
 }
 function TeamHeader({ team, views }) {
-  const [open, setOpen] = (0, import_react59.useState)(false);
-  const [menu, leaving] = useLinger(open, 120);
+  const [open, setOpen] = (0, import_react59.useState)(null);
+  const [menu, leaving] = useLinger(open === "more", 120);
+  const [directory, directoryLeaving] = useLinger(open === "bots", 120);
+  const [busy, setBusy] = (0, import_react59.useState)(null);
+  const [failure, setFailure] = (0, import_react59.useState)("");
   const more = (0, import_react59.useRef)(null);
   const trigger = (0, import_react59.useRef)(null);
+  const botsTrigger = (0, import_react59.useRef)(null);
   const list = (0, import_react59.useRef)(null);
   const shown = team.hooks.useShown((value) => value);
   const roster = team.hooks.useRoster((value) => value);
   const ui2 = team.hooks.useUi((value) => value);
+  const selected = roster.byId[shown]?.id ?? shown;
+  const keep = (entry) => isMainOf(roster, entry.id) || entry.pinned === true || entry.id === selected || currentPart(entry) === shown;
+  const others = (entry) => !isMainOf(roster, entry.id);
+  const hidden = [...roster.bots, ...roster.rooms].filter((entry) => !keep(entry));
+  const messageNews = views.useSessionStatus((map) => hidden.some((entry) => {
+    const status = map.get(roster.byId[entry.id] ? currentPart(entry) : entry.id);
+    return status?.completionUnread === true || status?.pendingInteraction !== void 0;
+  }));
+  const hiddenNews = messageNews || hidden.some((entry) => ui2.unread?.[entry.id] || team.actions.taskUnread?.(entry.id));
   (0, import_react59.useEffect)(() => {
     list.current?.querySelector('[aria-current="page"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [shown]);
   (0, import_react59.useEffect)(() => {
     if (!open) return;
-    more.current?.querySelector('[role="menuitem"]')?.focus();
+    more.current?.querySelector(open === "bots" ? ".mek-bot-directory .bt-row" : '[role="menuitem"]')?.focus();
     const close = (event) => {
       if (event.type === "keydown") {
         if (event.key === "Escape") {
-          setOpen(false);
-          trigger.current?.focus();
-        } else if (event.key === "Tab") setOpen(false);
-      } else if (!more.current?.contains(event.target)) setOpen(false);
+          setOpen(null);
+          (open === "bots" ? botsTrigger : trigger).current?.focus();
+        }
+      } else if (!more.current?.contains(event.target)) setOpen(null);
     };
     document.addEventListener("pointerdown", close);
     document.addEventListener("keydown", close);
@@ -20933,7 +20954,7 @@ function TeamHeader({ team, views }) {
     };
   }, [open]);
   const run2 = (action) => {
-    setOpen(false);
+    setOpen(null);
     trigger.current?.focus();
     action();
   };
@@ -20946,17 +20967,35 @@ function TeamHeader({ team, views }) {
     items[next]?.focus();
   };
   const actions = { ...views.actions, openSession: (id) => selectConversation(team, id) };
-  return /* @__PURE__ */ import_react59.default.createElement("header", { className: "mek-team-header" }, /* @__PURE__ */ import_react59.default.createElement("nav", { ref: list, className: "mek-team-center", "aria-label": t("Bot list") }, /* @__PURE__ */ import_react59.default.createElement(TeamSidebar, { ...views, actions, wide: true, navigation: true })), /* @__PURE__ */ import_react59.default.createElement("div", { ref: more, className: "mek-team-tools" }, /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", className: "bt-round", "aria-label": t("Tasks"), title: t("Tasks"), disabled: !roster.byId[shown] && !roster.roomsById[shown], "aria-pressed": ui2.details === shown && ui2.view === "details" && ["todos", "tasks"].includes(ui2.tab), onClick: () => {
-    setOpen(false);
+  const choose = { ...actions, openSession: (id) => {
+    setOpen(null);
+    team.actions.openSession(id);
+  } };
+  const favorite = async (entry) => {
+    setBusy(entry.id);
+    setFailure("");
+    try {
+      await team.actions.setFlags(entry.id, { pinned: !entry.pinned, ...!entry.pinned ? { hidden: false } : {} });
+    } catch (error) {
+      setFailure(error.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const directoryRow = (entry, row) => /* @__PURE__ */ import_react59.default.createElement("div", { key: entry.item.id, className: "mek-directory-row" }, row, entry.kind !== "agent" && /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", className: "bt-round mek-favorite", "aria-label": t(entry.item.pinned ? "Unfavorite {name}" : "Favorite {name}", { name: entry.item.name }), title: t(entry.item.pinned ? "Remove favorite" : "Add favorite"), "aria-pressed": entry.item.pinned === true, disabled: busy !== null || Boolean(roster.readOnly), onClick: () => void favorite(entry.item) }, /* @__PURE__ */ import_react59.default.createElement(StarLineIcon, null)));
+  return /* @__PURE__ */ import_react59.default.createElement("header", { className: "mek-team-header" }, /* @__PURE__ */ import_react59.default.createElement("nav", { ref: list, className: "mek-team-center", "aria-label": t("Bot list") }, /* @__PURE__ */ import_react59.default.createElement(TeamSidebar, { ...views, actions, includeEntry: keep, wide: true, navigation: true })), /* @__PURE__ */ import_react59.default.createElement("div", { ref: more, className: "mek-team-tools" }, /* @__PURE__ */ import_react59.default.createElement("button", { ref: botsTrigger, type: "button", className: "bt-round", "aria-label": t("Bot list"), title: t("Bot list"), "aria-expanded": open === "bots", "aria-haspopup": "dialog", onClick: () => setOpen((value) => value === "bots" ? null : "bots") }, /* @__PURE__ */ import_react59.default.createElement(PeopleIcon, null), hiddenNews && /* @__PURE__ */ import_react59.default.createElement("span", { className: "mek-tab-dot", "aria-hidden": "true" })), /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", className: "bt-round", "aria-label": t("Tasks"), title: t("Tasks"), disabled: !roster.byId[shown] && !roster.roomsById[shown], "aria-pressed": ui2.details === shown && ui2.view === "details" && ["todos", "tasks"].includes(ui2.tab), onClick: () => {
+    setOpen(null);
     team.actions.showDetails(shown, "tasks");
   } }, /* @__PURE__ */ import_react59.default.createElement(TasksIcon, null), team.actions.taskUnread?.(shown) && /* @__PURE__ */ import_react59.default.createElement("span", { className: "mek-tab-dot", "aria-hidden": "true" })), /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", className: "bt-round", "aria-label": t("Search"), title: t("Search"), onClick: () => {
-    setOpen(false);
+    setOpen(null);
     team.actions.openPalette();
-  } }, /* @__PURE__ */ import_react59.default.createElement(SearchIcon, null)), /* @__PURE__ */ import_react59.default.createElement("button", { ref: trigger, type: "button", className: "bt-round", "aria-label": t("More"), title: t("More"), "aria-expanded": open, "aria-haspopup": "menu", onClick: () => setOpen((value) => !value) }, /* @__PURE__ */ import_react59.default.createElement(DotsIcon, null)), menu && /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu mek-team-menu", role: "menu", "data-leaving": leaving ? "" : void 0, inert: leaving ? "" : void 0, onKeyDown: menuKeys }, /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", role: "menuitem", onClick: () => run2(() => team.actions.openNewChat("new")) }, /* @__PURE__ */ import_react59.default.createElement(PlusIcon, null), t("New…")), /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu-sep", role: "separator" }), [[t("Usage"), "usage"], [t("Connectors"), "connectors"], [t("Bot settings"), "general"]].map(([label3, page]) => /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", role: "menuitem", key: page, onClick: () => run2(() => team.actions.openSettings(page)) }, label3)))));
+  } }, /* @__PURE__ */ import_react59.default.createElement(SearchIcon, null)), /* @__PURE__ */ import_react59.default.createElement("button", { ref: trigger, type: "button", className: "bt-round", "aria-label": t("More"), title: t("More"), "aria-expanded": open === "more", "aria-haspopup": "menu", onClick: () => setOpen((value) => value === "more" ? null : "more") }, /* @__PURE__ */ import_react59.default.createElement(DotsIcon, null)), directory && /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu mek-bot-directory", role: "dialog", "aria-label": t("Bot list"), "data-leaving": directoryLeaving ? "" : void 0, inert: directoryLeaving ? "" : void 0, onBlur: (event) => {
+    if (event.relatedTarget && !more.current?.contains(event.relatedTarget)) setOpen(null);
+  } }, /* @__PURE__ */ import_react59.default.createElement("div", { className: "mek-directory-heading" }, t("Bot list")), /* @__PURE__ */ import_react59.default.createElement(TeamSidebar, { ...views, actions: choose, includeEntry: others, wrapEntry: directoryRow, showHidden: true, wide: true, navigation: true }), hidden.length === 0 && roster.bots.length + roster.rooms.length <= (roster.mainBotIds?.length ?? 1) && /* @__PURE__ */ import_react59.default.createElement("p", { className: "bt-hint" }, t("No other conversations.")), failure && /* @__PURE__ */ import_react59.default.createElement("p", { className: "bt-error", role: "alert" }, failure)), menu && /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu mek-team-menu", role: "menu", "data-leaving": leaving ? "" : void 0, inert: leaving ? "" : void 0, onKeyDown: menuKeys }, /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", role: "menuitem", onClick: () => run2(() => team.actions.openNewChat("new")) }, /* @__PURE__ */ import_react59.default.createElement(PlusIcon, null), t("New…")), /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu-sep", role: "separator" }), [[t("Usage"), "usage"], [t("Connectors"), "connectors"], [t("Bot settings"), "general"]].map(([label3, page]) => /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", role: "menuitem", key: page, onClick: () => run2(() => team.actions.openSettings(page)) }, label3)))));
 }
 var TEAM_HEADER_CSS = `
 .dsb-frame.mek-team-frame{grid-template-columns:minmax(0,1fr);grid-template-rows:40px minmax(0,1fr)}
-.mek-team-header{display:grid;grid-template-columns:104px minmax(0,1fr) 104px;align-items:center;gap:8px;min-width:0;padding:0 12px;background:var(--bt-main);border-bottom:1px solid var(--bt-line);color:var(--bt-ink);font-family:var(--bt-font);box-sizing:border-box;z-index:50}
+.mek-team-header{display:grid;grid-template-columns:138px minmax(0,1fr) 138px;align-items:center;gap:8px;min-width:0;padding:0 12px;background:var(--bt-main);border-bottom:1px solid var(--bt-line);color:var(--bt-ink);font-family:var(--bt-font);box-sizing:border-box;z-index:50}
 .mek-team-header .bt-round{flex:none;width:28px;height:28px}
 .mek-team-center{grid-column:2;min-width:0;overflow:hidden}
 .mek-team-nav{padding:0;min-width:0}
@@ -20970,6 +21009,16 @@ var TEAM_HEADER_CSS = `
 .mek-team-nav .bt-read-only{position:absolute;top:40px;left:8px;right:8px;z-index:1}
 .mek-team-tools{grid-column:3;position:relative;display:flex;justify-content:flex-end;gap:6px}
 .mek-team-menu{position:absolute;top:34px;right:0;max-height:calc(100vh - 84px);overflow-y:auto;transform-origin:top right}
+.mek-bot-directory{position:absolute;top:34px;right:0;width:min(320px,calc(100vw - 72px));max-height:calc(100dvh - 100px);overflow:auto;box-sizing:border-box;transform-origin:top right}
+.mek-directory-heading{padding:8px 10px;color:var(--bt-ink-2);font-size:12px}
+.mek-bot-directory .mek-team-nav.bt-side>.bt-list{display:flex;flex-direction:column;align-items:stretch;gap:4px;width:100%;max-width:100%;overflow:visible}
+.mek-directory-row{display:flex;align-items:center;min-width:0;gap:4px}
+.mek-bot-directory .mek-team-nav .bt-row{flex:1;min-width:0;width:0;max-width:none;border-radius:8px}
+.mek-bot-directory .bt-row-title{white-space:normal;overflow-wrap:anywhere}
+.mek-bot-directory .bt-read-only{position:static}
+.mek-bot-directory .mek-favorite{flex:none}
+.mek-favorite[aria-pressed=true]{color:var(--bt-accent)}
+.mek-favorite[aria-pressed=true] svg{fill:currentColor}
 .mek-team-frame>.dsb-main{height:auto}
 .mek-team-frame .dsb-scroll{padding-top:16px}
 .mek-team-frame .dsb-head{height:0;padding:0}
@@ -20979,7 +21028,7 @@ var TEAM_HEADER_CSS = `
 .bt-settings-team{padding:0;overflow:hidden;min-height:0}
 .bt-settings-team .mek-overview nav>button{flex:none;white-space:nowrap}
 .mek-team-header :is(button,[role=menuitem]):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
-@media(max-width:640px){.mek-team-header{grid-template-columns:96px minmax(0,1fr) 96px;gap:4px;padding:0 8px}.mek-team-nav .bt-row{max-width:124px}.mek-team-nav .bt-row-name{font-size:13px}}
+@media(max-width:640px){.mek-team-header{grid-template-columns:minmax(0,1fr) 132px;gap:4px;padding:0 8px}.mek-team-center{grid-column:1}.mek-team-tools{grid-column:2}.mek-team-nav.bt-side>.bt-list{margin:0}.mek-team-nav .bt-row{max-width:124px}.mek-team-nav .bt-row-name{font-size:13px}}
 `;
 
 // src/client/mek/group-chat.jsx
@@ -21289,7 +21338,7 @@ function ConversationTaskPanel({ team, ctx, sessionId, bucket = "tasks" }) {
   const render = (entry) => /* @__PURE__ */ import_react65.default.createElement(SeenEntry, { key: entry.key, entry, inbox }, entry.kind === "schedule" ? /* @__PURE__ */ import_react65.default.createElement(ScheduleCard, { rule: entry.record, busy, mutate }) : entry.kind === "legacy" ? /* @__PURE__ */ import_react65.default.createElement(TaskCard, { task: entry.record, roster, team, ctx, compact: true, onChanged: acknowledge }) : /* @__PURE__ */ import_react65.default.createElement(TodoCard, { task: entry.record, tasks: view.todos, roster, busy, operation }));
   return /* @__PURE__ */ import_react65.default.createElement("section", { className: "mek-task-panel", "data-bucket": bucket, "aria-label": text3(bucket === "todos" ? "To-dos" : "Tasks", bucket === "todos" ? "待办" : "任务") }, /* @__PURE__ */ import_react65.default.createElement("div", { className: "mek-plan-heading" }, /* @__PURE__ */ import_react65.default.createElement("div", null, /* @__PURE__ */ import_react65.default.createElement("strong", null, text3(bucket === "todos" ? "Planned" : "Current tasks", bucket === "todos" ? "未来计划" : "当前任务")), /* @__PURE__ */ import_react65.default.createElement("span", null, active.length)), bucket === "todos" && /* @__PURE__ */ import_react65.default.createElement("button", { type: "button", className: "mek-plan-add", "aria-expanded": creating, onClick: () => setCreating((value) => !value) }, text3("Add", "新增"))), creating && /* @__PURE__ */ import_react65.default.createElement(PlanForm, { target: view.target, available: roster.todoSchedules?.available, busy, save: mutate, close: () => setCreating(false) }), error && /* @__PURE__ */ import_react65.default.createElement("p", { role: "alert" }, error), !active.length && /* @__PURE__ */ import_react65.default.createElement("p", { className: "mek-task-empty" }, text3(bucket === "todos" ? "No future plans yet." : "No tasks in progress.", bucket === "todos" ? "暂无未来计划。" : "暂无执行中的任务。")), /* @__PURE__ */ import_react65.default.createElement("div", { className: "mek-plan-list" }, active.slice(0, limit).map(render)), active.length > limit && /* @__PURE__ */ import_react65.default.createElement("div", { className: "mek-task-footer" }, /* @__PURE__ */ import_react65.default.createElement("button", { type: "button", className: "mek-task-more", onClick: () => setLimit((value) => value + 8) }, text3("Show more", "显示更多"), " · ", active.length - limit)), ended3.length > 0 && /* @__PURE__ */ import_react65.default.createElement("details", { className: "mek-ended-tasks", onToggle: (event) => setEndedOpen(event.currentTarget.open) }, /* @__PURE__ */ import_react65.default.createElement("summary", null, text3("Ended", "已结束"), " · ", ended3.length), /* @__PURE__ */ import_react65.default.createElement("div", null, endedOpen && ended3.map(render))));
 }
-var TASK_PANEL_CSS = `.mek-task-drawer{min-width:0}.mek-task-panel{min-width:0;font-size:12px}.mek-plan-heading{display:flex;align-items:center;justify-content:space-between;min-height:32px;margin-bottom:12px}.mek-plan-heading>div{display:flex;align-items:center;gap:8px}.mek-plan-heading strong{font-size:13px;font-weight:500}.mek-plan-heading span{font-variant-numeric:tabular-nums;color:var(--bt-ink-3)}.mek-plan-add{padding:5px 10px;border:1px solid var(--bt-line);border-radius:999px;background:var(--bt-hover);color:var(--bt-ink);font:inherit;cursor:pointer}.mek-plan-list{display:flex;flex-direction:column;gap:8px}.mek-task-panel :is(.mek-todo,.mek-task){max-width:none;margin:0;border-radius:12px}.mek-task-panel :is(.mek-todo,.mek-task)>summary{padding:12px;align-items:flex-start;gap:8px}.mek-task-panel .mek-task-title{flex:1;min-width:0;white-space:normal!important;overflow-wrap:anywhere}.mek-task-panel :is(.mek-todo,.mek-task)>summary>span:last-child{flex:none;font-size:11px;color:var(--bt-ink-2);white-space:nowrap}.mek-inbox-entry{position:relative;min-width:0}.mek-inbox-entry[data-unread]::before{content:'';position:absolute;top:18px;left:3px;width:5px;height:5px;border-radius:50%;background:var(--bt-danger,#e02135);z-index:1}.mek-ended-tasks{border-top:1px solid var(--bt-line);margin-top:20px;padding-top:12px;color:var(--bt-ink-2)}.mek-ended-tasks>summary{cursor:pointer}.mek-ended-tasks>div{display:flex;flex-direction:column;gap:8px;padding-top:10px;color:var(--bt-ink)}.mek-task-attention{flex:none;max-height:28vh;overflow:auto;padding:8px 16px 0;font-size:12px}.mek-task-empty{color:var(--bt-ink-3);padding:16px 0}.bt-panel-view>.bt-tabs{flex:none;min-height:28px;flex-wrap:nowrap;margin:8px 16px 0}.bt-panel-view>.bt-drawer-top{flex:none}.bt-drawer-body>.bt-drawer-id{flex:none;padding:4px 0 8px}.bt-tabs .bt-tab{display:inline-flex;align-items:center;gap:5px}.bt-tabs .bt-tab:focus-visible,.mek-task-panel button:focus-visible,.mek-task-panel summary:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-tab-dot,.mek-nav-unread{display:inline-block;flex:none;width:6px;height:6px;border-radius:50%;background:var(--bt-danger,#e02135)}.mek-team-tools .bt-round{position:relative}.mek-team-tools .mek-tab-dot{position:absolute;top:2px;right:2px}`;
+var TASK_PANEL_CSS = `.mek-task-drawer{min-width:0}.mek-task-panel{min-width:0;font-size:12px}.mek-plan-heading{display:flex;align-items:center;justify-content:space-between;min-height:32px;margin-bottom:12px}.mek-plan-heading>div{display:flex;align-items:center;gap:8px}.mek-plan-heading strong{font-size:13px;font-weight:500}.mek-plan-heading span{font-variant-numeric:tabular-nums;color:var(--bt-ink-3)}.mek-plan-add{padding:5px 10px;border:1px solid var(--bt-line);border-radius:999px;background:var(--bt-hover);color:var(--bt-ink);font:inherit;cursor:pointer}.mek-plan-list{display:flex;flex-direction:column;gap:8px}.mek-task-panel :is(.mek-todo,.mek-task){min-width:0;max-width:100%;box-sizing:border-box;margin:0;border-radius:12px}.mek-task-panel :is(.mek-todo,.mek-task)>summary{padding:12px;align-items:flex-start;gap:8px}.mek-task-panel .mek-task>summary>.mek-task-title{flex:1 1 0%;min-width:0;white-space:normal;overflow-wrap:anywhere}.mek-task-panel :is(.mek-todo,.mek-task)>summary>span:last-child{flex:none;font-size:11px;color:var(--bt-ink-2);white-space:nowrap}.mek-inbox-entry{position:relative;min-width:0}.mek-inbox-entry[data-unread]::before{content:'';position:absolute;top:18px;left:3px;width:5px;height:5px;border-radius:50%;background:var(--bt-danger,#e02135);z-index:1}.mek-ended-tasks{border-top:1px solid var(--bt-line);margin-top:20px;padding-top:12px;color:var(--bt-ink-2)}.mek-ended-tasks>summary{cursor:pointer}.mek-ended-tasks>div{display:flex;flex-direction:column;gap:8px;padding-top:10px;color:var(--bt-ink)}.mek-task-attention{flex:none;max-height:28vh;overflow:auto;padding:8px 16px 0;font-size:12px}.mek-task-empty{color:var(--bt-ink-3);padding:16px 0}.bt-panel-view>.bt-tabs{flex:none;min-height:28px;flex-wrap:nowrap;margin:8px 16px 0}.bt-panel-view>.bt-drawer-top{flex:none}.bt-drawer-body>.bt-drawer-id{flex:none;padding:4px 0 8px}.bt-tabs .bt-tab{display:inline-flex;align-items:center;gap:5px}.bt-tabs .bt-tab:focus-visible,.mek-task-panel button:focus-visible,.mek-task-panel summary:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-tab-dot,.mek-nav-unread{display:inline-block;flex:none;width:6px;height:6px;border-radius:50%;background:var(--bt-danger,#e02135)}.mek-team-tools .bt-round{position:relative}.mek-team-tools .mek-tab-dot{position:absolute;top:2px;right:2px}`;
 
 // src/client/mek/task-inbox.js
 var KEY = "mek-bot:task-inbox:v1";

@@ -37,6 +37,7 @@ Object.defineProperty(win.Element.prototype,'clientHeight',{configurable:true,ge
 const React = require('react'); const { createRoot } = require('react-dom/client'); const ReactDOM = require('react-dom')
 const { act } = React
 let deleted=false
+const favorites=new Set()
 let revision=1
 const sends=[]
 let refuseSend=true
@@ -57,12 +58,13 @@ const feedControllers=new Set()
 let nativeStatuses=new Map()
 const nativeListeners=new Set()
 const sessionStatus={getSnapshot:()=>nativeStatuses,subscribe:listener=>{nativeListeners.add(listener);return()=>nativeListeners.delete(listener)}}
-const roster = () => ({revision,todos:todoFixtures,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',model:'mock/model',createdAt:3}],rooms:groupEnabled?[{id:'group-fixture',name:'Fixture group',members:['main','keep'],admin:'main'},{id:'other-group',name:'Other group',members:['main','keep'],admin:'main'}]:[],agents:[],tasks:[...(groupEnabled?[{id:'group-task',owner:'main',originSessionId:'group-fixture',status:'review',summary:'Only this group task',work:[],decisions:[],deliveries:[]},{id:'other-task',owner:'main',originSessionId:'other-group',status:'review',summary:'Different group task',work:[],decisions:[],deliveries:[]}]:[]),{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]},...Array.from({length:extraTasks},(_,i)=>({id:`extra-${i}`,owner:'main',status:'running',summary:`Extra fixture ${i}`,work:[],decisions:[],deliveries:[]}))],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:groupWork.length?{'group-fixture':groupWork}:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}},...(groupApproval?[{id:'group-approval',botId:'keep',roomId:'group-fixture',at:Date.now(),tool:'write_file'}]:[])]}})
+const roster = () => ({revision,todos:todoFixtures,mainBotId:'main',mainBotIds:['main'],bots:[{id:'main',name:'Chief',model:'mock/model',createdAt:1},...(deleted ? [] : [{id:'delete',name:'Delete Selected',model:'mock/model',createdAt:2}]),{id:'keep',name:'Keeper',pinned:favorites.has('keep'),model:'mock/model',createdAt:3}],rooms:groupEnabled?[{id:'group-fixture',name:'Fixture group',members:['main','keep'],admin:'main'},{id:'other-group',name:'Other group',members:['main','keep'],admin:'main'}]:[],agents:[],tasks:[...(groupEnabled?[{id:'group-task',owner:'main',originSessionId:'group-fixture',status:'review',summary:'Only this group task',work:[],decisions:[],deliveries:[]},{id:'other-task',owner:'main',originSessionId:'other-group',status:'review',summary:'Different group task',work:[],decisions:[],deliveries:[]}]:[]),{id:'root',owner:'main',status:'needs_decision',summary:'A delegated example',work:[{id:'worker',name:'Keeper',status:'waiting_decision'}],decisions:[{id:'question',status:'open',question:'Which project convention?'}],deliveries:[]},{id:'missing-report',owner:'main',status:'needs_report',summary:'Returned work needs evidence',work:[{id:'missing-worker',name:'Keeper',status:'needs_report',result:'Existing result retained'}],decisions:[],deliveries:[]},{id:'awaiting-review',owner:'main',status:'review',summary:'Verified result awaits acceptance',work:[{id:'reported-worker',name:'Keeper',status:'review',report:{summary:'Verified result',evidence:'Regression passed'}}],decisions:[],deliveries:[]},...Array.from({length:extraTasks},(_,i)=>({id:`extra-${i}`,owner:'main',status:'running',summary:`Extra fixture ${i}`,work:[],decisions:[],deliveries:[]}))],exchangeTurns:{},questions:{},views:pendingPanel?{main:pendingPanel}:{},models:[{ref:'mock/model',name:'Mock',provider:'mock'}],modelsKey:'mock',defaultModel:'mock/model',colors:['blue'],prefs:{},memory:false,browser:false,activity:{},secretRequests:{keep:[{id:'secure-fixture',name:'FIXTURE_ONLY',kind:'fill',purpose:'Mock credential request',sessionId:'keep',taskOwner:'main',status:'pending'}]},work:{bots:doing?{main:doing}:{},rooms:groupWork.length?{'group-fixture':groupWork}:{},approvals:[{id:'approval-fixture',taskOwner:'main',botId:'keep',tool:'read_file',answerable:true,detail:{text:'Fixture approval remains visible'}},...(groupApproval?[{id:'group-approval',botId:'keep',roomId:'group-fixture',at:Date.now(),tool:'write_file'}]:[])]}})
 const fetch = async (url,options={}) => {
  if(url.endsWith('/feed')) return new Response(new ReadableStream({ start(controller) { feedControllers.add(controller);options.signal?.addEventListener('abort',()=>{feedControllers.delete(controller);controller.close()},{once:true}) } }))
  const {endpoint,payload} = JSON.parse(options.body)
  let value=null
  if(endpoint==='state') value=roster()
+ else if(endpoint==='set-flags') { if(payload.pinned)favorites.add(payload.id);else favorites.delete(payload.id);revision++ }
  else if(endpoint==='mek-task-list') value={tasks:roster().tasks,nextCursor:null}
  else if(endpoint==='room-chat') value=groupHistory ? groupHistory(payload.cursor) : {sessionId:payload.roomId,part:0,items:[],cursor:null,progress:groupProgress}
  else if(endpoint==='image') { imageReads.push(payload.sessionId); value={attachment:{mediaType:'image/png'},data:'AAAA'} }
@@ -98,7 +100,15 @@ async function refresh() {
 async function publish(pending, sessionId='main') {
  await act(async()=>{nativeStatuses=new Map(pending?[[sessionId,{pendingInteraction:pending}]]:[]);for(const listener of nativeListeners)listener();await pause()})
 }
-async function click(selector) {const node=document.querySelector(selector);if(!node) throw new Error(`Missing ${selector}`);await act(async()=>{node.focus();node.click();await pause()})}
+async function click(selector) {
+ let node=document.querySelector(selector)
+ if (/^\[data-(bot|room)-id=/.test(selector) && !document.querySelector(`.mek-team-center ${selector}`)) {
+  await click('.mek-team-tools [aria-label="Bot list"]')
+  node=document.querySelector(`.mek-bot-directory ${selector}`)
+ }
+ if(!node) throw new Error(`Missing ${selector}`)
+ await act(async()=>{node.focus();node.click();await pause()})
+}
 async function tab(name) {const node=[...document.querySelectorAll('.bt-tabs [role="tab"]')].find(node=>node.textContent===name);assert.ok(node,`Missing tab ${name}`);await act(async()=>{node.click();await pause()})}
 async function see() {await act(async()=>{for(const observer of [...intersections])observer.callback([...observer.targets].map(target=>({target,isIntersecting:true,intersectionRatio:1})));await pause()})}
 try {
@@ -109,6 +119,21 @@ try {
  // A navigation-only mount must not create either conversation-margin rule.
  assert.equal(document.querySelector('style[data-dsh-bot="chat-room"]'),null)
  await click('[data-bot-id="main"]')
+ assert.equal(document.querySelector('.mek-team-center [data-bot-id="keep"]'),null,'unselected non-main Bots start folded')
+ await act(async()=>{for(const controller of feedControllers)controller.enqueue(new TextEncoder().encode('event: message\ndata: '+JSON.stringify({sessionId:'keep',item:{kind:'bot',text:'A new result',time:Date.now()}})+'\n\n'));await pause()})
+ assert.ok(document.querySelector('.mek-team-tools [aria-label="Bot list"] .mek-tab-dot'),'a folded Bot still exposes new message activity')
+ await click('.mek-team-tools [aria-label="Bot list"]')
+ assert.equal(document.querySelector('.mek-bot-directory [data-bot-id="main"]'),null)
+ assert.ok(document.querySelector('.mek-bot-directory [data-bot-id="keep"]'))
+ await click('.mek-favorite[aria-label="Favorite Keeper"]')
+ assert.ok(document.querySelector('.mek-team-center [data-bot-id="keep"]'),'a favorite appears without switching conversations')
+ assert.equal(document.querySelector('textarea').getAttribute('aria-label'),'Message Chief')
+ await click('.mek-favorite[aria-label="Unfavorite Keeper"]')
+ assert.equal(document.querySelector('.mek-team-center [data-bot-id="keep"]'),null)
+ await click('.mek-bot-directory [data-bot-id="keep"]')
+ assert.ok(document.querySelector('.mek-team-center [data-bot-id="keep"]'),'a temporary selection appears at the top')
+ await click('[data-bot-id="main"]')
+ assert.equal(document.querySelector('.mek-team-center [data-bot-id="keep"]'),null,'switching away removes a temporary selection')
  todoFixtures=[
   {id:'todo-root',rootId:'todo-root',botId:'main',title:'One complete request',instruction:'One complete request',status:'running',startRequested:true,revision:1,dependencies:[],predecessors:[]},
   {id:'todo-future',rootId:'todo-future',botId:'main',title:'A future plan',instruction:'A future plan',status:'pending',revision:1,dependencies:[],predecessors:[]},
@@ -377,9 +402,7 @@ try {
  assert.equal(document.querySelector('.mek-task-footer'),null,'pagination action disappears once all tasks are shown')
  // Group work remains visible after the round relinquishes its speaker.
  groupEnabled=true;await refresh()
- const groupRow=[...document.querySelectorAll('.mek-team-header .bt-row')].find(node=>node.textContent.includes('Fixture group'))
- assert.ok(groupRow)
- await act(async()=>{groupRow.click();await pause();await pause()})
+ await click('[data-room-id="group-fixture"]')
  assert.ok(document.querySelector('.bt-panel .mek-task-panel'),'groups also expose the task tab')
  assert.match(document.querySelector('.bt-panel .mek-task-panel').textContent,/Only this group task/)
  assert.doesNotMatch(document.querySelector('.bt-panel .mek-task-panel').textContent,/Different group task/)
@@ -421,12 +444,11 @@ try {
  assert.equal(scroller.scrollTop,1540,'follow the tail while the reader is there')
  await click('[data-bot-id="keep"]')
  assert.equal(document.querySelector('[data-group-running]'),null)
- await act(async()=>{groupRow.click();await pause();await pause()})
+ await click('[data-room-id="group-fixture"]')
  assert.match(document.querySelector('[data-group-running]').textContent,/Another group step/)
- const otherGroup=[...document.querySelectorAll('.mek-team-header .bt-row')].find(node=>node.textContent.includes('Other group'))
- await act(async()=>{otherGroup.click();await pause();await pause()})
+ await click('[data-room-id="other-group"]')
  assert.equal(document.querySelector('[data-group-running]').children.length,0,'another group must not inherit this group work')
- await act(async()=>{groupRow.click();await pause();await pause()})
+ await click('[data-room-id="group-fixture"]')
  assert.match(document.querySelector('[data-group-running]').textContent,/Another group step/)
  groupWork=[];groupProgress=[];await refresh()
  assert.equal(document.querySelector('[data-group-running]').children.length,0,'exclude idle and privately busy members')
