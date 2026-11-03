@@ -57,6 +57,7 @@
 import { teamOperationsResponse } from './mek-team-responses.mjs'
 import { coordinationResponse } from './mek-coordination-responses.mjs'
 import { todoResponse } from './mek-todo-responses.mjs'
+import { groupReturnResponse } from './mek-group-return-responses.mjs'
 import { createServer } from 'node:http'
 import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync } from 'node:fs'
@@ -138,6 +139,10 @@ function decide(body) {
   const me = /You are (.+?), a Bot on the user's team/.exec(system)?.[1] ?? 'Bot'
   const isMain = system.includes('You are the Main Bot')
   const isRelay = system.includes('# Group chat relay')
+  if (process.env.MEK_MOCK_GROUP_RETURN === '1') {
+    const response = groupReturnResponse({ messages, tools, me, isMain, text, tool, textOf })
+    if (response) return response
+  }
   if (process.env.MEK_MOCK_TODOS === '1') {
     const response = todoResponse({ messages, tools, text, tool, textOf })
     if (response) return response

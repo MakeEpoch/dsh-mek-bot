@@ -7,6 +7,34 @@ import { install as installPolicy } from '../src/host/mek-policy.js'
 
 const acceptance = { summary: 'Reviewed result', evidence: 'Verified the returned report.' }
 
+test('a planned assignment returns nested repairs to its reviewer before the administrator', async t => {
+  const h = await todoHost(t)
+  const root = await h.create({ target: 'r', title: 'Review and repair', worker: 'c' }, 'a')
+  await h.action('start', root, {}, 'a'); await h.settle()
+  let seq = 1000
+  const emit = (id, type, data) => {
+    for (const listener of h.ctx.listeners.get('session/event') ?? []) if (listener.length >= 2) listener({ id }, { type, seq: ++seq, data })
+  }
+  const take = id => { const message = h.agent(id).calls.at(-1); emit(id, 'turn/start', { turn: 1 }); emit(id, 'user/message', message) }
+  const end = (id, text) => {
+    emit(id, 'assistant/message', { message: { content: [{ type: 'text', text }] } })
+    emit(id, 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+  }
+  take('gc')
+  await h.tool('gc', 'message_bot', { to: 'Coder', message: 'Repair the regression and report evidence.' })
+  end('gc', 'Waiting for repair')
+  take('gb')
+  await h.tool('gb', 'report_bot_task', { status: 'completed', summary: 'Repaired', evidence: 'Regression passed' })
+  end('gb', 'Repair ready'); await h.settle()
+  assert.equal(h.agent('gc').calls.length, 2, 'the reviewer must receive the nested repair')
+  assert.equal(h.agent('ga').calls.length, 0, 'the administrator must not bypass the reviewer')
+  take('gc')
+  await h.tool('gc', 'report_bot_task', { status: 'completed', summary: 'Review passed', evidence: 'Inspected repair and regression' })
+  end('gc', 'Review passed'); await h.settle()
+  assert.equal(h.agent('ga').calls.length, 1)
+  assert.equal(h.get(root.id).status, 'review')
+})
+
 test('recording is quiet, duplicate creates are idempotent, edits require the current revision', async t => {
   const h = await todoHost(t)
   const a = await h.create({ target: 'r', title: 'Fix login', requestId: 'one' }, 'a')

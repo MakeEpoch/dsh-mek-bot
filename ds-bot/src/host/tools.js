@@ -131,8 +131,8 @@ export function install(rt) {
   }
   const tooLong = text => `Not sent: the message has ${text.length} characters, more than ${MESSAGE_INLINE_MAX}, and this DeepSeek Harness cannot send it as a file. Write it to a file in your working folder and send its path instead.`
 
-  // Work for a group stays in it: from a group Session, message_bot calls a member there
-  // exactly as an "@Name" line would, and never reaches a Bot outside the group.
+  // Group delegations stay in the group. The native coordinator retains their
+  // owner and return chain; upstream-only runtimes keep the ordinary @ route.
   const groupRefusal = (room, sender, target) => {
     if (room.members.includes(target.id)) return undefined
     const add = rt.isMain(sender.id) || rt.isAdminOf(room, sender.id) ? ', or add it yourself with update_group first' : ''
@@ -213,7 +213,7 @@ export function install(rt) {
       if (room !== undefined) {
         const refusal = groupRefusal(room, sender, target)
         if (refusal !== undefined) refuse(refusal)
-        const send = () => rt.mekCurrentWorks?.(exec.agent?.id)?.length
+        const send = () => rt.mekDelegateGroup
           ? rt.mekDelegateGroup(exec.agent.id, room, sender, target, text.trim())
           : callInGroup(exec, room, sender, target, text.trim())
         return request === undefined ? await send() : answer(await rt.admitRequest(request, send))

@@ -77,3 +77,7 @@ DSH 0.2.2's presentation waterfall may contain only sections, contexts and varia
 The native adapter now layers persistent conversation plans over the existing root/work coordinator. Stable child ids retain their independent work attempts. Group-local plans use the current group administrator, while private task ownership remains unchanged; a handover retains running work and routes results to the new administrator. Accepted predecessor versions gate dispatch and supported tool execution. Paused or unknown work is never treated as success. The native pane exposes the same task records in group and assigned-member views.
 
 DSH remains the clock owner. The optional schedule adapter uses public durable delivery history and change events to deduplicate occurrences, then creates a pending main plan or durably notifies its coordinator. The original clock wake is not a business dispatch and cannot call tools. Existing permissions, evidence checks, resource leases and cancellation continue to apply. See the [complete design and implementation limits](plans/2026-11-03-mek-conversation-tasks.md); do not infer full design acceptance from this first implementation.
+
+### 群内首次派工与逐层回传
+
+原生协调器启用时，群管理员从普通群回合调用 `message_bot` 即进入持久化执行任务，根任务保留用户目标及群 Session。成员只能在已有任务内继续派工；结果沿父任务逐层检查，最后回原群协调者。群内问题和返工也保持该入口。计划任务的管理员交接只调整协调者投递，不绕过嵌套检查者。普通群聊/公告/@ 不会变为正式任务，旧讨论不会在升级时自动重放；验收、未知结果、审批和凭据边界沿用既有契约。详见[任务所有权](plans/2026-10-30-mek-task-ownership.md#group-dispatch-return-chain-2026-11-03-hotfix)。

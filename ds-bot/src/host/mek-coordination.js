@@ -21,6 +21,7 @@ const rules = `## Task ownership (takes precedence over the ordinary team messag
 - A worker's result is evidence to review, not automatic success. Check the goal and acceptance criteria; request concrete corrections or missing checks with revise_bot_task. This continues the same task. Do not thank a worker or echo status messages. You may send follow-up work when it is necessary to finish the goal.
 - A needs_report result has returned but lacks a structured completed report. Use revise_bot_task with its work id to request the missing report and evidence from the retained result; do not repeat completed external actions. Missing documentation alone is not a reason to cancel. A review task awaits your acceptance, not further worker execution. Cancel only work the user has abandoned or superseded.
 - Workers should call report_bot_task with a concrete outcome, verification evidence and artifacts before ending delegated work. Use blocked or failed when the task cannot be completed. Ask a question with ask_user when a decision could unblock it.
+- In a group, message_bot is a formal delegation, including the administrator's first dispatch. It keeps a persistent main task and returns to the delegator in this group. Use message_bot for nested implementation/review work; plain @mentions only display text in a tracked turn. Report back to an ancestor instead of delegating back to it. The ancestor reviews your returned result and can revise the same assignment for another pass.
 - Use list_tasks to recover pending work and decisions after another user message or a restart. Use read_task for a full result when its preview is cut. Do not copy unrelated private conversations into a task.
 - Only the task owner calls finish_bot_task, after all delegated work and questions are settled and the results satisfy the user's request. Then deliver the actual outcome, evidence, artifacts, and remaining limitations in the owner's conversation. A failed or blocked worker must not be described as success. cancel_bot_task stops a task and its outstanding delegated work.
 - Tool approvals and secrets are not ordinary Bot decisions. Never approve your own tools, fabricate user authorization, or request credentials in an ordinary question. The user answers real approval cards and secure credential requests.`
@@ -170,7 +171,12 @@ export function install(rt) {
   const resumeArgs = (work, text) => ({ fromId: work.from, toId: work.to,
     ...(work.sessionId ? { sessionId: work.sessionId } : {}),
     role: 'resume', work: work.id, text })
+  const ownerGroupSession = root => {
+    const group = rt.groupOwners.get(root?.originSessionId)
+    return group && group.botId === root.owner ? rt.roomOf(group.roomId)?.sessions?.[root.owner] : undefined
+  }
   const decisionArgs = (decision, work) => ({ fromId: work.to, toId: decision.owner, role: 'decision', exchangeId: decision.id,
+    ...(ownerGroupSession(rootOf(decision.rootId)) ? { sessionId: ownerGroupSession(rootOf(decision.rootId)) } : {}),
     text: `Decision needed for task ${decision.rootId}; delegated work ${work.id}.\nQuestion ${decision.id}: ${decision.question}\nOptions: ${JSON.stringify(decision.options ?? [])}\n${decision.detail ?? ''}\nThe worker is paused, not finished. Resolve this from the user's instructions, conventions, and evidence, then call answer_bot_question. Ask the user here only for essential information or authorization. Do not send the user to another chat.` })
   const createRoot = ({ owner, goal, projectId, criteria = [], sessionId, workflow, attach = true }) => {
     if (!rt.botOf(owner) || !String(goal ?? '').trim()) refuse('Choose an existing owner and a concrete goal.')
@@ -270,7 +276,7 @@ export function install(rt) {
     const work = workOf(source.exchangeId)
     if (!work) return false
     const plannedReturn = rt.mekTodoReturnOwner?.(work.rootId)
-    if (plannedReturn) source = { ...source, senderSessionId: plannedReturn.botId, senderRoomId: plannedReturn.roomId }
+    if (plannedReturn && !work.parent) source = { ...source, senderSessionId: plannedReturn.botId, senderRoomId: plannedReturn.roomId }
     if (final(rootOf(work.rootId)) || ['cancelled', 'superseded'].includes(work.status) || (work.resultExchangeId && !own(state.works, work.id))) return true
     if (work.groupRoot && work.parent === work.groupRoot) {
       void completeGroupMember(work, sessionId, text).catch(error => rt.warn('mek-bot: group task result failed: %s', error))
@@ -303,6 +309,7 @@ export function install(rt) {
       item.args.text = `${long?.text ?? text}${structured}${reviewAdvice(work)}`
       work.reviewNoticeId = id
       await save()
+      if (work.room) await rt.appendGroupTaskResult?.(work.room, work.to, `${text}${structured}`)
       await send(item)
       announce('result', rootOf(work.rootId), work)
     })().catch(error => rt.warn('mek-bot: could not retain task result: %s', error))
@@ -392,17 +399,18 @@ export function install(rt) {
   }
   rt.mekHandlesGroupTurn = (sessionId, info) => Boolean(rt.groupOwners.has(sessionId) && workOf(rt.workOf(info)))
   const groupInstruction = (instruction, context) => `${context}\n\n[Delegated group task]\n${instruction}\nThe original task owner receives your result and questions. Use message_bot to delegate to another member of this group; plain @mentions do not start work for this tracked task. Call report_bot_task with evidence when finished.`
-  async function groupMember(room, from, memberId, instruction, parent, groupRoot) {
+  async function groupMember(room, from, memberId, instruction, parent, groupRoot, { rootId, prepared } = {}) {
     const member = rt.botOf(memberId)
     if (!member || !room.members.includes(memberId)) refuse('Choose a member still in this group.')
     if (rt.upstreamOf([parent]).has(memberId)) refuse('A selected group member is waiting for this task. Ask the owner a question instead of delegating back to an ancestor.')
-    const { sessionId, context, files } = await rt.prepareGroupMemberTask(room, member)
+    const { sessionId, context, files } = prepared ?? await rt.prepareGroupMemberTask(room, member)
     const id = randomUUID()
     const fromSession = room.sessions?.[from]
-    rt.openWork(id, { from, to: memberId, parent, groupRoot, room: room.id, sessionId,
-      ...(parent !== groupRoot && fromSession ? { fromRoom: room.id } : {}), instruction })
+    const returnInGroup = fromSession && (!groupRoot || parent !== groupRoot)
+    rt.openWork(id, { from, to: memberId, parent, groupRoot, ...(rootId ? { rootId } : {}), room: room.id, sessionId,
+      ...(returnInGroup ? { fromRoom: room.id } : {}), instruction })
     const args = { fromId: from, toId: memberId, sessionId, role: 'request', exchangeId: id,
-      ...(parent !== groupRoot && fromSession ? { fromRoomId: room.id } : {}), text: groupInstruction(instruction, context), files }
+      ...(returnInGroup ? { fromRoomId: room.id } : {}), text: groupInstruction(instruction, context), files }
     return { id, item: prepare(rootOf(id).id, args) }
   }
   // `delegated` says the post is a dispatch that must reach members: message_bot's
@@ -463,10 +471,23 @@ export function install(rt) {
   }
   rt.mekDelegateGroup = async (sessionId, room, sender, target, instruction) => {
     const parent = activeWork(sessionId)
-    if (!parent || !parent.groupRoot) refuse('No active delegated group task.')
-    if (rt.upstreamOf([parent.id]).has(target.id)) refuse('That Bot waits for this work. Use ask_user for an owner decision instead of creating a cycle.')
-    const { id, item } = await groupMember(room, sender.id, target.id, instruction, parent.id, parent.groupRoot)
+    if (!parent && room.admin !== sender.id) refuse('Only the group administrator can start a formal task. Ask the administrator to arrange this work; members delegate within their existing assignment.')
+    if (parent && parent.room !== room.id && parent.fromRoom !== room.id) refuse('Delegate only within the current task’s group.')
+    if (parent && rt.upstreamOf([parent.id]).has(target.id)) refuse('That Bot waits for this work. Return your result with report_bot_task, or use ask_user for an owner decision instead of creating a cycle.')
+    let root = parent && rootOf(parent.id), prepared
+    if (!root) {
+      // Loading the group context restores long log entries before retaining the
+      // user's goal. Dispatch instructions may cover only one step of that goal.
+      await rt.prepareGroupMemberTask(room, sender)
+      prepared = await rt.prepareGroupMemberTask(room, target)
+      if (room.admin !== sender.id) refuse('The group administrator changed before dispatch.')
+      const continuing = rt.mekTaskForSession(sessionId)
+      root = continuing && !final(continuing) ? continuing : createRoot({ owner: sender.id, sessionId,
+        goal: rt.live.get(sessionId)?.mekGoal ?? room.log?.findLast(line => line.who === 'User')?.text ?? instruction })
+    }
+    const { id, item } = await groupMember(room, sender.id, target.id, instruction, parent?.id, parent?.groupRoot, { rootId: root.id, prepared })
     await save(); await send(item)
+    announce('created', root, workOf(id))
     return `Delegated group work ${id}. Its result returns here before your own result returns to the task owner.`
   }
   async function completeGroupMember(work, sessionId, text) {
@@ -715,7 +736,7 @@ export function install(rt) {
     // previous attempt's durable reply during restart reconciliation.
     rt.mekPolicyGuard?.({ root, action: 'revise', work })
     const id = randomUUID()
-    open(id, { from: work.from, ...(work.to ? { to: work.to } : { room: work.room }), ...(own(state.works, work.parent) ? { parent: work.parent } : {}) })
+    open(id, { from: work.from, ...(work.to ? { to: work.to } : { room: work.room }), ...(work.fromRoom ? { fromRoom: work.fromRoom } : {}), ...(own(state.works, work.parent) ? { parent: work.parent } : {}) })
     const next = { ...work, id, previous: work.id, status: 'queued', attempt: work.attempt + 1, instruction: `Original task: ${work.instruction}\nRevision required: ${feedback}`, createdAt: Date.now() }
     for (const key of ['browserHold', 'restartResumeId', 'reviewNoticeId', 'dispatching', 'members', 'groupMentions', 'result', 'resultLength', 'resultAt', 'resultExchangeId', 'resultSessionId', 'outcome', 'report']) delete next[key]
     work.status = 'superseded'
@@ -735,7 +756,7 @@ export function install(rt) {
       await rt.mekPostGroup(rt.roomOf(next.room), rt.botOf(next.from), next.instruction, next.id, [], { delegated: true })
       return `Group revision ${id} queued under task ${root.id}.`
     }
-    await enqueue(root.id, { fromId: next.from, toId: next.to, ...(next.sessionId ? { sessionId: next.sessionId } : {}), role: 'request', exchangeId: id, text: next.instruction })
+    await enqueue(root.id, { fromId: next.from, toId: next.to, ...(next.sessionId ? { sessionId: next.sessionId } : {}), ...(next.fromRoom ? { fromRoomId: next.fromRoom } : {}), role: 'request', exchangeId: id, text: next.instruction })
     return `Revision ${id} queued under task ${root.id}. Review the new result before finishing.`
   })
   register('finish_bot_task', 'Accept a task after reviewing its results and verification. Refuses while any delegated work, decision, failure, or uncertain delivery remains unresolved.', {
@@ -858,6 +879,11 @@ export function install(rt) {
     const source = event.data?.source
     if (source?.kind === 'user' && entry && entry.info === undefined) entry.mekGoal = textOf(event.data.content)
     if (source?.kind !== SOURCE_KIND) return
+    if (source.role === 'room' && entry) {
+      const room = rt.roomOf(rt.groupOwners.get(session.id)?.roomId)
+      const goal = room?.log?.findLast(line => line.who === 'User')?.text
+      if (goal) entry.mekGoal = goal
+    }
     const out = own(data().outbox, source.exchangeId)
     if (out) { out.status = 'taken'; delete out.args; changed() }
     const work = workOf(source.role === 'request' ? source.exchangeId : source.work)

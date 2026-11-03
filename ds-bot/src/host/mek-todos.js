@@ -264,7 +264,8 @@ export function install(rt) {
       if (data().tasks[root.id] !== root) break
       if (owner(root) !== botId) continue
       rebind(root)
-      if (['reply', 'decision', 'notice'].includes(args.role)) { args.toId = botId; args.sessionId = target.sessionId }
+      const nestedReply = args.role === 'reply' && own(state.mekTasks?.works, args.replyTo)?.parent
+      if (['reply', 'decision', 'notice'].includes(args.role) && !nestedReply) { args.toId = botId; args.sessionId = target.sessionId }
       return
     }
     throw Object.assign(new Error('The administrator changed before delivery.'), { code: 'bot/todo-waiting' })
