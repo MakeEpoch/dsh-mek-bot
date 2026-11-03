@@ -345,6 +345,7 @@ var ZH = {
   "Send message": "发送",
   // Details drawer
   Details: "详情",
+  Tasks: "任务",
   Browser: "浏览器",
   "Browser access": "浏览器权限",
   "Bots browse, click and fill in forms freely. Posting, uploading, downloading and deleting ask you first unless you allow them here. Payments are always yours: the Bot hands the page to you.": "Bot 可以自由浏览、点击和填写表单。发布、上传、下载和删除会先征求你的同意，除非你在这里预先允许。付款始终由你自己完成：Bot 会把页面交给你。",
@@ -1891,6 +1892,7 @@ var SmileIcon = lineIcon(["M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z", "M7.
 var ReplyIcon = lineIcon(["M8 5L4 9l4 4", "M4 9h7.5a4.5 4.5 0 0 1 4.5 4.5V15"]);
 var DotsIcon = lineIcon(["M5 10h.01M10 10h.01M15 10h.01"]);
 var CheckIcon = lineIcon(["M4.5 10.5l3.5 3.5 7.5-8"]);
+var TasksIcon = lineIcon(["M8.5 5h8M8.5 10h8M8.5 15h8M3 4.5l1 1 2-2M3 10h2M3 15h2"]);
 var GlobeIcon = lineIcon(["M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14z", "M3 10h14", "M10 3c2 2.2 2.9 4.5 2.9 7S12 14.8 10 17c-2-2.2-2.9-4.5-2.9-7S8 5.2 10 3z"]);
 var ArrowDownIcon = lineIcon(["M10 4v12", "M5 11l5 5 5-5"]);
 var DownloadIcon = lineIcon(["M10 3.5v9", "M6.5 9.5L10 13l3.5-3.5", "M4 16h12"]);
@@ -7771,7 +7773,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
         if (!state.details || state.details === id) return state;
         const snap = roster.getSnapshot();
         const view = state.view === "browser" && snap.byId[id] === void 0 ? "details" : state.view === "side" && !(snap.sideChats?.[snap.byId[id]?.id] ?? []).some((chat) => chat?.id === state.side) ? "details" : state.view;
-        return { ...state, details: id, view, renaming: false, tab: null };
+        return { ...state, details: id, view, renaming: false, tab: state.view === "details" && state.tab === "tasks" ? "tasks" : null };
       });
     },
     showDetails: (id, tab = null) => {
@@ -17435,7 +17437,7 @@ function transcriptOf(list, id, name, hiddenTurns = []) {
   }
   return lines.join("\n\n");
 }
-var TAB_LABELS = { details: "Details", browser: "Browser" };
+var TAB_LABELS = { details: "Details", tasks: "Tasks", browser: "Browser" };
 var hostOf2 = (url) => {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -17660,7 +17662,8 @@ function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, a
   const owner = roster.byId[sessionId];
   const part = owner ? currentPart(owner) : sessionId;
   const isMainBot = isMainOf(roster, owner?.id);
-  const [tab, setTab] = (0, import_react49.useState)("details");
+  const TaskPanel = actions.TaskPanel;
+  const [tab, setTab] = (0, import_react49.useState)(startTab === "tasks" && TaskPanel ? "tasks" : startTab === "browser" && owner ? "browser" : "details");
   const room2 = roster.roomsById[sessionId];
   const [view, setView] = (0, import_react49.useState)(startTab === "settings" && (owner || room2) ? "settings" : "overview");
   const [editing, setEditing] = (0, import_react49.useState)(Boolean(startRenaming && (roster.byId[sessionId] || roster.roomsById[sessionId])));
@@ -17741,10 +17744,10 @@ function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, a
     if (room2) await run2(actions.updateRoom(room2.id, { name: next }));
   };
   const subtitle = bot ? bot.role : roomSubtitle(room2, roster);
-  const tabs = bot ? ["details", "browser"] : ["details"];
+  const tabs = ["details", ...TaskPanel && (bot || room2) ? ["tasks"] : [], ...bot ? ["browser"] : []];
   return [
     (0, import_react49.createElement)(import_react49.Fragment, { key: "top" }, top),
-    (0, import_react49.createElement)(
+    tab !== "tasks" ? (0, import_react49.createElement)(
       "div",
       { key: "id", className: "bt-drawer-id", "data-move": side },
       bot ? (0, import_react49.createElement)(BotAvatar, { bot, size: 64, state: botState(running, doing, roster.questions?.[part] !== void 0), main: isMainBot, badge: false, gaze: true, pokeable: true }) : (0, import_react49.createElement)(MemberPile, { room: room2, roster }),
@@ -17768,17 +17771,18 @@ function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, a
         setEditing(true);
       } }, current),
       subtitle ? (0, import_react49.createElement)("span", { className: "bt-drawer-role" }, subtitle) : null
-    ),
+    ) : null,
     tabs.length > 1 ? (0, import_react49.createElement)(
       "div",
       { key: "tabs", ref: glide.box, className: "bt-tabs", role: "tablist", "data-move": side },
       (0, import_react49.createElement)("span", { ref: glide.thumb, className: "bt-thumb", "aria-hidden": true }),
-      tabs.map((key) => (0, import_react49.createElement)("button", { key, type: "button", role: "tab", className: "bt-tab", "aria-selected": tab === key, onClick: () => setTab(key) }, t(TAB_LABELS[key])))
+      tabs.map((key) => (0, import_react49.createElement)("button", { key, type: "button", role: "tab", className: "bt-tab", "aria-selected": tab === key, onClick: () => TaskPanel ? actions.showDetails(sessionId, key) : setTab(key) }, t(TAB_LABELS[key])))
     ) : null,
     (0, import_react49.createElement)(
       "div",
-      { key: `body:${tab}`, className: "bt-drawer-body", "data-move": move },
+      { key: `body:${tab}`, className: `bt-drawer-body${tab === "tasks" ? " mek-task-drawer" : ""}`, "data-move": move },
       errorLine,
+      TaskPanel && tab === "tasks" ? (0, import_react49.createElement)(TaskPanel, { key: sessionId, sessionId }) : null,
       room2 && tab === "details" ? (0, import_react49.createElement)(GroupOverview, { room: room2, roster, actions, usage, useWork, openSettings: () => setView("settings") }) : null,
       bot && tab === "details" ? [
         (0, import_react49.createElement)(RunStats, { key: "stats", bot, part, running, actions }),
@@ -20530,9 +20534,17 @@ var savedFolds = () => {
     return {};
   }
 };
-function TaskProgress({ team, sessionId, ctx, all = false }) {
+function TaskAttention({ team, sessionId }) {
   const roster = team.hooks.useRoster((value) => value);
   const work = team.hooks.useWork((value) => value);
+  const owner = roster.byId[sessionId]?.id;
+  const secrets = !owner ? [] : Object.entries(roster.secretRequests ?? {}).flatMap(([botId, requests]) => requests.filter((request) => request.taskOwner === owner && request.status === "pending").map((request) => ({ botId, request })));
+  const approvals = !owner ? [] : (work.approvals ?? []).filter((approval) => approval.taskOwner === owner);
+  if (!secrets.length && !approvals.length) return null;
+  return /* @__PURE__ */ import_react56.default.createElement("section", { className: "mek-task-attention", "aria-label": label("Task requests", "任务请求") }, secrets.map(({ botId, request }) => /* @__PURE__ */ import_react56.default.createElement(SecretCard, { key: request.id, sessionId: request.sessionId, bot: roster.byId[botId], request, roster, actions: team.actions })), approvals.map((approval) => /* @__PURE__ */ import_react56.default.createElement(ApprovalCard, { key: approval.id, approval, bot: roster.byId[approval.botId] ?? { name: "Bot" }, actions: team.actions })));
+}
+function TaskProgress({ team, sessionId, ctx, all = false }) {
+  const roster = team.hooks.useRoster((value) => value);
   const [busy, setBusy] = (0, import_react56.useState)(null);
   const [filter, setFilter] = (0, import_react56.useState)("open");
   const [search, setSearch] = (0, import_react56.useState)("");
@@ -20585,21 +20597,22 @@ function TaskProgress({ team, sessionId, ctx, all = false }) {
     }
   };
   const owner = roster.byId[sessionId]?.id;
+  const room2 = roster.roomsById[sessionId];
+  const roomSessions = new Set(room2 ? [room2.id, sessionId, ...Object.values(room2.sessions ?? {}), ...room2.parts ?? []] : []);
   const known = all ? [...new Map([...history, ...roster.tasks ?? []].map((task) => [task.id, task])).values()] : roster.tasks ?? [];
   const planned = new Set((roster.todos ?? []).map((task) => task.executionId).filter(Boolean));
-  const owned = known.filter((task) => !planned.has(task.id) && (all || task.owner === owner));
+  const owned = known.filter((task) => !planned.has(task.id) && (all || (room2 ? roomSessions.has(task.originSessionId) || task.work?.some((item) => item.fromRoom === room2.id || item.room === room2.id) : task.owner === owner)));
   const tasks = owned.filter((task) => !all || (filter === "all" || (filter === "open" ? !["completed", "cancelled"].includes(task.status) : task.status === filter)) && `${task.summary ?? ""} ${roster.byId[task.owner]?.name ?? ""}`.toLowerCase().includes(search.toLowerCase()));
-  const expanded = all || folds[owner] !== true;
+  const foldOwner = room2?.id ?? owner;
+  const expanded = all || folds[foldOwner] !== true;
   const toggleTasks = () => setFolds((previous) => {
-    const next = { ...previous, [owner]: previous[owner] !== true };
+    const next = { ...previous, [foldOwner]: previous[foldOwner] !== true };
     try {
       window.sessionStorage.setItem(foldsKey, JSON.stringify(next));
     } catch {
     }
     return next;
   });
-  const secrets = !owner || all ? [] : Object.entries(roster.secretRequests ?? {}).flatMap(([botId, requests]) => requests.filter((request) => request.taskOwner === owner && request.status === "pending").map((request) => ({ botId, request })));
-  const approvals = !owner || all ? [] : (work.approvals ?? []).filter((approval) => approval.taskOwner === owner);
   const cancel = async (taskId) => {
     setBusy(taskId);
     try {
@@ -20611,8 +20624,7 @@ function TaskProgress({ team, sessionId, ctx, all = false }) {
       setBusy(null);
     }
   };
-  if (!all && !owned.length && !approvals.length && !secrets.length) return null;
-  return /* @__PURE__ */ import_react56.default.createElement("section", { className: `mek-tasks${all ? " mek-task-ledger" : ""}`, "aria-label": label("Team tasks", "团队任务") }, !all && tasks.length > 0 && /* @__PURE__ */ import_react56.default.createElement("button", { type: "button", className: "mek-task-toggle", "aria-expanded": expanded, "aria-label": expanded ? label("Collapse tasks", "收起任务") : label("Expand tasks", "展开任务"), onClick: toggleTasks }, /* @__PURE__ */ import_react56.default.createElement("span", null, label("Team tasks", "团队任务"), " · ", tasks.length), /* @__PURE__ */ import_react56.default.createElement("span", null, expanded ? label("Collapse", "收起") : label("Expand", "展开"))), all && /* @__PURE__ */ import_react56.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react56.default.createElement("input", { "aria-label": label("Search tasks", "搜索任务"), placeholder: label("Search tasks", "搜索任务"), value: search, onChange: (event) => setSearch(event.target.value) }), /* @__PURE__ */ import_react56.default.createElement("select", { "aria-label": label("Task status", "任务状态"), value: filter, onChange: (event) => setFilter(event.target.value) }, [["open", "Open tasks", "未完成"], ["completed", "Accepted", "已验收"], ["cancelled", "Cancelled", "已取消"], ["all", "All tasks", "全部任务"]].map(([key, en, zh]) => /* @__PURE__ */ import_react56.default.createElement("option", { key, value: key }, label(en, zh))))), all && !tasks.length && /* @__PURE__ */ import_react56.default.createElement("p", null, label("No matching tasks.", "没有符合条件的任务。")), secrets.map(({ botId, request }) => /* @__PURE__ */ import_react56.default.createElement(SecretCard, { key: request.id, sessionId: request.sessionId, bot: roster.byId[botId], request, roster, actions: team.actions })), approvals.map((approval) => /* @__PURE__ */ import_react56.default.createElement(ApprovalCard, { key: approval.id, approval, bot: roster.byId[approval.botId] ?? { name: "Bot" }, actions: team.actions })), expanded && tasks.slice(0, all ? tasks.length : limit).map((task) => /* @__PURE__ */ import_react56.default.createElement("details", { key: task.id, className: "mek-task", "data-task-state": task.status }, /* @__PURE__ */ import_react56.default.createElement("summary", null, /* @__PURE__ */ import_react56.default.createElement("span", null, label("Team task", "团队任务")), /* @__PURE__ */ import_react56.default.createElement("span", null, taskStatus(task.status)), /* @__PURE__ */ import_react56.default.createElement("span", { className: "mek-task-preview" }, task.summary)), /* @__PURE__ */ import_react56.default.createElement("div", { className: "mek-task-body" }, task.status === "needs_report" && /* @__PURE__ */ import_react56.default.createElement("p", { role: "status" }, label("The result has returned. The owner must request a structured report and verification evidence before accepting it. Missing a report alone does not require cancellation.", "结果已返回，负责人需请求执行者补充结构化报告和验证证据，再进行验收；无需仅因缺报告取消任务。")), task.status === "review" && /* @__PURE__ */ import_react56.default.createElement("p", { role: "status" }, label("The results are ready for the owner to review and accept. The task is not still executing.", "结果已返回，等待负责人检查证据并验收。")), (task.work ?? []).filter((item) => item.status !== "superseded").map((item) => /* @__PURE__ */ import_react56.default.createElement("div", { key: item.id, className: "mek-task-step" }, /* @__PURE__ */ import_react56.default.createElement("strong", null, item.name), /* @__PURE__ */ import_react56.default.createElement("span", null, taskStatus(item.status)), item.report && /* @__PURE__ */ import_react56.default.createElement("p", null, item.report.summary, /* @__PURE__ */ import_react56.default.createElement("br", null), item.report.evidence), !item.report && item.result && /* @__PURE__ */ import_react56.default.createElement("p", null, item.result), item.report?.artifacts?.length > 0 && /* @__PURE__ */ import_react56.default.createElement(Artifacts, { values: item.report.artifacts, sessionId: item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to, ctx }))), (task.decisions ?? []).filter((item) => item.status === "open").map((item) => /* @__PURE__ */ import_react56.default.createElement("p", { key: item.id }, label("Question being handled by the owner: ", "负责人正在处理的问题："), item.question)), task.deliveries?.some((item) => item.status === "uncertain") && /* @__PURE__ */ import_react56.default.createElement("p", { role: "status" }, label("A delivery is being reconciled. The task has not been repeated.", "消息送达情况待核对，未重复执行任务。")), !["completed", "cancelled"].includes(task.status) && /* @__PURE__ */ import_react56.default.createElement("button", { type: "button", disabled: busy === task.id, onClick: () => cancel(task.id) }, label("Cancel task", "取消任务"))))), !all && expanded && tasks.length > limit && /* @__PURE__ */ import_react56.default.createElement("div", { className: "mek-task-footer" }, /* @__PURE__ */ import_react56.default.createElement("button", { type: "button", className: "mek-task-more", onClick: () => setLimit((value) => value + 8) }, /* @__PURE__ */ import_react56.default.createElement("span", null, label("Show more tasks", "显示更多任务")), /* @__PURE__ */ import_react56.default.createElement("span", { className: "mek-task-more-count" }, tasks.length - limit), /* @__PURE__ */ import_react56.default.createElement(ChevronRightIcon, null))), all && cursor && /* @__PURE__ */ import_react56.default.createElement("div", { className: "mek-task-footer" }, /* @__PURE__ */ import_react56.default.createElement("button", { type: "button", className: "mek-task-more", disabled: loading, onClick: () => void loadEarlier() }, label("Load earlier tasks", "加载更早任务"))), all && loading && /* @__PURE__ */ import_react56.default.createElement("p", { role: "status" }, label("Loading tasks…", "正在加载任务…")), failure && /* @__PURE__ */ import_react56.default.createElement("p", { role: "alert" }, failure));
+  return /* @__PURE__ */ import_react56.default.createElement("section", { className: `mek-tasks${all ? " mek-task-ledger" : ""}`, "aria-label": label("Team tasks", "团队任务") }, !all && !owned.length && /* @__PURE__ */ import_react56.default.createElement("p", { className: "mek-task-empty" }, label("No team tasks in this conversation.", "当前会话暂无团队任务。")), !all && tasks.length > 0 && /* @__PURE__ */ import_react56.default.createElement("button", { type: "button", className: "mek-task-toggle", "aria-expanded": expanded, "aria-label": expanded ? label("Collapse tasks", "收起任务") : label("Expand tasks", "展开任务"), onClick: toggleTasks }, /* @__PURE__ */ import_react56.default.createElement("span", null, label("Team tasks", "团队任务"), " · ", tasks.length), /* @__PURE__ */ import_react56.default.createElement("span", null, expanded ? label("Collapse", "收起") : label("Expand", "展开"))), all && /* @__PURE__ */ import_react56.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react56.default.createElement("input", { "aria-label": label("Search tasks", "搜索任务"), placeholder: label("Search tasks", "搜索任务"), value: search, onChange: (event) => setSearch(event.target.value) }), /* @__PURE__ */ import_react56.default.createElement("select", { "aria-label": label("Task status", "任务状态"), value: filter, onChange: (event) => setFilter(event.target.value) }, [["open", "Open tasks", "未完成"], ["completed", "Accepted", "已验收"], ["cancelled", "Cancelled", "已取消"], ["all", "All tasks", "全部任务"]].map(([key, en, zh]) => /* @__PURE__ */ import_react56.default.createElement("option", { key, value: key }, label(en, zh))))), all && !tasks.length && /* @__PURE__ */ import_react56.default.createElement("p", null, label("No matching tasks.", "没有符合条件的任务。")), expanded && tasks.slice(0, all ? tasks.length : limit).map((task) => /* @__PURE__ */ import_react56.default.createElement("details", { key: task.id, className: "mek-task", "data-task-state": task.status }, /* @__PURE__ */ import_react56.default.createElement("summary", null, /* @__PURE__ */ import_react56.default.createElement("span", null, label("Team task", "团队任务")), /* @__PURE__ */ import_react56.default.createElement("span", null, taskStatus(task.status)), /* @__PURE__ */ import_react56.default.createElement("span", { className: "mek-task-preview" }, task.summary)), /* @__PURE__ */ import_react56.default.createElement("div", { className: "mek-task-body" }, task.status === "needs_report" && /* @__PURE__ */ import_react56.default.createElement("p", { role: "status" }, label("The result has returned. The owner must request a structured report and verification evidence before accepting it. Missing a report alone does not require cancellation.", "结果已返回，负责人需请求执行者补充结构化报告和验证证据，再进行验收；无需仅因缺报告取消任务。")), task.status === "review" && /* @__PURE__ */ import_react56.default.createElement("p", { role: "status" }, label("The results are ready for the owner to review and accept. The task is not still executing.", "结果已返回，等待负责人检查证据并验收。")), (task.work ?? []).filter((item) => item.status !== "superseded").map((item) => /* @__PURE__ */ import_react56.default.createElement("div", { key: item.id, className: "mek-task-step" }, /* @__PURE__ */ import_react56.default.createElement("strong", null, item.name), /* @__PURE__ */ import_react56.default.createElement("span", null, taskStatus(item.status)), item.report && /* @__PURE__ */ import_react56.default.createElement("p", null, item.report.summary, /* @__PURE__ */ import_react56.default.createElement("br", null), item.report.evidence), !item.report && item.result && /* @__PURE__ */ import_react56.default.createElement("p", null, item.result), item.report?.artifacts?.length > 0 && /* @__PURE__ */ import_react56.default.createElement(Artifacts, { values: item.report.artifacts, sessionId: item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to, ctx }))), (task.decisions ?? []).filter((item) => item.status === "open").map((item) => /* @__PURE__ */ import_react56.default.createElement("p", { key: item.id }, label("Question being handled by the owner: ", "负责人正在处理的问题："), item.question)), task.deliveries?.some((item) => item.status === "uncertain") && /* @__PURE__ */ import_react56.default.createElement("p", { role: "status" }, label("A delivery is being reconciled. The task has not been repeated.", "消息送达情况待核对，未重复执行任务。")), !["completed", "cancelled"].includes(task.status) && /* @__PURE__ */ import_react56.default.createElement("button", { type: "button", disabled: busy === task.id, onClick: () => cancel(task.id) }, label("Cancel task", "取消任务"))))), !all && expanded && tasks.length > limit && /* @__PURE__ */ import_react56.default.createElement("div", { className: "mek-task-footer" }, /* @__PURE__ */ import_react56.default.createElement("button", { type: "button", className: "mek-task-more", onClick: () => setLimit((value) => value + 8) }, /* @__PURE__ */ import_react56.default.createElement("span", null, label("Show more tasks", "显示更多任务")), /* @__PURE__ */ import_react56.default.createElement("span", { className: "mek-task-more-count" }, tasks.length - limit), /* @__PURE__ */ import_react56.default.createElement(ChevronRightIcon, null))), all && cursor && /* @__PURE__ */ import_react56.default.createElement("div", { className: "mek-task-footer" }, /* @__PURE__ */ import_react56.default.createElement("button", { type: "button", className: "mek-task-more", disabled: loading, onClick: () => void loadEarlier() }, label("Load earlier tasks", "加载更早任务"))), all && loading && /* @__PURE__ */ import_react56.default.createElement("p", { role: "status" }, label("Loading tasks…", "正在加载任务…")), failure && /* @__PURE__ */ import_react56.default.createElement("p", { role: "alert" }, failure));
 }
 var TASK_CSS = `.mek-tasks{flex:none;max-height:28vh;overflow:auto;padding:48px 16px 0;font-size:12px}.mek-task{border:1px solid var(--bt-line);border-radius:12px;margin:5px auto;max-width:900px}.mek-task-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;max-width:900px;margin:0 auto;padding:6px 0;border:0;background:transparent;color:var(--bt-ink);font:inherit;cursor:pointer}.mek-task-footer{display:flex;justify-content:center;max-width:900px;margin:6px auto 10px}.mek-task-more{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:28px;max-width:100%;padding:4px 12px;border:1px solid var(--bt-line);border-radius:999px;background:transparent;color:var(--bt-ink-2);font:inherit;line-height:18px;cursor:pointer;transition:background-color .12s ease,color .12s ease}.mek-task-more:hover:not(:disabled){background:var(--bt-hover);color:var(--bt-ink)}.mek-task-more:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-task-more:disabled{opacity:.5;cursor:default}.mek-task-more>svg{flex:none;transform:rotate(90deg)}.mek-task-more-count{font-variant-numeric:tabular-nums;color:var(--bt-ink-3)}.mek-task-toggle>span:last-child{color:var(--bt-ink-2)}.mek-task-toggle:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-task summary{display:flex;gap:10px;align-items:center;padding:8px 12px;cursor:pointer}.mek-task summary>span:first-child{flex:none;white-space:nowrap}.mek-task summary>span:nth-child(2){opacity:.7;white-space:nowrap}.mek-task-preview{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.6;min-width:0}.mek-task-body{padding:0 12px 10px}.mek-task-step{display:flex;flex-wrap:wrap;gap:10px;padding:6px 0}.mek-task-step p{flex-basis:100%;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:130px;overflow:auto}.mek-task-body button{padding:5px 10px;border:1px solid var(--bt-line);border-radius:8px;background:transparent;cursor:pointer;color:inherit}`;
 var LEDGER_CSS = `.mek-tasks.mek-task-ledger{max-height:none;padding:0;overflow:visible}.mek-task-ledger .mek-task,.mek-task-ledger .mek-task-footer{max-width:none}.mek-task-step .mek-artifacts{width:100%}`;
@@ -20871,6 +20883,8 @@ function TeamHeader({ team, views }) {
   const trigger = (0, import_react59.useRef)(null);
   const list = (0, import_react59.useRef)(null);
   const shown = team.hooks.useShown((value) => value);
+  const roster = team.hooks.useRoster((value) => value);
+  const ui2 = team.hooks.useUi((value) => value);
   (0, import_react59.useEffect)(() => {
     list.current?.querySelector('[aria-current="page"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [shown]);
@@ -20906,14 +20920,17 @@ function TeamHeader({ team, views }) {
     items[next]?.focus();
   };
   const actions = { ...views.actions, openSession: (id) => selectConversation(team, id) };
-  return /* @__PURE__ */ import_react59.default.createElement("header", { className: "mek-team-header" }, /* @__PURE__ */ import_react59.default.createElement("nav", { ref: list, className: "mek-team-center", "aria-label": t("Bot list") }, /* @__PURE__ */ import_react59.default.createElement(TeamSidebar, { ...views, actions, wide: true, navigation: true })), /* @__PURE__ */ import_react59.default.createElement("div", { ref: more, className: "mek-team-tools" }, /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", className: "bt-round", "aria-label": t("Search"), title: t("Search"), onClick: () => {
+  return /* @__PURE__ */ import_react59.default.createElement("header", { className: "mek-team-header" }, /* @__PURE__ */ import_react59.default.createElement("nav", { ref: list, className: "mek-team-center", "aria-label": t("Bot list") }, /* @__PURE__ */ import_react59.default.createElement(TeamSidebar, { ...views, actions, wide: true, navigation: true })), /* @__PURE__ */ import_react59.default.createElement("div", { ref: more, className: "mek-team-tools" }, /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", className: "bt-round", "aria-label": t("Tasks"), title: t("Tasks"), disabled: !roster.byId[shown] && !roster.roomsById[shown], "aria-pressed": ui2.details === shown && ui2.view === "details" && ui2.tab === "tasks", onClick: () => {
+    setOpen(false);
+    team.actions.showDetails(shown, "tasks");
+  } }, /* @__PURE__ */ import_react59.default.createElement(TasksIcon, null)), /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", className: "bt-round", "aria-label": t("Search"), title: t("Search"), onClick: () => {
     setOpen(false);
     team.actions.openPalette();
   } }, /* @__PURE__ */ import_react59.default.createElement(SearchIcon, null)), /* @__PURE__ */ import_react59.default.createElement("button", { ref: trigger, type: "button", className: "bt-round", "aria-label": t("More"), title: t("More"), "aria-expanded": open, "aria-haspopup": "menu", onClick: () => setOpen((value) => !value) }, /* @__PURE__ */ import_react59.default.createElement(DotsIcon, null)), menu && /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu mek-team-menu", role: "menu", "data-leaving": leaving ? "" : void 0, inert: leaving ? "" : void 0, onKeyDown: menuKeys }, /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", role: "menuitem", onClick: () => run2(() => team.actions.openNewChat("new")) }, /* @__PURE__ */ import_react59.default.createElement(PlusIcon, null), t("New…")), /* @__PURE__ */ import_react59.default.createElement("div", { className: "bt-menu-sep", role: "separator" }), [[t("Usage"), "usage"], [t("Connectors"), "connectors"], [t("Bot settings"), "general"]].map(([label3, page]) => /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", role: "menuitem", key: page, onClick: () => run2(() => team.actions.openSettings(page)) }, label3)))));
 }
 var TEAM_HEADER_CSS = `
 .dsb-frame.mek-team-frame{grid-template-columns:minmax(0,1fr);grid-template-rows:40px minmax(0,1fr)}
-.mek-team-header{display:grid;grid-template-columns:72px minmax(0,1fr) 72px;align-items:center;gap:8px;min-width:0;padding:0 12px;background:var(--bt-main);border-bottom:1px solid var(--bt-line);color:var(--bt-ink);font-family:var(--bt-font);box-sizing:border-box;z-index:50}
+.mek-team-header{display:grid;grid-template-columns:104px minmax(0,1fr) 104px;align-items:center;gap:8px;min-width:0;padding:0 12px;background:var(--bt-main);border-bottom:1px solid var(--bt-line);color:var(--bt-ink);font-family:var(--bt-font);box-sizing:border-box;z-index:50}
 .mek-team-header .bt-round{flex:none;width:28px;height:28px}
 .mek-team-center{grid-column:2;min-width:0;overflow:hidden}
 .mek-team-nav{padding:0;min-width:0}
@@ -20936,7 +20953,7 @@ var TEAM_HEADER_CSS = `
 .bt-settings-team{padding:0;overflow:hidden;min-height:0}
 .bt-settings-team .mek-overview nav>button{flex:none;white-space:nowrap}
 .mek-team-header :is(button,[role=menuitem]):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
-@media(max-width:640px){.mek-team-header{grid-template-columns:64px minmax(0,1fr) 64px;gap:4px;padding:0 8px}.mek-team-nav .bt-row{max-width:124px}.mek-team-nav .bt-row-name{font-size:13px}}
+@media(max-width:640px){.mek-team-header{grid-template-columns:96px minmax(0,1fr) 96px;gap:4px;padding:0 8px}.mek-team-nav .bt-row{max-width:124px}.mek-team-nav .bt-row-name{font-size:13px}}
 `;
 
 // src/client/mek/group-chat.jsx
@@ -21146,9 +21163,9 @@ var import_react64 = __toESM(require("react"), 1);
 var text2 = (en, zh) => language().startsWith("zh") ? zh : en;
 var done = (task) => ["completed", "cancelled"].includes(task.status);
 var label2 = (task) => ({ pending: text2("To do", "待办"), waiting: text2("Waiting for predecessors", "等待前置"), paused: text2("Paused", "已暂停") })[task.status] ?? taskStatus(task.status);
-function ConversationTodos({ team, sessionId }) {
+function ConversationTodos({ team, sessionId, initiallyOpen = false }) {
   const roster = team.hooks.useRoster((value) => value);
-  const [open, setOpen] = (0, import_react64.useState)(false);
+  const [open, setOpen] = (0, import_react64.useState)(initiallyOpen);
   const [title, setTitle] = (0, import_react64.useState)("");
   const [busy, setBusy] = (0, import_react64.useState)(false);
   const [error, setError] = (0, import_react64.useState)("");
@@ -21195,17 +21212,24 @@ function ConversationTodos({ team, sessionId }) {
 }
 var TODO_CSS = `.mek-todos{flex:none;font-size:12px;color:var(--bt-ink);padding:0 16px;min-width:0}.mek-todo-toggle{display:flex;justify-content:space-between;width:100%;max-width:900px;margin:auto;padding:6px 0;background:transparent;border:0;color:inherit;font:inherit;cursor:pointer}.mek-todo-toggle span,.mek-todo-hint{color:var(--bt-ink-2)}.mek-todo-list{max-height:38vh;overflow:auto;max-width:900px;margin:auto;padding-bottom:8px}.mek-todo-create{display:flex;gap:6px;margin:6px 0}.mek-todo-create input{flex:1;min-width:0;padding:7px;border:1px solid var(--bt-line);border-radius:8px;background:var(--bt-card);color:inherit;font:inherit}.mek-todos button{font:inherit;color:inherit;cursor:pointer}.mek-todo-create button,.mek-todo-actions button{padding:5px 10px;border:1px solid var(--bt-line);border-radius:8px;background:transparent}.mek-todos button:disabled{opacity:.5;cursor:default}.mek-todos button:focus-visible,.mek-todos summary:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-todo{border:1px solid var(--bt-line);border-radius:10px;margin:5px 0;min-width:0}.mek-todo summary{display:flex;align-items:flex-start;gap:10px;padding:8px;cursor:pointer}.mek-todo summary>span:last-child{flex:none;color:var(--bt-ink-2)}.mek-todo-title{flex:1;min-width:0;overflow-wrap:anywhere}.mek-todo-content{padding:0 8px 8px;overflow-wrap:anywhere}.mek-todo-content p{white-space:pre-wrap}.mek-todo-content small{display:block;color:var(--bt-ink-2)}.mek-todo-actions{display:flex;flex-wrap:wrap;gap:6px}.mek-todo-child{margin-left:4px}`;
 
-// src/client/mek/view.jsx
+// src/client/mek/task-panel.jsx
 var import_react65 = __toESM(require("react"), 1);
+function ConversationTaskPanel({ team, ctx, sessionId }) {
+  return /* @__PURE__ */ import_react65.default.createElement("div", { className: "mek-task-panel" }, /* @__PURE__ */ import_react65.default.createElement(ConversationTodos, { team, sessionId, initiallyOpen: true }), /* @__PURE__ */ import_react65.default.createElement(TaskProgress, { team, ctx, sessionId }));
+}
+var TASK_PANEL_CSS = `.mek-task-drawer{min-width:0}.mek-task-panel{min-width:0}.mek-task-panel .mek-todos{padding:0}.mek-task-panel .mek-todo-list{max-height:none;overflow:visible}.mek-task-panel .mek-tasks{max-height:none;overflow:visible;padding:16px 0 0}.mek-task-panel .mek-task summary{flex-wrap:wrap;gap:4px 8px}.mek-task-panel .mek-task-preview{flex-basis:100%;white-space:normal;overflow-wrap:anywhere}.mek-task-attention{flex:none;max-height:28vh;overflow:auto;padding:8px 16px 0;font-size:12px}.mek-task-empty{color:var(--bt-ink-2)}.bt-tabs .bt-tab:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}`;
+
+// src/client/mek/view.jsx
+var import_react66 = __toESM(require("react"), 1);
 var STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS2 + HANDOFF_CSS + SIDE_CSS + app_default;
 function TeamView({ ctx, requests, viewport }) {
-  const team = (0, import_react65.useMemo)(() => {
+  const team = (0, import_react66.useMemo)(() => {
     const value = createTeam();
     value.actions.schedules = void 0;
     attachAgentActions(value, ctx);
     return value;
   }, [ctx]);
-  (0, import_react65.useEffect)(() => {
+  (0, import_react66.useEffect)(() => {
     const stopWatching = watchDeletedSubjects(team);
     const stopRemembering = rememberConversation(team);
     const stop = team.start();
@@ -21216,11 +21240,14 @@ function TeamView({ ctx, requests, viewport }) {
     };
   }, [team]);
   const { hooks, actions } = team;
-  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react65.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
+  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react66.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
+  actions.TaskPanel = (0, import_react66.useMemo)(() => function TaskPanel({ sessionId }) {
+    return /* @__PURE__ */ import_react66.default.createElement(ConversationTaskPanel, { team, ctx, sessionId });
+  }, [team, ctx]);
   const shown = hooks.useShown((value) => value);
   const roster = hooks.useRoster((value) => value);
   const prefs = roster.prefs;
-  (0, import_react65.useEffect)(() => {
+  (0, import_react66.useEffect)(() => {
     const root = sceneRoot();
     if (!root) return;
     root.dataset.btMotion = prefs?.motion ?? "normal";
@@ -21228,7 +21255,7 @@ function TeamView({ ctx, requests, viewport }) {
     root.style.setProperty("--bt-msg-w", String(widthOf(prefs) / 100));
     root.style.setProperty("--bt-flat-w", String(flatWidthOf(prefs) / 100));
   }, [prefs]);
-  (0, import_react65.useEffect)(() => {
+  (0, import_react66.useEffect)(() => {
     if (!requests) return;
     const show2 = () => {
       const id = requests.getSnapshot();
@@ -21239,8 +21266,8 @@ function TeamView({ ctx, requests, viewport }) {
     show2();
     return requests.subscribe(show2);
   }, [team, requests]);
-  const OverviewPage = (0, import_react65.useMemo)(() => function OverviewPage2() {
-    return /* @__PURE__ */ import_react65.default.createElement(TeamOverview, { team, ctx, embedded: true });
+  const OverviewPage = (0, import_react66.useMemo)(() => function OverviewPage2() {
+    return /* @__PURE__ */ import_react66.default.createElement(TeamOverview, { team, ctx, embedded: true });
   }, [team, ctx]);
   const views = {
     ...hooks,
@@ -21248,18 +21275,18 @@ function TeamView({ ctx, requests, viewport }) {
     TeamOverview: OverviewPage,
     useFrame: (selector) => selector({ viewport, sidebarWidth: 0, collapsedWidth: 0 }),
     useSessions: (selector) => {
-      const host = (0, import_react65.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
+      const host = (0, import_react66.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
       return hooks.useSessions((own) => selector({ ...own, byId: Object.fromEntries([.../* @__PURE__ */ new Set([...Object.keys(host.byId), ...Object.keys(own.byId)])].map((id) => [id, { ...host.byId[id], retainedBy: {}, ...own.byId[id] }])) }));
     }
   };
   const themed = themeCss(allThemes()[prefs?.theme] ?? allThemes().deepseek, prefs?.accent);
-  return /* @__PURE__ */ import_react65.default.createElement(import_react65.default.Fragment, null, /* @__PURE__ */ import_react65.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react65.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react65.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react65.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react65.default.createElement(import_react65.default.Fragment, { key: shown }, /* @__PURE__ */ import_react65.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react65.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react65.default.createElement(ConversationTodos, { key: shown, team, sessionId: shown }), /* @__PURE__ */ import_react65.default.createElement(TaskProgress, { team, ctx, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react65.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react65.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react65.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react65.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react65.default.createElement(ErrorToast, { ...views })));
+  return /* @__PURE__ */ import_react66.default.createElement(import_react66.default.Fragment, null, /* @__PURE__ */ import_react66.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react66.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react66.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react66.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react66.default.createElement(import_react66.default.Fragment, { key: shown }, /* @__PURE__ */ import_react66.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react66.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react66.default.createElement(TaskAttention, { team, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react66.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react66.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react66.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react66.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react66.default.createElement(ErrorToast, { ...views })));
 }
 function NativeBot({ ctx, requests }) {
-  const root = (0, import_react65.useRef)(null);
-  const [ready, setReady] = (0, import_react65.useState)(false);
-  const [viewport, setViewport] = (0, import_react65.useState)(0);
-  (0, import_react65.useLayoutEffect)(() => {
+  const root = (0, import_react66.useRef)(null);
+  const [ready, setReady] = (0, import_react66.useState)(false);
+  const [viewport, setViewport] = (0, import_react66.useState)(0);
+  (0, import_react66.useLayoutEffect)(() => {
     const release = mountScene(root.current);
     const measure = () => setViewport(root.current?.clientWidth ?? 0);
     const observer = new ResizeObserver(measure);
@@ -21278,7 +21305,7 @@ function NativeBot({ ctx, requests }) {
       release();
     };
   }, []);
-  return /* @__PURE__ */ import_react65.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react65.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS)), ready && /* @__PURE__ */ import_react65.default.createElement(TeamView, { ctx, requests, viewport }));
+  return /* @__PURE__ */ import_react66.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react66.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS)), ready && /* @__PURE__ */ import_react66.default.createElement(TeamView, { ctx, requests, viewport }));
 }
 
 // src/client/approval-notices.js
@@ -21388,7 +21415,7 @@ function startNativeNotices({ show: show2, shownSession = () => null }) {
 }
 
 // src/client/mek/index.jsx
-var import_react66 = __toESM(require("react"), 1);
+var import_react67 = __toESM(require("react"), 1);
 var inject = ["slots", "layout", "sessions", "uiWorkspace"];
 var PANEL = "mek-bot";
 function apply(ctx) {
@@ -21400,9 +21427,9 @@ function apply(ctx) {
     },
     shownSession: () => sceneRoot()?.querySelector("[data-mek-session]")?.dataset.mekSession ?? null
   }));
-  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react66.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react66.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react66.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
+  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react67.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react67.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react67.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
   ctx.slots.inject("main", () => {
-    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react66.default.createElement(NativeBot, { ctx, requests }));
+    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react67.default.createElement(NativeBot, { ctx, requests }));
     ctx.effect(() => rememberPanel(ctx.layout, PANEL));
   });
   ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));

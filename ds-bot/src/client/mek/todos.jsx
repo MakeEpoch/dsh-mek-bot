@@ -8,9 +8,9 @@ const text = (en, zh) => language().startsWith('zh') ? zh : en
 const done = task => ['completed', 'cancelled'].includes(task.status)
 const label = task => ({ pending: text('To do', '待办'), waiting: text('Waiting for predecessors', '等待前置'), paused: text('Paused', '已暂停') }[task.status] ?? taskStatus(task.status))
 
-export function ConversationTodos({ team, sessionId }) {
+export function ConversationTodos({ team, sessionId, initiallyOpen = false }) {
   const roster = team.hooks.useRoster(value => value)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(initiallyOpen)
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')

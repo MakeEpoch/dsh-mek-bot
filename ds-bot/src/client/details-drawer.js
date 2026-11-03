@@ -29,7 +29,7 @@ function transcriptOf(list, id, name, hiddenTurns = []) {
   return lines.join('\n\n')
 }
 
-const TAB_LABELS = { details: 'Details', browser: 'Browser' }
+const TAB_LABELS = { details: 'Details', tasks: 'Tasks', browser: 'Browser' }
 
 const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' } }
 const shortUrl = url => String(url ?? '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '')
@@ -185,7 +185,8 @@ export function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, ro
   const owner = roster.byId[sessionId]
   const part = owner ? currentPart(owner) : sessionId
   const isMainBot = isMainOf(roster, owner?.id)
-  const [tab, setTab] = useState('details')
+  const TaskPanel = actions.TaskPanel
+  const [tab, setTab] = useState(startTab === 'tasks' && TaskPanel ? 'tasks' : startTab === 'browser' && owner ? 'browser' : 'details')
   const room = roster.roomsById[sessionId]
   // The info pane swaps its overview for the Bot or group settings view in place.
   const [view, setView] = useState(startTab === 'settings' && (owner || room) ? 'settings' : 'overview')
@@ -256,10 +257,9 @@ export function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, ro
     if (room) await run(actions.updateRoom(room.id, { name: next }))
   }
   const subtitle = bot ? bot.role : roomSubtitle(room, roster)
-  // Tab sets: a 1:1 Bot has Details and Browser; a group has only Details, so no tab row.
-  const tabs = bot ? ['details', 'browser'] : ['details']
+  const tabs = ['details', ...(TaskPanel && (bot || room) ? ['tasks'] : []), ...(bot ? ['browser'] : [])]
   return [h(Fragment, { key: 'top' }, top),
-    h('div', { key: 'id', className: 'bt-drawer-id', 'data-move': side },
+    tab !== 'tasks' ? h('div', { key: 'id', className: 'bt-drawer-id', 'data-move': side },
       bot ? h(BotAvatar, { bot, size: 64, state: botState(running, doing, roster.questions?.[part] !== undefined), main: isMainBot, badge: false, gaze: true, pokeable: true })
         : h(MemberPile, { room, roster }),
       editing
@@ -270,12 +270,13 @@ export function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, ro
             onKeyDown: (event) => { if (event.key === 'Enter') void saveName(); if (event.key === 'Escape') { event.stopPropagation(); setEditing(false) } },
           })
         : h('button', { type: 'button', className: 'bt-drawer-name', 'aria-label': t('Rename {name}', { name: current }), title: t('Rename'), onClick: () => { setDraftName(room && !room.named ? '' : current); setEditing(true) } }, current),
-      subtitle ? h('span', { className: 'bt-drawer-role' }, subtitle) : null),
+      subtitle ? h('span', { className: 'bt-drawer-role' }, subtitle) : null) : null,
     tabs.length > 1 ? h('div', { key: 'tabs', ref: glide.box, className: 'bt-tabs', role: 'tablist', 'data-move': side },
       h('span', { ref: glide.thumb, className: 'bt-thumb', 'aria-hidden': true }),
-      tabs.map(key => h('button', { key, type: 'button', role: 'tab', className: 'bt-tab', 'aria-selected': tab === key, onClick: () => setTab(key) }, t(TAB_LABELS[key])))) : null,
-    h('div', { key: `body:${tab}`, className: 'bt-drawer-body', 'data-move': move },
+      tabs.map(key => h('button', { key, type: 'button', role: 'tab', className: 'bt-tab', 'aria-selected': tab === key, onClick: () => TaskPanel ? actions.showDetails(sessionId, key) : setTab(key) }, t(TAB_LABELS[key])))) : null,
+    h('div', { key: `body:${tab}`, className: `bt-drawer-body${tab === 'tasks' ? ' mek-task-drawer' : ''}`, 'data-move': move },
       errorLine,
+      TaskPanel && tab === 'tasks' ? h(TaskPanel, { key: sessionId, sessionId }) : null,
       room && tab === 'details' ? h(GroupOverview, { room, roster, actions, usage, useWork, openSettings: () => setView('settings') }) : null,
       bot && tab === 'details' ? [
         h(RunStats, { key: 'stats', bot, part, running, actions }),

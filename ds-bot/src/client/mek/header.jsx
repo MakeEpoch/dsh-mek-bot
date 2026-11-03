@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { TeamSidebar } from '../sidebar.js'
-import { DotsIcon, PlusIcon, SearchIcon } from '../icons.js'
+import { DotsIcon, PlusIcon, SearchIcon, TasksIcon } from '../icons.js'
 import { useLinger } from '../motion.js'
 import { t } from '../i18n.js'
 import { currentPart } from '../text.js'
@@ -19,6 +19,8 @@ export function TeamHeader({ team, views }) {
   const trigger = useRef(null)
   const list = useRef(null)
   const shown = team.hooks.useShown(value => value)
+  const roster = team.hooks.useRoster(value => value)
+  const ui = team.hooks.useUi(value => value)
   useEffect(() => {
     list.current?.querySelector('[aria-current="page"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   }, [shown])
@@ -48,6 +50,7 @@ export function TeamHeader({ team, views }) {
   return <header className="mek-team-header">
     <nav ref={list} className="mek-team-center" aria-label={t('Bot list')}><TeamSidebar {...views} actions={actions} wide navigation /></nav>
     <div ref={more} className="mek-team-tools">
+      <button type="button" className="bt-round" aria-label={t('Tasks')} title={t('Tasks')} disabled={!roster.byId[shown] && !roster.roomsById[shown]} aria-pressed={ui.details === shown && ui.view === 'details' && ui.tab === 'tasks'} onClick={() => { setOpen(false); team.actions.showDetails(shown, 'tasks') }}><TasksIcon /></button>
       <button type="button" className="bt-round" aria-label={t('Search')} title={t('Search')} onClick={() => { setOpen(false); team.actions.openPalette() }}><SearchIcon /></button>
       <button ref={trigger} type="button" className="bt-round" aria-label={t('More')} title={t('More')} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(value => !value)}><DotsIcon /></button>
       {menu && <div className="bt-menu mek-team-menu" role="menu" data-leaving={leaving ? '' : undefined} inert={leaving ? '' : undefined} onKeyDown={menuKeys}>
@@ -61,7 +64,7 @@ export function TeamHeader({ team, views }) {
 
 export const TEAM_HEADER_CSS = `
 .dsb-frame.mek-team-frame{grid-template-columns:minmax(0,1fr);grid-template-rows:40px minmax(0,1fr)}
-.mek-team-header{display:grid;grid-template-columns:72px minmax(0,1fr) 72px;align-items:center;gap:8px;min-width:0;padding:0 12px;background:var(--bt-main);border-bottom:1px solid var(--bt-line);color:var(--bt-ink);font-family:var(--bt-font);box-sizing:border-box;z-index:50}
+.mek-team-header{display:grid;grid-template-columns:104px minmax(0,1fr) 104px;align-items:center;gap:8px;min-width:0;padding:0 12px;background:var(--bt-main);border-bottom:1px solid var(--bt-line);color:var(--bt-ink);font-family:var(--bt-font);box-sizing:border-box;z-index:50}
 .mek-team-header .bt-round{flex:none;width:28px;height:28px}
 .mek-team-center{grid-column:2;min-width:0;overflow:hidden}
 .mek-team-nav{padding:0;min-width:0}
@@ -84,5 +87,5 @@ export const TEAM_HEADER_CSS = `
 .bt-settings-team{padding:0;overflow:hidden;min-height:0}
 .bt-settings-team .mek-overview nav>button{flex:none;white-space:nowrap}
 .mek-team-header :is(button,[role=menuitem]):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
-@media(max-width:640px){.mek-team-header{grid-template-columns:64px minmax(0,1fr) 64px;gap:4px;padding:0 8px}.mek-team-nav .bt-row{max-width:124px}.mek-team-nav .bt-row-name{font-size:13px}}
+@media(max-width:640px){.mek-team-header{grid-template-columns:96px minmax(0,1fr) 96px;gap:4px;padding:0 8px}.mek-team-nav .bt-row{max-width:124px}.mek-team-nav .bt-row-name{font-size:13px}}
 `

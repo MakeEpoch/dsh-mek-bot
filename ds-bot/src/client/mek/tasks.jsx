@@ -25,9 +25,21 @@ const savedFolds = () => {
   } catch { return {} }
 }
 
-export function TaskProgress({ team, sessionId, ctx, all = false }) {
+export function TaskAttention({ team, sessionId }) {
   const roster = team.hooks.useRoster(value => value)
   const work = team.hooks.useWork(value => value)
+  const owner = roster.byId[sessionId]?.id
+  const secrets = !owner ? [] : Object.entries(roster.secretRequests ?? {}).flatMap(([botId, requests]) => requests.filter(request => request.taskOwner === owner && request.status === 'pending').map(request => ({ botId, request })))
+  const approvals = !owner ? [] : (work.approvals ?? []).filter(approval => approval.taskOwner === owner)
+  if (!secrets.length && !approvals.length) return null
+  return <section className="mek-task-attention" aria-label={label('Task requests', '任务请求')}>
+    {secrets.map(({ botId, request }) => <SecretCard key={request.id} sessionId={request.sessionId} bot={roster.byId[botId]} request={request} roster={roster} actions={team.actions} />)}
+    {approvals.map(approval => <ApprovalCard key={approval.id} approval={approval} bot={roster.byId[approval.botId] ?? { name: 'Bot' }} actions={team.actions} />)}
+  </section>
+}
+
+export function TaskProgress({ team, sessionId, ctx, all = false }) {
+  const roster = team.hooks.useRoster(value => value)
   const [busy, setBusy] = useState(null)
   const [filter, setFilter] = useState('open')
   const [search, setSearch] = useState('')
@@ -62,31 +74,30 @@ export function TaskProgress({ team, sessionId, ctx, all = false }) {
     finally { if (query.current === generation) setLoading(false) }
   }
   const owner = roster.byId[sessionId]?.id
+  const room = roster.roomsById[sessionId]
+  const roomSessions = new Set(room ? [room.id, sessionId, ...Object.values(room.sessions ?? {}), ...(room.parts ?? [])] : [])
   const known = all ? [...new Map([...history,...(roster.tasks ?? [])].map(task => [task.id, task])).values()] : (roster.tasks ?? [])
   const planned = new Set((roster.todos ?? []).map(task => task.executionId).filter(Boolean))
-  const owned = known.filter(task => !planned.has(task.id) && (all || task.owner === owner))
+  const owned = known.filter(task => !planned.has(task.id) && (all || (room ? roomSessions.has(task.originSessionId) || task.work?.some(item => item.fromRoom === room.id || item.room === room.id) : task.owner === owner)))
   const tasks = owned.filter(task => !all || (filter === 'all' || (filter === 'open' ? !['completed','cancelled'].includes(task.status) : task.status === filter)) && `${task.summary ?? ''} ${roster.byId[task.owner]?.name ?? ''}`.toLowerCase().includes(search.toLowerCase()))
-  const expanded = all || folds[owner] !== true
+  const foldOwner = room?.id ?? owner
+  const expanded = all || folds[foldOwner] !== true
   const toggleTasks = () => setFolds(previous => {
-    const next = { ...previous, [owner]: previous[owner] !== true }
+    const next = { ...previous, [foldOwner]: previous[foldOwner] !== true }
     try { window.sessionStorage.setItem(foldsKey, JSON.stringify(next)) } catch { /* Folding still works when storage is unavailable. */ }
     return next
   })
-  const secrets = !owner || all ? [] : Object.entries(roster.secretRequests ?? {}).flatMap(([botId, requests]) => requests.filter(request => request.taskOwner === owner && request.status === 'pending').map(request => ({ botId, request })))
-  const approvals = !owner || all ? [] : (work.approvals ?? []).filter(approval => approval.taskOwner === owner)
   const cancel = async taskId => {
     setBusy(taskId)
     try { await call('task-cancel', { taskId }); await team.refresh() }
     catch (error) { team.actions.reportError(error, 'task-cancel') }
     finally { setBusy(null) }
   }
-  if (!all && !owned.length && !approvals.length && !secrets.length) return null
   return <section className={`mek-tasks${all ? ' mek-task-ledger' : ''}`} aria-label={label('Team tasks', '团队任务')}>
+    {!all && !owned.length && <p className="mek-task-empty">{label('No team tasks in this conversation.', '当前会话暂无团队任务。')}</p>}
     {!all && tasks.length > 0 && <button type="button" className="mek-task-toggle" aria-expanded={expanded} aria-label={expanded ? label('Collapse tasks', '收起任务') : label('Expand tasks', '展开任务')} onClick={toggleTasks}><span>{label('Team tasks', '团队任务')} · {tasks.length}</span><span>{expanded ? label('Collapse', '收起') : label('Expand', '展开')}</span></button>}
     {all && <div className="mek-form-row"><input aria-label={label('Search tasks', '搜索任务')} placeholder={label('Search tasks', '搜索任务')} value={search} onChange={event => setSearch(event.target.value)} /><select aria-label={label('Task status', '任务状态')} value={filter} onChange={event => setFilter(event.target.value)}>{[['open','Open tasks','未完成'],['completed','Accepted','已验收'],['cancelled','Cancelled','已取消'],['all','All tasks','全部任务']].map(([key,en,zh]) => <option key={key} value={key}>{label(en,zh)}</option>)}</select></div>}
     {all && !tasks.length && <p>{label('No matching tasks.', '没有符合条件的任务。')}</p>}
-    {secrets.map(({ botId, request }) => <SecretCard key={request.id} sessionId={request.sessionId} bot={roster.byId[botId]} request={request} roster={roster} actions={team.actions} />)}
-    {approvals.map(approval => <ApprovalCard key={approval.id} approval={approval} bot={roster.byId[approval.botId] ?? { name: 'Bot' }} actions={team.actions} />)}
     {expanded && tasks.slice(0, all ? tasks.length : limit).map(task => <details key={task.id} className="mek-task" data-task-state={task.status}>
       <summary><span>{label('Team task', '团队任务')}</span><span>{taskStatus(task.status)}</span><span className="mek-task-preview">{task.summary}</span></summary>
       <div className="mek-task-body">

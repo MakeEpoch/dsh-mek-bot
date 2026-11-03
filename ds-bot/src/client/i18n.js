@@ -206,6 +206,7 @@ const ZH = {
 
   // Details drawer
   Details: '详情',
+  Tasks: '任务',
   Browser: '浏览器',
   'Browser access': '浏览器权限',
   'Bots browse, click and fill in forms freely. Posting, uploading, downloading and deleting ask you first unless you allow them here. Payments are always yours: the Bot hands the page to you.': 'Bot 可以自由浏览、点击和填写表单。发布、上传、下载和删除会先征求你的同意，除非你在这里预先允许。付款始终由你自己完成：Bot 会把页面交给你。',
