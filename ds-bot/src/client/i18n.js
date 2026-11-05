@@ -5,6 +5,15 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'Search Bots': '搜索 Bot',
+  'Pending messages': '待处理消息',
+  'Entering current turn': '正在送入当前轮次',
+  'Waiting for next turn': '等待下一轮',
+  'Send into current turn': '立即介入',
+  'Could not update queued message': '无法更新待处理消息',
+  'Attachment message': '附件消息',
+  '{count} attachments': '{count} 个附件',
+  'The pending queue is unavailable. Open this session in DSH to check it.': '暂时无法读取待处理队列，可在 DSH 中打开此会话查看。',
   'Refresh': '刷新',
   'A recent WeChat reply failed to send. Check the connection in WeChat settings.': '最近有微信回复投递失败，请到微信设置检查连接。',
   "WeChat links": "微信关联",

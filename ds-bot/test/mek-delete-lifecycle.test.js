@@ -275,6 +275,15 @@ try {
   assert.ok(details,`details remain shown at ${width}px`)
   assert.equal(details.hasAttribute('data-overlay'),width<740)
   assert.ok(document.querySelector('.mek-team-header [data-bot-id="main"]'))
+  if (width===390) {
+   assert.equal(document.querySelector('.mek-team-tools > button[aria-label="Bot list"]'),null)
+   assert.equal(document.querySelector('.mek-team-tools > button[aria-label="Tasks"]'),null)
+   assert.equal(document.querySelector('.mek-team-tools > button[aria-label="Search"]'),null)
+   await click('.mek-team-tools > button[aria-label="More"]')
+   const labels=[...document.querySelectorAll('.mek-team-menu [role="menuitem"]')].map(node=>node.textContent)
+   assert.ok(labels.includes('Bot list') && labels.includes('Tasks') && labels.includes('Search Bots'))
+   await click('.mek-team-tools > button[aria-label="More"]')
+  }
  }
  await click('[aria-label="Close details"]')
  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,350))})

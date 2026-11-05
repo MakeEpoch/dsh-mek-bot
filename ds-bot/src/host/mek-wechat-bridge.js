@@ -34,6 +34,7 @@ export function install(rt) {
   }
   const bridge = {
     version: 1,
+    supportsInterrupt: true,
     async targets() {
       await rt.load()
       return [
@@ -42,15 +43,23 @@ export function install(rt) {
       ]
     },
     async resolve(target) { await ready(); return assertTarget(target) },
-    async send(target, { text, images = [], requestId = randomUUID() }) {
+    async activity(target) {
       await ready()
       const current = assertTarget(target)
+      const work = rt.workView()[current.id]
+      return { busy: current.kind === 'bot' && work !== undefined && work.roomId === undefined }
+    },
+    async send(target, { text, images = [], requestId = randomUUID(), mode = 'queue' }) {
+      await ready()
+      const current = assertTarget(target)
+      const content = [...(text?.trim() ? [{ type: 'text', text }] : []), ...images.map(image => ({ type: 'image', mediaType: image.mediaType, data: image.data, ...(image.name ? { name: image.name } : {}) }))]
+      if (!content.length) throw invalid('Nothing to send')
+      if (!['queue', 'interrupt'].includes(mode) || (mode === 'interrupt' && current.kind !== 'bot')) throw invalid('Only private Main Bot chats support interruption.')
+      if (mode === 'interrupt') await bridge.stop(target)
       await rt.ensureCapabilities(current.sessionId)
       // Recheck after asynchronous capability preparation: deletion or demotion
       // cannot silently redirect an external user's message to another identity.
       const latest = assertTarget(target)
-      const content = [...(text?.trim() ? [{ type: 'text', text }] : []), ...images.map(image => ({ type: 'image', mediaType: image.mediaType, data: image.data, ...(image.name ? { name: image.name } : {}) }))]
-      if (!content.length) throw invalid('Nothing to send')
       await rt.ctx.sessionController.prompt({ sessionId: latest.sessionId, requestId, mode: 'queue', content }, AbortSignal.timeout(30_000))
       return true
     },

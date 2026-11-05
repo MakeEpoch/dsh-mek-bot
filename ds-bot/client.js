@@ -148,6 +148,15 @@ var scopedWindow = new Proxy({}, {
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Search Bots": "搜索 Bot",
+  "Pending messages": "待处理消息",
+  "Entering current turn": "正在送入当前轮次",
+  "Waiting for next turn": "等待下一轮",
+  "Send into current turn": "立即介入",
+  "Could not update queued message": "无法更新待处理消息",
+  "Attachment message": "附件消息",
+  "{count} attachments": "{count} 个附件",
+  "The pending queue is unavailable. Open this session in DSH to check it.": "暂时无法读取待处理队列，可在 DSH 中打开此会话查看。",
   "Refresh": "刷新",
   "A recent WeChat reply failed to send. Check the connection in WeChat settings.": "最近有微信回复投递失败，请到微信设置检查连接。",
   "WeChat links": "微信关联",
@@ -10490,6 +10499,7 @@ function Chat({ sessionId, team, children }) {
     (0, import_react25.createElement)(
       "div",
       { className: "dsb-composer-root" },
+      actions.Queue ? (0, import_react25.createElement)(actions.Queue, { sessionId }) : null,
       (0, import_react25.createElement)(ModelChoiceDock, { sessionId, useRoster: hooks.useRoster, actions }),
       (0, import_react25.createElement)(Composer, {
         sessionId,
@@ -22280,6 +22290,7 @@ function selectConversation(team, id) {
   else team.actions.openSession(id);
 }
 function TeamHeader({ team, views }) {
+  const compact2 = views.useFrame?.((frame) => frame.viewport > 0 && frame.viewport <= 640) ?? false;
   const [open, setOpen] = (0, import_react61.useState)(null);
   const [menu, leaving] = useLinger(open === "more", 120);
   const [directory, directoryLeaving] = useLinger(open === "bots", 120);
@@ -22311,7 +22322,7 @@ function TeamHeader({ team, views }) {
       if (event.type === "keydown") {
         if (event.key === "Escape") {
           setOpen(null);
-          (open === "bots" ? botsTrigger : trigger).current?.focus();
+          (open === "bots" ? botsTrigger.current ?? trigger.current : trigger.current)?.focus();
         }
       } else if (!more.current?.contains(event.target)) setOpen(null);
     };
@@ -22352,15 +22363,15 @@ function TeamHeader({ team, views }) {
     }
   };
   const directoryRow = (entry, row) => /* @__PURE__ */ import_react61.default.createElement("div", { key: entry.item.id, className: "mek-directory-row" }, row, entry.kind !== "agent" && /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", className: "bt-round mek-favorite", "aria-label": t(entry.item.pinned ? "Unfavorite {name}" : "Favorite {name}", { name: entry.item.name }), title: t(entry.item.pinned ? "Remove favorite" : "Add favorite"), "aria-pressed": entry.item.pinned === true, disabled: busy !== null || Boolean(roster.readOnly), onClick: () => void favorite(entry.item) }, /* @__PURE__ */ import_react61.default.createElement(StarLineIcon, null)));
-  return /* @__PURE__ */ import_react61.default.createElement("header", { className: "mek-team-header" }, /* @__PURE__ */ import_react61.default.createElement("nav", { ref: list, className: "mek-team-center", "aria-label": t("Bot list") }, /* @__PURE__ */ import_react61.default.createElement(TeamSidebar, { ...views, actions, includeEntry: keep, wide: true, navigation: true })), /* @__PURE__ */ import_react61.default.createElement("div", { ref: more, className: "mek-team-tools" }, /* @__PURE__ */ import_react61.default.createElement("button", { ref: botsTrigger, type: "button", className: "bt-round", "aria-label": t("Bot list"), title: t("Bot list"), "aria-expanded": open === "bots", "aria-haspopup": "dialog", onClick: () => setOpen((value) => value === "bots" ? null : "bots") }, /* @__PURE__ */ import_react61.default.createElement(PeopleIcon, null), hiddenNews && /* @__PURE__ */ import_react61.default.createElement("span", { className: "mek-tab-dot", "aria-hidden": "true" })), /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", className: "bt-round", "aria-label": t("Tasks"), title: t("Tasks"), disabled: !roster.byId[shown] && !roster.roomsById[shown], "aria-pressed": ui2.details === shown && ui2.view === "details" && ["todos", "tasks"].includes(ui2.tab), onClick: () => {
+  return /* @__PURE__ */ import_react61.default.createElement("header", { className: "mek-team-header", "data-compact": compact2 || void 0 }, /* @__PURE__ */ import_react61.default.createElement("nav", { ref: list, className: "mek-team-center", "aria-label": t("Bot list") }, /* @__PURE__ */ import_react61.default.createElement(TeamSidebar, { ...views, actions, includeEntry: keep, wide: true, navigation: true })), /* @__PURE__ */ import_react61.default.createElement("div", { ref: more, className: "mek-team-tools" }, !compact2 && /* @__PURE__ */ import_react61.default.createElement(import_react61.default.Fragment, null, /* @__PURE__ */ import_react61.default.createElement("button", { ref: botsTrigger, type: "button", className: "bt-round", "aria-label": t("Bot list"), title: t("Bot list"), "aria-expanded": open === "bots", "aria-haspopup": "dialog", onClick: () => setOpen((value) => value === "bots" ? null : "bots") }, /* @__PURE__ */ import_react61.default.createElement(PeopleIcon, null), hiddenNews && /* @__PURE__ */ import_react61.default.createElement("span", { className: "mek-tab-dot", "aria-hidden": "true" })), /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", className: "bt-round", "aria-label": t("Tasks"), title: t("Tasks"), disabled: !roster.byId[shown] && !roster.roomsById[shown], "aria-pressed": ui2.details === shown && ui2.view === "details" && ["todos", "tasks"].includes(ui2.tab), onClick: () => {
     setOpen(null);
     team.actions.showDetails(shown, "tasks");
   } }, /* @__PURE__ */ import_react61.default.createElement(TasksIcon, null), team.actions.taskUnread?.(shown) && /* @__PURE__ */ import_react61.default.createElement("span", { className: "mek-tab-dot", "aria-hidden": "true" })), /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", className: "bt-round", "aria-label": t("Search"), title: t("Search"), onClick: () => {
     setOpen(null);
     team.actions.openPalette();
-  } }, /* @__PURE__ */ import_react61.default.createElement(SearchIcon, null)), /* @__PURE__ */ import_react61.default.createElement("button", { ref: trigger, type: "button", className: "bt-round", "aria-label": t("More"), title: t("More"), "aria-expanded": open === "more", "aria-haspopup": "menu", onClick: () => setOpen((value) => value === "more" ? null : "more") }, /* @__PURE__ */ import_react61.default.createElement(DotsIcon, null)), directory && /* @__PURE__ */ import_react61.default.createElement("div", { className: "bt-menu mek-bot-directory", role: "dialog", "aria-label": t("Bot list"), "data-leaving": directoryLeaving ? "" : void 0, inert: directoryLeaving ? "" : void 0, onBlur: (event) => {
+  } }, /* @__PURE__ */ import_react61.default.createElement(SearchIcon, null))), /* @__PURE__ */ import_react61.default.createElement("button", { ref: trigger, type: "button", className: "bt-round", "aria-label": t("More"), title: t("More"), "aria-expanded": open === "more", "aria-haspopup": "menu", onClick: () => setOpen((value) => value === "more" ? null : "more") }, /* @__PURE__ */ import_react61.default.createElement(DotsIcon, null), compact2 && (hiddenNews || team.actions.taskUnread?.(shown)) && /* @__PURE__ */ import_react61.default.createElement("span", { className: "mek-tab-dot", "aria-hidden": "true" })), directory && /* @__PURE__ */ import_react61.default.createElement("div", { className: "bt-menu mek-bot-directory", role: "dialog", "aria-label": t("Bot list"), "data-leaving": directoryLeaving ? "" : void 0, inert: directoryLeaving ? "" : void 0, onBlur: (event) => {
     if (event.relatedTarget && !more.current?.contains(event.relatedTarget)) setOpen(null);
-  } }, /* @__PURE__ */ import_react61.default.createElement("div", { className: "mek-directory-heading" }, t("Bot list")), /* @__PURE__ */ import_react61.default.createElement(TeamSidebar, { ...views, actions: choose, includeEntry: others, wrapEntry: directoryRow, showHidden: true, wide: true, navigation: true }), hidden.length === 0 && roster.bots.length + roster.rooms.length <= (roster.mainBotIds?.length ?? 1) && /* @__PURE__ */ import_react61.default.createElement("p", { className: "bt-hint" }, t("No other conversations.")), failure && /* @__PURE__ */ import_react61.default.createElement("p", { className: "bt-error", role: "alert" }, failure)), menu && /* @__PURE__ */ import_react61.default.createElement("div", { className: "bt-menu mek-team-menu", role: "menu", "data-leaving": leaving ? "" : void 0, inert: leaving ? "" : void 0, onKeyDown: menuKeys }, /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", role: "menuitem", onClick: () => run2(() => team.actions.openNewChat("new")) }, /* @__PURE__ */ import_react61.default.createElement(PlusIcon, null), t("New…")), /* @__PURE__ */ import_react61.default.createElement("div", { className: "bt-menu-sep", role: "separator" }), [[t("Usage"), "usage"], [t("Connectors"), "connectors"], [t("Bot settings"), "general"]].map(([label3, page]) => /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", role: "menuitem", key: page, onClick: () => run2(() => team.actions.openSettings(page)) }, label3)))));
+  } }, /* @__PURE__ */ import_react61.default.createElement("div", { className: "mek-directory-heading" }, t("Bot list")), /* @__PURE__ */ import_react61.default.createElement(TeamSidebar, { ...views, actions: choose, includeEntry: others, wrapEntry: directoryRow, showHidden: true, wide: true, navigation: true }), hidden.length === 0 && roster.bots.length + roster.rooms.length <= (roster.mainBotIds?.length ?? 1) && /* @__PURE__ */ import_react61.default.createElement("p", { className: "bt-hint" }, t("No other conversations.")), failure && /* @__PURE__ */ import_react61.default.createElement("p", { className: "bt-error", role: "alert" }, failure)), menu && /* @__PURE__ */ import_react61.default.createElement("div", { className: "bt-menu mek-team-menu", role: "menu", "data-leaving": leaving ? "" : void 0, inert: leaving ? "" : void 0, onKeyDown: menuKeys }, compact2 && /* @__PURE__ */ import_react61.default.createElement(import_react61.default.Fragment, null, /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", role: "menuitem", onClick: () => setOpen("bots") }, /* @__PURE__ */ import_react61.default.createElement(PeopleIcon, null), t("Bot list"), hiddenNews && /* @__PURE__ */ import_react61.default.createElement("span", { className: "mek-tab-dot", "aria-hidden": "true" })), /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", role: "menuitem", disabled: !roster.byId[shown] && !roster.roomsById[shown], onClick: () => run2(() => team.actions.showDetails(shown, "tasks")) }, /* @__PURE__ */ import_react61.default.createElement(TasksIcon, null), t("Tasks"), team.actions.taskUnread?.(shown) && /* @__PURE__ */ import_react61.default.createElement("span", { className: "mek-tab-dot", "aria-hidden": "true" })), /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", role: "menuitem", onClick: () => run2(() => team.actions.openPalette()) }, /* @__PURE__ */ import_react61.default.createElement(SearchIcon, null), t("Search Bots")), /* @__PURE__ */ import_react61.default.createElement("div", { className: "bt-menu-sep", role: "separator" })), /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", role: "menuitem", onClick: () => run2(() => team.actions.openNewChat("new")) }, /* @__PURE__ */ import_react61.default.createElement(PlusIcon, null), t("New…")), /* @__PURE__ */ import_react61.default.createElement("div", { className: "bt-menu-sep", role: "separator" }), [[t("Usage"), "usage"], [t("Connectors"), "connectors"], [t("Bot settings"), "general"]].map(([label3, page]) => /* @__PURE__ */ import_react61.default.createElement("button", { type: "button", role: "menuitem", key: page, onClick: () => run2(() => team.actions.openSettings(page)) }, label3)))));
 }
 var TEAM_HEADER_CSS = `
 .dsb-frame.mek-team-frame{grid-template-columns:minmax(0,1fr);grid-template-rows:40px minmax(0,1fr)}
@@ -22399,6 +22410,7 @@ var TEAM_HEADER_CSS = `
 .mek-team-header :is(button,[role=menuitem]):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
 @media(max-width:640px){.mek-team-header{grid-template-columns:minmax(0,1fr) 132px;gap:4px;padding:0 8px}.mek-team-center{grid-column:1}.mek-team-tools{grid-column:2}.mek-team-nav.bt-side>.bt-list{margin:0}.mek-team-nav .bt-row{max-width:124px}.mek-team-nav .bt-row-name{font-size:13px}}
 `;
+var COMPACT_HEADER_CSS = `.mek-team-header[data-compact]{grid-template-columns:minmax(0,1fr) 28px;gap:8px;padding:0 8px}.mek-team-header[data-compact] .mek-team-center{grid-column:1}.mek-team-header[data-compact] .mek-team-tools{grid-column:2}.mek-team-header[data-compact] .bt-list{margin:0}.mek-team-menu [role=menuitem]{position:relative}.mek-team-menu [role=menuitem] .mek-tab-dot{position:static;margin-left:auto}`;
 
 // src/client/mek/group-chat.jsx
 var import_react62 = __toESM(require("react"), 1);
@@ -22485,7 +22497,7 @@ function GroupChat({ sessionId, team }) {
     const bot = roster.byId[entry.id];
     const label3 = entry.state === "ask" ? t("Waiting for your approval") : workPhrase(entry.doing);
     return /* @__PURE__ */ import_react62.default.createElement("div", { key: entry.id, className: "bt-typing", "data-running-bot": entry.id, role: "status" }, /* @__PURE__ */ import_react62.default.createElement(BotMark, { bot, size: 22, state: entry.state === "ask" ? "alert" : workState(entry.doing) }), /* @__PURE__ */ import_react62.default.createElement("span", { className: "bt-typing-text" }, /* @__PURE__ */ import_react62.default.createElement("span", { className: "bt-typing-label" }, /* @__PURE__ */ import_react62.default.createElement(Shimmer, null, bot.name, " · ", label3, "…")), /* @__PURE__ */ import_react62.default.createElement(Elapsed, { at: entry.doing.since, className: "bt-typing-time" })));
-  }))))), /* @__PURE__ */ import_react62.default.createElement("div", { className: "dsb-composer-root" }, /* @__PURE__ */ import_react62.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text4, images, id) => {
+  }))))), /* @__PURE__ */ import_react62.default.createElement("div", { className: "dsb-composer-root" }, actions.Queue && /* @__PURE__ */ import_react62.default.createElement(actions.Queue, { sessionId }), /* @__PURE__ */ import_react62.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text4, images, id) => {
     await actions.send(sessionId, text4, images, id);
     await refresh.current?.();
   }, actions, useUi: hooks.useUi, useRoster: hooks.useRoster })));
@@ -22891,11 +22903,69 @@ var WECHAT_LINKS_CSS = `
 .mek-wechat-row{display:flex;align-items:center;gap:8px;min-width:0}.mek-wechat-row span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:12px}.mek-wechat-row button{flex-shrink:0}
 `;
 
-// src/client/mek/view.jsx
+// src/client/mek/session-queue.jsx
 var import_react69 = __toESM(require("react"), 1);
+var humanQueue = (value) => ["next-step", "next-turn"].flatMap((placement) => (value?.[placement] ?? []).filter((item) => item.source?.kind === "user").map((item) => ({ id: item.id, placement, text: (item.content ?? []).filter((part) => part.type === "text").map((part) => part.text).join("\n"), attachments: (item.content ?? []).filter((part) => ["image", "file"].includes(part.type)).length })));
+function QueueRows({ session, editable }) {
+  const source = session.projections.faceOf("inbox");
+  const snapshot = (0, import_react69.useSyncExternalStore)(source.subscribe, source.getSnapshot);
+  const items = humanQueue(snapshot);
+  const [busy, setBusy] = (0, import_react69.useState)(null), [error, setError] = (0, import_react69.useState)("");
+  const update = async (id, kind) => {
+    if (busy) return;
+    setBusy(id);
+    setError("");
+    try {
+      const result = await session.updateQueue(id, { kind });
+      if (!result.ok && result.error?.code !== "session/queue-item-not-found") setError(result.error?.message ?? t("Could not update queued message"));
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  if (!items.length && !error) return null;
+  return /* @__PURE__ */ import_react69.default.createElement("section", { className: "mek-session-queue", "aria-label": t("Pending messages") }, /* @__PURE__ */ import_react69.default.createElement("div", { className: "bt-note" }, t("Pending messages"), " · ", items.length), items.map((item) => /* @__PURE__ */ import_react69.default.createElement("div", { className: "mek-queue-row", key: item.id, "data-queue-id": item.id }, /* @__PURE__ */ import_react69.default.createElement("div", { className: "mek-queue-text" }, /* @__PURE__ */ import_react69.default.createElement("span", { className: "bt-note" }, t(item.placement === "next-step" ? "Entering current turn" : "Waiting for next turn")), /* @__PURE__ */ import_react69.default.createElement("p", null, item.text || t("Attachment message"), item.attachments ? ` · ${t("{count} attachments", { count: item.attachments })}` : "")), /* @__PURE__ */ import_react69.default.createElement("div", { className: "mek-queue-actions" }, item.placement === "next-turn" && /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !editable || !!busy, onClick: () => void update(item.id, "steer") }, t("Send into current turn")), /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !editable || !!busy, onClick: () => void update(item.id, "remove") }, t("Remove"))))), error && /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-error", role: "alert" }, error));
+}
+function SessionQueue({ ctx, sessionId, editable = true }) {
+  const [state, setState] = (0, import_react69.useState)(null);
+  const [attempt, setAttempt] = (0, import_react69.useState)(0);
+  (0, import_react69.useEffect)(() => {
+    let active = true, reference, timer;
+    setState(null);
+    if (!ctx.sessions.retain) {
+      setState({ unavailable: true });
+      return void 0;
+    }
+    const failed = (error) => {
+      if (!active) return;
+      setState({ unavailable: true, error });
+      if (attempt < 2) timer = setTimeout(() => setAttempt((value) => value + 1), 1e3);
+    };
+    try {
+      reference = ctx.sessions.retain(sessionId, { source: "mekBotQueue" });
+      void reference.ready.then((binding) => {
+        if (active) setState({ session: binding.session });
+      }, failed);
+    } catch (error) {
+      failed(error);
+    }
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      reference?.release();
+    };
+  }, [ctx, sessionId, attempt]);
+  if (state?.unavailable) return /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note", role: "status", "data-queue-error": state.error?.code ?? state.error?.name }, t("The pending queue is unavailable. Open this session in DSH to check it."), " ", ctx.sessions.retain && /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: () => setAttempt((value) => value + 1) }, t("Retry")));
+  return state?.session ? /* @__PURE__ */ import_react69.default.createElement(QueueRows, { key: sessionId, session: state.session, editable }) : null;
+}
+var SESSION_QUEUE_CSS = `.mek-session-queue{box-sizing:border-box;width:100%;max-height:220px;overflow:auto;padding:8px 12px;background:var(--bt-card);border:1px solid var(--bt-line);border-radius:12px;margin-bottom:8px;font-size:12px}.mek-queue-row{display:flex;align-items:center;gap:8px;padding:8px 0;min-width:0}.mek-queue-text{flex:1;min-width:0}.mek-queue-text p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:72px;overflow:auto}.mek-queue-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;max-width:136px}.mek-session-queue button{min-height:28px}`;
+
+// src/client/mek/view.jsx
+var import_react70 = __toESM(require("react"), 1);
 var STYLES = TASK_PROGRESS_CSS + TURN_ERROR_CSS + SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS2 + HANDOFF_CSS + SIDE_CSS + app_default;
 function TeamView({ ctx, requests, viewport }) {
-  const team = (0, import_react69.useMemo)(() => {
+  const team = (0, import_react70.useMemo)(() => {
     const value = createTeam();
     value.taskInbox = createTaskInbox();
     value.actions.schedules = void 0;
@@ -22903,8 +22973,8 @@ function TeamView({ ctx, requests, viewport }) {
     attachAgentActions(value, ctx);
     return value;
   }, [ctx]);
-  (0, import_react69.useSyncExternalStore)(team.taskInbox.subscribe, team.taskInbox.getSnapshot);
-  (0, import_react69.useEffect)(() => {
+  (0, import_react70.useSyncExternalStore)(team.taskInbox.subscribe, team.taskInbox.getSnapshot);
+  (0, import_react70.useEffect)(() => {
     const stopWatching = watchDeletedSubjects(team);
     const stopRemembering = rememberConversation(team);
     const stopInbox = team.taskInbox.start();
@@ -22917,13 +22987,18 @@ function TeamView({ ctx, requests, viewport }) {
     };
   }, [team]);
   const { hooks, actions } = team;
-  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react69.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
-  actions.TaskPanel = (0, import_react69.useMemo)(() => function TaskPanel({ sessionId, bucket }) {
-    return /* @__PURE__ */ import_react69.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket });
+  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react70.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
+  actions.TaskPanel = (0, import_react70.useMemo)(() => function TaskPanel({ sessionId, bucket }) {
+    return /* @__PURE__ */ import_react70.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket });
   }, [team, ctx]);
-  actions.WechatLinks = (0, import_react69.useMemo)(() => function Links(props) {
-    return /* @__PURE__ */ import_react69.default.createElement(WechatLinks, { ...props, editable: !team.roster.getSnapshot().readOnly });
+  actions.WechatLinks = (0, import_react70.useMemo)(() => function Links(props) {
+    return /* @__PURE__ */ import_react70.default.createElement(WechatLinks, { ...props, editable: !team.roster.getSnapshot().readOnly });
   }, [team]);
+  actions.Queue = (0, import_react70.useMemo)(() => function Queue({ sessionId }) {
+    const roster2 = (0, import_react70.useSyncExternalStore)(team.roster.subscribe, team.roster.getSnapshot);
+    const owner = roster2.byId[sessionId] ?? roster2.roomsById[sessionId];
+    return /* @__PURE__ */ import_react70.default.createElement(SessionQueue, { ctx, sessionId: owner ? currentPart(owner) : sessionId, editable: !roster2.readOnly });
+  }, [team, ctx]);
   actions.taskUnread = (id, bucket) => {
     const snapshot = team.roster.getSnapshot();
     const target = snapshot.byId[id]?.id ?? snapshot.roomsById[id]?.id ?? id;
@@ -22931,11 +23006,11 @@ function TeamView({ ctx, requests, viewport }) {
   };
   const shown = hooks.useShown((value) => value);
   const roster = hooks.useRoster((value) => value);
-  (0, import_react69.useEffect)(() => {
+  (0, import_react70.useEffect)(() => {
     team.taskInbox.update(roster);
   }, [team, roster]);
   const prefs = roster.prefs;
-  (0, import_react69.useEffect)(() => {
+  (0, import_react70.useEffect)(() => {
     const root = sceneRoot();
     if (!root) return;
     root.dataset.btMotion = prefs?.motion ?? "normal";
@@ -22943,7 +23018,7 @@ function TeamView({ ctx, requests, viewport }) {
     root.style.setProperty("--bt-msg-w", String(widthOf(prefs) / 100));
     root.style.setProperty("--bt-flat-w", String(flatWidthOf(prefs) / 100));
   }, [prefs]);
-  (0, import_react69.useEffect)(() => {
+  (0, import_react70.useEffect)(() => {
     if (!requests) return;
     const show2 = () => {
       const id = requests.getSnapshot();
@@ -22954,8 +23029,8 @@ function TeamView({ ctx, requests, viewport }) {
     show2();
     return requests.subscribe(show2);
   }, [team, requests]);
-  const OverviewPage = (0, import_react69.useMemo)(() => function OverviewPage2() {
-    return /* @__PURE__ */ import_react69.default.createElement(TeamOverview, { team, ctx, embedded: true });
+  const OverviewPage = (0, import_react70.useMemo)(() => function OverviewPage2() {
+    return /* @__PURE__ */ import_react70.default.createElement(TeamOverview, { team, ctx, embedded: true });
   }, [team, ctx]);
   const views = {
     ...hooks,
@@ -22963,18 +23038,18 @@ function TeamView({ ctx, requests, viewport }) {
     TeamOverview: OverviewPage,
     useFrame: (selector) => selector({ viewport, sidebarWidth: 0, collapsedWidth: 0 }),
     useSessions: (selector) => {
-      const host = (0, import_react69.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
+      const host = (0, import_react70.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
       return hooks.useSessions((own) => selector({ ...own, byId: Object.fromEntries([.../* @__PURE__ */ new Set([...Object.keys(host.byId), ...Object.keys(own.byId)])].map((id) => [id, { ...host.byId[id], retainedBy: {}, ...own.byId[id] }])) }));
     }
   };
   const themed = themeCss(allThemes()[prefs?.theme] ?? allThemes().deepseek, prefs?.accent);
-  return /* @__PURE__ */ import_react69.default.createElement(import_react69.default.Fragment, null, /* @__PURE__ */ import_react69.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react69.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react69.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react69.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react69.default.createElement(import_react69.default.Fragment, { key: shown }, /* @__PURE__ */ import_react69.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react69.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react69.default.createElement(TaskAttention, { team, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react69.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react69.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react69.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react69.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react69.default.createElement(ErrorToast, { ...views })));
+  return /* @__PURE__ */ import_react70.default.createElement(import_react70.default.Fragment, null, /* @__PURE__ */ import_react70.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react70.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react70.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react70.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react70.default.createElement(import_react70.default.Fragment, { key: shown }, /* @__PURE__ */ import_react70.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react70.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react70.default.createElement(TaskAttention, { team, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react70.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react70.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react70.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react70.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react70.default.createElement(ErrorToast, { ...views })));
 }
 function NativeBot({ ctx, requests }) {
-  const root = (0, import_react69.useRef)(null);
-  const [ready, setReady] = (0, import_react69.useState)(false);
-  const [viewport, setViewport] = (0, import_react69.useState)(0);
-  (0, import_react69.useLayoutEffect)(() => {
+  const root = (0, import_react70.useRef)(null);
+  const [ready, setReady] = (0, import_react70.useState)(false);
+  const [viewport, setViewport] = (0, import_react70.useState)(0);
+  (0, import_react70.useLayoutEffect)(() => {
     const release = mountScene(root.current);
     const measure = () => setViewport(root.current?.clientWidth ?? 0);
     const observer = new ResizeObserver(measure);
@@ -22993,7 +23068,7 @@ function NativeBot({ ctx, requests }) {
       release();
     };
   }, []);
-  return /* @__PURE__ */ import_react69.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react69.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + WECHAT_LINKS_CSS)), ready && /* @__PURE__ */ import_react69.default.createElement(TeamView, { ctx, requests, viewport }));
+  return /* @__PURE__ */ import_react70.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react70.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + COMPACT_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + WECHAT_LINKS_CSS + SESSION_QUEUE_CSS)), ready && /* @__PURE__ */ import_react70.default.createElement(TeamView, { ctx, requests, viewport }));
 }
 
 // src/client/approval-notices.js
@@ -23103,7 +23178,7 @@ function startNativeNotices({ show: show2, shownSession = () => null }) {
 }
 
 // src/client/mek/index.jsx
-var import_react70 = __toESM(require("react"), 1);
+var import_react71 = __toESM(require("react"), 1);
 var inject = ["slots", "layout", "sessions", "uiWorkspace"];
 var PANEL = "mek-bot";
 function apply(ctx) {
@@ -23115,9 +23190,9 @@ function apply(ctx) {
     },
     shownSession: () => sceneRoot()?.querySelector("[data-mek-session]")?.dataset.mekSession ?? null
   }));
-  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react70.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react70.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react70.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
+  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react71.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react71.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react71.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
   ctx.slots.inject("main", () => {
-    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react70.default.createElement(NativeBot, { ctx, requests }));
+    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react71.default.createElement(NativeBot, { ctx, requests }));
     ctx.effect(() => rememberPanel(ctx.layout, PANEL));
   });
   ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));

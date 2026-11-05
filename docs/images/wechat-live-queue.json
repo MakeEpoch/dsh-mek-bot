@@ -1,0 +1,48 @@
+{
+  "widths": [
+    {
+      "viewport": 1200,
+      "width": 891,
+      "scroll": 891
+    },
+    {
+      "viewport": 390,
+      "width": 361,
+      "scroll": 361
+    }
+  ],
+  "errors": [],
+  "queueSurvivesReload": true,
+  "removeWorks": true,
+  "interruptedOldTurn": true,
+  "cancellationEvents": [
+    {
+      "sessionId": "session-1f64fffa-fdfc-4bcc-8cee-32e3a25b0f93",
+      "type": "turn/end",
+      "turn": 1,
+      "reason": "aborted",
+      "cause": "user",
+      "at": 1793858197311
+    },
+    {
+      "sessionId": "session-1f64fffa-fdfc-4bcc-8cee-32e3a25b0f93",
+      "type": "turn/start",
+      "turn": 2,
+      "at": 1793858197320
+    }
+  ],
+  "typing": [
+    {
+      "on": true,
+      "at": 1793858189134
+    },
+    {
+      "on": true,
+      "at": 1793858197135
+    },
+    {
+      "on": false,
+      "at": 1793858203136
+    }
+  ]
+}

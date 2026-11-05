@@ -1,0 +1,12 @@
+{
+  "geometry": {
+    "width": 390,
+    "scroll": 390,
+    "top": 48
+  },
+  "errors": [],
+  "narrowButtons": 1,
+  "wideButtons": 4,
+  "listTasksSearchWork": true,
+  "sidebarHeaderNotModified": true
+}

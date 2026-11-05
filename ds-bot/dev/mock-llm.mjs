@@ -140,6 +140,7 @@ function decide(body) {
   const me = /You are (.+?), a Bot on the user's team/.exec(system)?.[1] ?? 'Bot'
   const isMain = system.includes('You are the Main Bot')
   const isRelay = system.includes('# Group chat relay')
+  if (process.env.MEK_MOCK_LIVE_CONTROL === '1' && textOf(last?.content).includes('LIVE-BLOCK') && !textOf(last?.content).includes('Pause now fixture')) return Object.assign([text('Late fixture reply')], { delay: 60000 })
   if (process.env.MEK_MOCK_COORDINATOR === '1') {
     const response = coordinatorResponse({ messages, tools, me, isMain, text, tool, textOf })
     if (response) return response

@@ -14,6 +14,7 @@ export function selectConversation(team, id) {
 }
 
 export function TeamHeader({ team, views }) {
+  const compact = views.useFrame?.(frame => frame.viewport > 0 && frame.viewport <= 640) ?? false
   const [open, setOpen] = useState(null)
   const [menu, leaving] = useLinger(open === 'more', 120)
   const [directory, directoryLeaving] = useLinger(open === 'bots', 120)
@@ -40,7 +41,7 @@ export function TeamHeader({ team, views }) {
     more.current?.querySelector(open === 'bots' ? '.mek-bot-directory .bt-row' : '[role="menuitem"]')?.focus()
     const close = event => {
       if (event.type === 'keydown') {
-        if (event.key === 'Escape') { setOpen(null); (open === 'bots' ? botsTrigger : trigger).current?.focus() }
+        if (event.key === 'Escape') { setOpen(null); (open === 'bots' ? botsTrigger.current ?? trigger.current : trigger.current)?.focus() }
       } else if (!more.current?.contains(event.target)) setOpen(null)
     }
     document.addEventListener('pointerdown', close)
@@ -65,13 +66,15 @@ export function TeamHeader({ team, views }) {
     finally { setBusy(null) }
   }
   const directoryRow = (entry, row) => <div key={entry.item.id} className="mek-directory-row">{row}{entry.kind !== 'agent' && <button type="button" className="bt-round mek-favorite" aria-label={t(entry.item.pinned ? 'Unfavorite {name}' : 'Favorite {name}', { name: entry.item.name })} title={t(entry.item.pinned ? 'Remove favorite' : 'Add favorite')} aria-pressed={entry.item.pinned === true} disabled={busy !== null || Boolean(roster.readOnly)} onClick={() => void favorite(entry.item)}><StarLineIcon /></button>}</div>
-  return <header className="mek-team-header">
+  return <header className="mek-team-header" data-compact={compact || undefined}>
     <nav ref={list} className="mek-team-center" aria-label={t('Bot list')}><TeamSidebar {...views} actions={actions} includeEntry={keep} wide navigation /></nav>
     <div ref={more} className="mek-team-tools">
-      <button ref={botsTrigger} type="button" className="bt-round" aria-label={t('Bot list')} title={t('Bot list')} aria-expanded={open === 'bots'} aria-haspopup="dialog" onClick={() => setOpen(value => value === 'bots' ? null : 'bots')}><PeopleIcon />{hiddenNews && <span className="mek-tab-dot" aria-hidden="true" />}</button>
-      <button type="button" className="bt-round" aria-label={t('Tasks')} title={t('Tasks')} disabled={!roster.byId[shown] && !roster.roomsById[shown]} aria-pressed={ui.details === shown && ui.view === 'details' && ['todos', 'tasks'].includes(ui.tab)} onClick={() => { setOpen(null); team.actions.showDetails(shown, 'tasks') }}><TasksIcon />{team.actions.taskUnread?.(shown) && <span className="mek-tab-dot" aria-hidden="true" />}</button>
-      <button type="button" className="bt-round" aria-label={t('Search')} title={t('Search')} onClick={() => { setOpen(null); team.actions.openPalette() }}><SearchIcon /></button>
-      <button ref={trigger} type="button" className="bt-round" aria-label={t('More')} title={t('More')} aria-expanded={open === 'more'} aria-haspopup="menu" onClick={() => setOpen(value => value === 'more' ? null : 'more')}><DotsIcon /></button>
+      {!compact && <>
+        <button ref={botsTrigger} type="button" className="bt-round" aria-label={t('Bot list')} title={t('Bot list')} aria-expanded={open === 'bots'} aria-haspopup="dialog" onClick={() => setOpen(value => value === 'bots' ? null : 'bots')}><PeopleIcon />{hiddenNews && <span className="mek-tab-dot" aria-hidden="true" />}</button>
+        <button type="button" className="bt-round" aria-label={t('Tasks')} title={t('Tasks')} disabled={!roster.byId[shown] && !roster.roomsById[shown]} aria-pressed={ui.details === shown && ui.view === 'details' && ['todos', 'tasks'].includes(ui.tab)} onClick={() => { setOpen(null); team.actions.showDetails(shown, 'tasks') }}><TasksIcon />{team.actions.taskUnread?.(shown) && <span className="mek-tab-dot" aria-hidden="true" />}</button>
+        <button type="button" className="bt-round" aria-label={t('Search')} title={t('Search')} onClick={() => { setOpen(null); team.actions.openPalette() }}><SearchIcon /></button>
+      </>}
+      <button ref={trigger} type="button" className="bt-round" aria-label={t('More')} title={t('More')} aria-expanded={open === 'more'} aria-haspopup="menu" onClick={() => setOpen(value => value === 'more' ? null : 'more')}><DotsIcon />{compact && (hiddenNews || team.actions.taskUnread?.(shown)) && <span className="mek-tab-dot" aria-hidden="true" />}</button>
       {directory && <div className="bt-menu mek-bot-directory" role="dialog" aria-label={t('Bot list')} data-leaving={directoryLeaving ? '' : undefined} inert={directoryLeaving ? '' : undefined} onBlur={event => { if (event.relatedTarget && !more.current?.contains(event.relatedTarget)) setOpen(null) }}>
         <div className="mek-directory-heading">{t('Bot list')}</div>
         <TeamSidebar {...views} actions={choose} includeEntry={others} wrapEntry={directoryRow} showHidden wide navigation />
@@ -79,6 +82,12 @@ export function TeamHeader({ team, views }) {
         {failure && <p className="bt-error" role="alert">{failure}</p>}
       </div>}
       {menu && <div className="bt-menu mek-team-menu" role="menu" data-leaving={leaving ? '' : undefined} inert={leaving ? '' : undefined} onKeyDown={menuKeys}>
+        {compact && <>
+          <button type="button" role="menuitem" onClick={() => setOpen('bots')}><PeopleIcon />{t('Bot list')}{hiddenNews && <span className="mek-tab-dot" aria-hidden="true" />}</button>
+          <button type="button" role="menuitem" disabled={!roster.byId[shown] && !roster.roomsById[shown]} onClick={() => run(() => team.actions.showDetails(shown, 'tasks'))}><TasksIcon />{t('Tasks')}{team.actions.taskUnread?.(shown) && <span className="mek-tab-dot" aria-hidden="true" />}</button>
+          <button type="button" role="menuitem" onClick={() => run(() => team.actions.openPalette())}><SearchIcon />{t('Search Bots')}</button>
+          <div className="bt-menu-sep" role="separator" />
+        </>}
         <button type="button" role="menuitem" onClick={() => run(() => team.actions.openNewChat('new'))}><PlusIcon />{t('New…')}</button>
         <div className="bt-menu-sep" role="separator" />
         {[[t('Usage'), 'usage'], [t('Connectors'), 'connectors'], [t('Bot settings'), 'general']].map(([label, page]) => <button type="button" role="menuitem" key={page} onClick={() => run(() => team.actions.openSettings(page))}>{label}</button>)}
@@ -124,3 +133,5 @@ export const TEAM_HEADER_CSS = `
 .mek-team-header :is(button,[role=menuitem]):focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}
 @media(max-width:640px){.mek-team-header{grid-template-columns:minmax(0,1fr) 132px;gap:4px;padding:0 8px}.mek-team-center{grid-column:1}.mek-team-tools{grid-column:2}.mek-team-nav.bt-side>.bt-list{margin:0}.mek-team-nav .bt-row{max-width:124px}.mek-team-nav .bt-row-name{font-size:13px}}
 `
+
+export const COMPACT_HEADER_CSS = `.mek-team-header[data-compact]{grid-template-columns:minmax(0,1fr) 28px;gap:8px;padding:0 8px}.mek-team-header[data-compact] .mek-team-center{grid-column:1}.mek-team-header[data-compact] .mek-team-tools{grid-column:2}.mek-team-header[data-compact] .bt-list{margin:0}.mek-team-menu [role=menuitem]{position:relative}.mek-team-menu [role=menuitem] .mek-tab-dot{position:static;margin-left:auto}`

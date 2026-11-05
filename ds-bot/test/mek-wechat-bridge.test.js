@@ -91,3 +91,19 @@ test('target settings report missing and incompatible plugins, and validate Main
   await assert.rejects(rt.mekWechatAction('mek-wechat-view', { target }), /Ordinary Bots/)
   assert.equal(calls.length, 1)
 })
+
+test('linked private interrupt cancels before admission, while groups keep queue semantics', async t => {
+  const { rt, bridge, prompts } = await fixture(t), order = []
+  rt.stopSubagents = async () => { order.push('subagents') }
+  rt.resolveAgent = async () => ({ cancel: async () => { order.push('cancel'); assert.equal(prompts.length, 0) } })
+  await bridge.send({ kind: 'bot', id: 'chief' }, { text: 'Stop the previous work', mode: 'interrupt' })
+  assert.deepEqual(order, ['subagents', 'cancel'])
+  assert.equal(prompts[0].mode, 'queue', 'cancellation precedes durable queued admission')
+  await assert.rejects(bridge.send({ kind: 'room', id: 'group' }, { text: 'No mass group interruption', mode: 'interrupt' }), /Only private/)
+  assert.equal(prompts.length, 1)
+  assert.equal((await bridge.activity({ kind: 'bot', id: 'chief' })).busy, false)
+  rt.workView = () => ({ chief: { since: 1 } })
+  assert.equal((await bridge.activity({ kind: 'bot', id: 'chief' })).busy, true)
+  rt.workView = () => ({ chief: { roomId: 'group' } })
+  assert.equal((await bridge.activity({ kind: 'bot', id: 'chief' })).busy, false, 'group work does not masquerade as private typing')
+})

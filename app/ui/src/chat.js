@@ -260,6 +260,7 @@ export function Chat({ sessionId, team, children }) {
           // This is transient presentation, never a row in the Session history.
           h('div', { 'data-chat-running': '' })))),
     h('div', { className: 'dsb-composer-root' },
+      actions.Queue ? h(actions.Queue, { sessionId }) : null,
       h(ModelChoiceDock, { sessionId, useRoster: hooks.useRoster, actions }),
       h(Composer, {
         sessionId,

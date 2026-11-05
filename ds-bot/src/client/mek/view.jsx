@@ -33,7 +33,7 @@ import { TaskAttention, TASK_CSS, LEDGER_CSS } from './tasks.jsx'
 import { TeamOverview, OVERVIEW_CSS } from './overview.jsx'
 import { ARTIFACT_CSS } from './artifacts.jsx'
 import { BROWSER_WORKSPACE_CSS } from './browser.jsx'
-import { TeamHeader, TEAM_HEADER_CSS } from './header.jsx'
+import { TeamHeader, TEAM_HEADER_CSS, COMPACT_HEADER_CSS } from './header.jsx'
 import { GroupChat } from './group-chat.jsx'
 import { NativeQuestion } from './native-question.jsx'
 import { SessionPermissions, PERMISSION_CSS } from './permissions.jsx'
@@ -42,6 +42,8 @@ import { TODO_SCHEDULE_CSS } from './todo-schedules.jsx'
 import { ConversationTaskPanel, TASK_PANEL_CSS } from './task-panel.jsx'
 import { createTaskInbox } from './task-inbox.js'
 import { WechatLinks, WECHAT_LINKS_CSS } from './wechat-links.jsx'
+import { SessionQueue, SESSION_QUEUE_CSS } from './session-queue.jsx'
+import { currentPart } from '../text.js'
 import { mountScene, sceneRoot, scopeCss } from './dom.js'
 
 const STYLES = TASK_PROGRESS_CSS + TURN_ERROR_CSS + SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS + HANDOFF_CSS + SIDE_CSS + appCss
@@ -60,6 +62,11 @@ function TeamView({ ctx, requests, viewport }) {
   actions.sessionPermission = ctx.sessions.retain ? sessionId => <SessionPermissions key={sessionId} ctx={ctx} sessionId={sessionId} /> : undefined
   actions.TaskPanel = useMemo(() => function TaskPanel({ sessionId, bucket }) { return <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} bucket={bucket} /> }, [team, ctx])
   actions.WechatLinks = useMemo(() => function Links(props) { return <WechatLinks {...props} editable={!team.roster.getSnapshot().readOnly} /> }, [team])
+  actions.Queue = useMemo(() => function Queue({ sessionId }) {
+    const roster = useSyncExternalStore(team.roster.subscribe, team.roster.getSnapshot)
+    const owner = roster.byId[sessionId] ?? roster.roomsById[sessionId]
+    return <SessionQueue ctx={ctx} sessionId={owner ? currentPart(owner) : sessionId} editable={!roster.readOnly} />
+  }, [team, ctx])
   actions.taskUnread = (id, bucket) => {
     const snapshot = team.roster.getSnapshot()
     const target = snapshot.byId[id]?.id ?? snapshot.roomsById[id]?.id ?? id
@@ -124,7 +131,7 @@ export function NativeBot({ ctx, requests }) {
     return () => { observer.disconnect(); dark.removeEventListener('change', paint); locale(); release() }
   }, [])
   return <div ref={root} className="mek-bot-scene" style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0, position: 'relative', contain: 'layout paint', isolation: 'isolate', overflow: 'hidden' }}>
-    <style>{scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + WECHAT_LINKS_CSS)}</style>
+    <style>{scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + COMPACT_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + WECHAT_LINKS_CSS + SESSION_QUEUE_CSS)}</style>
     {ready && <TeamView ctx={ctx} requests={requests} viewport={viewport} />}
   </div>
 }
