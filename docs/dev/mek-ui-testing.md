@@ -441,3 +441,9 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 - dsh-mek-wechatpad：包 `dc810ecc39219c51f131e14542fd1cc6913475ecce22011b4bad60a25488d371`，客户端 `4fd384b65ad3926b393ba97e8ec2f0173900a9a5ba840a8671ca727f8893d761`，源码/归档/隔离安装 69 个文件一致。
 
 真实微信客户端是否展示输入状态、网络与平台 ticket 是否有效，仍需实际微信验收。正式更新另记回执；保留原连接、绑定、队列及聊天数据，不发送正式测试消息。
+
+### 本批正式安装（2026-11-05 13:59，北京时间）
+
+Bot `30545e8`、WechatPad `0259900` 已快进并推送各自 MakeEpoch main。沿用本会话更新/重启授权，以标准 CLI 离线安装 Bot **0.2.9 → 0.2.10**、WechatPad **0.1.9 → 0.1.10**；未升级 DSH，未创建外部发布。备份 `/home/hapi/.dsh/profiles/web/.plugin-manager/backups/mek-live-0210-0110-20261105`，回执 `/tmp/mek-live-update-20261105/receipt.json` 为 completed。
+
+停服/安装/启动均 exit 0，正式版本及 96 / 69 个文件再次独立校验与上方验收归档一致。其他 profile 声明、peer 策略和连接配置未变；停服后的 Bot 状态、绑定及发现目录在安装期间未改写。服务 active/running，MainPID `1354933 → 1459808`、NRestarts=0，原 GUI 返回预期认证响应 401。未读取认证令牌、未发送真实微信测试消息、未更改正式绑定或队列；手机端输入状态展示仍待真实验收。独立浏览器已退出，本轮隔离 web/mock 已停且 3198/8798 已关闭。
