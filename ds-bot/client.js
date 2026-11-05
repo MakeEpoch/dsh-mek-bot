@@ -148,6 +148,44 @@ var scopedWindow = new Proxy({}, {
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Refresh": "刷新",
+  "A recent WeChat reply failed to send. Check the connection in WeChat settings.": "最近有微信回复投递失败，请到微信设置检查连接。",
+  "WeChat links": "微信关联",
+  "WeChat group links": "微信群关联",
+  "WeChat private chat links": "微信私聊关联",
+  "WeChat robot": "微信机器人",
+  "WeChat connection": "微信连接",
+  "WeChat group": "微信群",
+  "WeChat user": "微信用户",
+  "WeChat chat ID": "微信聊天 ID",
+  "Private chat ID": "私聊 ID",
+  "Only Main Bots can link WeChat private chats.": "仅主 Bot 可以关联微信私聊。",
+  "Choose a WeChat group for this Bot group.": "选择要关联到当前 Bot 群的微信群。",
+  "Choose a WeChat user for this Main Bot.": "选择要关联到当前主 Bot 的微信用户。",
+  "Checking WechatPad…": "正在检查微信插件…",
+  "WechatPad is not installed or enabled.": "WechatPad 插件未安装或未启用。",
+  "Update WechatPad to a version that supports Bot settings.": "请更新 WechatPad 插件，以支持在 Bot 设置中关联。",
+  "WechatPad is starting…": "微信插件正在启动…",
+  "Connection disabled": "连接未启用",
+  "Connection not configured": "连接配置不完整",
+  "Connection disconnected": "连接已断开",
+  "Scan the QR code in WeChat settings to sign in.": "账号未登录，请到微信设置扫码登录。",
+  "Connection failed. Check WeChat settings.": "连接异常，请到微信设置检查。",
+  "This chat type is disabled in WeChat access settings.": "微信访问控制已关闭此类聊天，请先到微信设置中启用。",
+  "Select…": "请选择",
+  "Linked elsewhere": "已关联其他目标",
+  "Enter a chat ID…": "手动输入聊天 ID…",
+  "No groups discovered. Send a message in the WeChat group, then refresh.": "还没有发现微信群，请先在微信群中发一条消息，再点击刷新。",
+  "No users discovered. Send a private message to the selected WeChat connection, then refresh.": "还没有发现微信用户，请先给所选微信连接发一条私聊消息，再点击刷新。",
+  "Choose a group ID ending in @chatroom.": "请选择以 @chatroom 结尾的微信群 ID。",
+  "Group IDs cannot be linked to a private Bot chat.": "微信群 ID 不能关联到 Bot 私聊。",
+  "Link chat": "保存关联",
+  "Unlink": "解除关联",
+  "Unlink {id}": "解除关联 {id}",
+  "Links save immediately. Existing WeChat access rules still apply. Multiple chats linked here share visible replies.": "关联立即保存，仍遵守微信访问控制；多个聊天关联到此处时共享可见回复。",
+  "Mention the WeChat account in group messages.": "群消息需要 @ 微信账号。",
+  "Open DSH settings → WeChat to enable and configure a connection. Existing links are kept.": "请到 DSH 设置 → 微信启用并配置连接，已有绑定会保留。",
+  "This team is read-only.": "当前团队为只读，无法修改关联。",
   // Shared
   "Main Bot": "主 Bot",
   Working: "进行中",
@@ -18930,6 +18968,7 @@ function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, a
         "div",
         { key: "set-body", className: "bt-drawer-body bt-set-body", "data-move": move },
         errorLine,
+        actions.WechatLinks ? (0, import_react51.createElement)(actions.WechatLinks, { key: sessionId, target: { kind: room2 ? "room" : "bot", id: room2?.id ?? bot.id }, eligible: !!room2 || isMainBot }) : null,
         bot ? (0, import_react51.createElement)(BotSettingsForm, { bot, roster, actions, run: run2 }) : (0, import_react51.createElement)(GroupSettingsForm, { room: room2, roster, actions, run: run2, onDeleted: close })
       )
     ];
@@ -22766,11 +22805,97 @@ function createTaskInbox(storage, events = globalThis.window) {
   };
 }
 
-// src/client/mek/view.jsx
+// src/client/mek/wechat-links.jsx
 var import_react68 = __toESM(require("react"), 1);
+var STATES2 = {
+  disabled: "Connection disabled",
+  unconfigured: "Connection not configured",
+  connecting: "Connecting…",
+  disconnected: "Connection disconnected",
+  "login-required": "Scan the QR code in WeChat settings to sign in.",
+  error: "Connection failed. Check WeChat settings.",
+  ready: "Connected"
+};
+var PLUGIN = {
+  "plugin-unavailable": "WechatPad is not installed or enabled.",
+  incompatible: "Update WechatPad to a version that supports Bot settings.",
+  starting: "WechatPad is starting…"
+};
+var providerName2 = (provider) => provider === "weixin" ? t("WeChat robot") : "WechatPad";
+function WechatLinks({ target, eligible, editable = true }) {
+  const [view, setView] = (0, import_react68.useState)(null), [error, setError] = (0, import_react68.useState)(""), [busy, setBusy] = (0, import_react68.useState)(false);
+  const [provider, setProvider] = (0, import_react68.useState)("pad"), [choice, setChoice] = (0, import_react68.useState)(""), [manualId, setManualId] = (0, import_react68.useState)("");
+  const generation = (0, import_react68.useRef)(0), saving = (0, import_react68.useRef)(false);
+  const load = (0, import_react68.useCallback)(async (signal) => {
+    const seq = ++generation.current;
+    try {
+      const next = await call("mek-wechat-view", { target }, signal);
+      if (seq === generation.current) {
+        setView(next);
+        setError("");
+      }
+    } catch (failure) {
+      if (!signal?.aborted && seq === generation.current) setError(failure.message);
+    }
+  }, [target.kind, target.id]);
+  (0, import_react68.useEffect)(() => {
+    if (!eligible) return void 0;
+    const controller = new AbortController();
+    void load(controller.signal);
+    const timer = setInterval(() => {
+      if (!saving.current) void load(controller.signal);
+    }, 15e3);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+      generation.current++;
+    };
+  }, [load, eligible]);
+  const connections = view?.connections ?? [];
+  const connection = connections.find((row) => row.provider === provider);
+  const candidates = (view?.chats ?? []).filter((row) => row.provider === provider);
+  const chatId = choice === "manual" ? manualId.trim() : choice;
+  const typeValid = target.kind === "room" ? provider === "pad" && chatId.endsWith("@chatroom") : !chatId.endsWith("@chatroom");
+  const alreadyLinked = candidates.some((row) => row.chatId === chatId && (row.linkedHere || row.linkedElsewhere));
+  const update = async (link) => {
+    if (busy || !view) return;
+    generation.current++;
+    saving.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const next = await call("mek-wechat-update", { target, link: { ...link, revision: view.revision } });
+      generation.current++;
+      setView(next);
+      setChoice("");
+      setManualId("");
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
+  };
+  return /* @__PURE__ */ import_react68.default.createElement("section", { className: "bt-set-section mek-wechat-links", "aria-label": t("WeChat links") }, /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-wechat-head" }, /* @__PURE__ */ import_react68.default.createElement("h3", null, t(target.kind === "room" ? "WeChat group links" : "WeChat private chat links")), eligible && /* @__PURE__ */ import_react68.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy, onClick: () => void load() }, t("Refresh"))), !eligible ? /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note" }, t("Only Main Bots can link WeChat private chats.")) : /* @__PURE__ */ import_react68.default.createElement(import_react68.default.Fragment, null, /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note" }, t(target.kind === "room" ? "Choose a WeChat group for this Bot group." : "Choose a WeChat user for this Main Bot.")), !view && !error && /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note", role: "status" }, t("Checking WechatPad…")), PLUGIN[view?.status] && /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note", role: "status" }, t(PLUGIN[view.status])), view?.status === "ready" && /* @__PURE__ */ import_react68.default.createElement(import_react68.default.Fragment, null, /* @__PURE__ */ import_react68.default.createElement("label", null, t("WeChat connection"), /* @__PURE__ */ import_react68.default.createElement("select", { "aria-label": t("WeChat connection"), value: provider, disabled: busy, onChange: (event) => {
+    setProvider(event.target.value);
+    setChoice("");
+    setManualId("");
+  } }, connections.map((row) => /* @__PURE__ */ import_react68.default.createElement("option", { key: row.provider, value: row.provider }, providerName2(row.provider))))), /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note", role: "status", "data-wechat-state": connection?.state }, t(STATES2[connection?.state] ?? "Connection disconnected")), connection?.policy === "disabled" && /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note" }, t("This chat type is disabled in WeChat access settings.")), /* @__PURE__ */ import_react68.default.createElement("label", null, t(target.kind === "room" ? "WeChat group" : "WeChat user"), /* @__PURE__ */ import_react68.default.createElement("select", { "aria-label": t(target.kind === "room" ? "WeChat group" : "WeChat user"), value: choice, disabled: busy || !editable, onChange: (event) => setChoice(event.target.value) }, /* @__PURE__ */ import_react68.default.createElement("option", { value: "" }, t("Select…")), candidates.map((row) => /* @__PURE__ */ import_react68.default.createElement("option", { key: row.chatId, value: row.chatId, disabled: row.linkedElsewhere }, row.label === row.chatId ? row.chatId : `${row.label} · ${row.chatId}`, row.linkedElsewhere ? ` (${t("Linked elsewhere")})` : "")), /* @__PURE__ */ import_react68.default.createElement("option", { value: "manual" }, t("Enter a chat ID…")))), !candidates.length && /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note" }, t(target.kind === "room" ? "No groups discovered. Send a message in the WeChat group, then refresh." : "No users discovered. Send a private message to the selected WeChat connection, then refresh.")), choice === "manual" && /* @__PURE__ */ import_react68.default.createElement("label", null, t("WeChat chat ID"), /* @__PURE__ */ import_react68.default.createElement("input", { "aria-label": t("WeChat chat ID"), value: manualId, placeholder: target.kind === "room" ? "xxx@chatroom" : t("Private chat ID"), disabled: busy || !editable, onChange: (event) => setManualId(event.target.value) })), chatId && !typeValid && /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note", role: "alert" }, t(target.kind === "room" ? "Choose a group ID ending in @chatroom." : "Group IDs cannot be linked to a private Bot chat.")), /* @__PURE__ */ import_react68.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy || !editable || connection?.state !== "ready" || connection?.policy === "disabled" || !chatId || !typeValid || alreadyLinked, onClick: () => void update({ provider, chatId }) }, t("Link chat")), /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-wechat-existing" }, view.links.map((row) => /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-wechat-row", key: JSON.stringify([row.provider, row.chatId]) }, /* @__PURE__ */ import_react68.default.createElement("span", null, providerName2(row.provider), " · ", view.chats.find((chat) => chat.provider === row.provider && chat.chatId === row.chatId)?.label || row.chatId), /* @__PURE__ */ import_react68.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy || !editable, "aria-label": t("Unlink {id}", { id: row.chatId }), onClick: () => void update({ ...row, remove: true }) }, t("Unlink"))))), /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note" }, t("Links save immediately. Existing WeChat access rules still apply. Multiple chats linked here share visible replies."), connection?.requireMention ? ` ${t("Mention the WeChat account in group messages.")}` : ""), view.deliveryFailed && /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-error", role: "alert" }, t("A recent WeChat reply failed to send. Check the connection in WeChat settings."))), view?.status !== "ready" && /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note" }, t("Open DSH settings → WeChat to enable and configure a connection. Existing links are kept.")), !editable && /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-note" }, t("This team is read-only.")), error && /* @__PURE__ */ import_react68.default.createElement("p", { className: "bt-error", role: "alert" }, error)));
+}
+var WECHAT_LINKS_CSS = `
+.mek-wechat-links{min-width:0;display:flex;flex-direction:column;gap:8px;padding-bottom:16px;border-bottom:1px solid var(--bt-line)}
+.mek-wechat-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.mek-wechat-head h3{margin:0}
+.mek-wechat-links label{display:flex;flex-direction:column;gap:6px;font-size:13px;min-width:0}
+.mek-wechat-links select,.mek-wechat-links input{box-sizing:border-box;width:100%;min-width:0;max-width:100%;height:36px;padding:6px 8px;font:inherit;color:var(--bt-ink);background:var(--bt-card);border:1px solid var(--bt-line);border-radius:8px}
+.mek-wechat-links p{margin:0;overflow-wrap:anywhere}.mek-wechat-existing{display:flex;flex-direction:column;gap:8px}
+.mek-wechat-row{display:flex;align-items:center;gap:8px;min-width:0}.mek-wechat-row span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:12px}.mek-wechat-row button{flex-shrink:0}
+`;
+
+// src/client/mek/view.jsx
+var import_react69 = __toESM(require("react"), 1);
 var STYLES = TASK_PROGRESS_CSS + TURN_ERROR_CSS + SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS2 + HANDOFF_CSS + SIDE_CSS + app_default;
 function TeamView({ ctx, requests, viewport }) {
-  const team = (0, import_react68.useMemo)(() => {
+  const team = (0, import_react69.useMemo)(() => {
     const value = createTeam();
     value.taskInbox = createTaskInbox();
     value.actions.schedules = void 0;
@@ -22778,8 +22903,8 @@ function TeamView({ ctx, requests, viewport }) {
     attachAgentActions(value, ctx);
     return value;
   }, [ctx]);
-  (0, import_react68.useSyncExternalStore)(team.taskInbox.subscribe, team.taskInbox.getSnapshot);
-  (0, import_react68.useEffect)(() => {
+  (0, import_react69.useSyncExternalStore)(team.taskInbox.subscribe, team.taskInbox.getSnapshot);
+  (0, import_react69.useEffect)(() => {
     const stopWatching = watchDeletedSubjects(team);
     const stopRemembering = rememberConversation(team);
     const stopInbox = team.taskInbox.start();
@@ -22792,10 +22917,13 @@ function TeamView({ ctx, requests, viewport }) {
     };
   }, [team]);
   const { hooks, actions } = team;
-  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react68.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
-  actions.TaskPanel = (0, import_react68.useMemo)(() => function TaskPanel({ sessionId, bucket }) {
-    return /* @__PURE__ */ import_react68.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket });
+  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react69.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
+  actions.TaskPanel = (0, import_react69.useMemo)(() => function TaskPanel({ sessionId, bucket }) {
+    return /* @__PURE__ */ import_react69.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket });
   }, [team, ctx]);
+  actions.WechatLinks = (0, import_react69.useMemo)(() => function Links(props) {
+    return /* @__PURE__ */ import_react69.default.createElement(WechatLinks, { ...props, editable: !team.roster.getSnapshot().readOnly });
+  }, [team]);
   actions.taskUnread = (id, bucket) => {
     const snapshot = team.roster.getSnapshot();
     const target = snapshot.byId[id]?.id ?? snapshot.roomsById[id]?.id ?? id;
@@ -22803,11 +22931,11 @@ function TeamView({ ctx, requests, viewport }) {
   };
   const shown = hooks.useShown((value) => value);
   const roster = hooks.useRoster((value) => value);
-  (0, import_react68.useEffect)(() => {
+  (0, import_react69.useEffect)(() => {
     team.taskInbox.update(roster);
   }, [team, roster]);
   const prefs = roster.prefs;
-  (0, import_react68.useEffect)(() => {
+  (0, import_react69.useEffect)(() => {
     const root = sceneRoot();
     if (!root) return;
     root.dataset.btMotion = prefs?.motion ?? "normal";
@@ -22815,7 +22943,7 @@ function TeamView({ ctx, requests, viewport }) {
     root.style.setProperty("--bt-msg-w", String(widthOf(prefs) / 100));
     root.style.setProperty("--bt-flat-w", String(flatWidthOf(prefs) / 100));
   }, [prefs]);
-  (0, import_react68.useEffect)(() => {
+  (0, import_react69.useEffect)(() => {
     if (!requests) return;
     const show2 = () => {
       const id = requests.getSnapshot();
@@ -22826,8 +22954,8 @@ function TeamView({ ctx, requests, viewport }) {
     show2();
     return requests.subscribe(show2);
   }, [team, requests]);
-  const OverviewPage = (0, import_react68.useMemo)(() => function OverviewPage2() {
-    return /* @__PURE__ */ import_react68.default.createElement(TeamOverview, { team, ctx, embedded: true });
+  const OverviewPage = (0, import_react69.useMemo)(() => function OverviewPage2() {
+    return /* @__PURE__ */ import_react69.default.createElement(TeamOverview, { team, ctx, embedded: true });
   }, [team, ctx]);
   const views = {
     ...hooks,
@@ -22835,18 +22963,18 @@ function TeamView({ ctx, requests, viewport }) {
     TeamOverview: OverviewPage,
     useFrame: (selector) => selector({ viewport, sidebarWidth: 0, collapsedWidth: 0 }),
     useSessions: (selector) => {
-      const host = (0, import_react68.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
+      const host = (0, import_react69.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
       return hooks.useSessions((own) => selector({ ...own, byId: Object.fromEntries([.../* @__PURE__ */ new Set([...Object.keys(host.byId), ...Object.keys(own.byId)])].map((id) => [id, { ...host.byId[id], retainedBy: {}, ...own.byId[id] }])) }));
     }
   };
   const themed = themeCss(allThemes()[prefs?.theme] ?? allThemes().deepseek, prefs?.accent);
-  return /* @__PURE__ */ import_react68.default.createElement(import_react68.default.Fragment, null, /* @__PURE__ */ import_react68.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react68.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react68.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react68.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react68.default.createElement(import_react68.default.Fragment, { key: shown }, /* @__PURE__ */ import_react68.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react68.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react68.default.createElement(TaskAttention, { team, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react68.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react68.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react68.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react68.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react68.default.createElement(ErrorToast, { ...views })));
+  return /* @__PURE__ */ import_react69.default.createElement(import_react69.default.Fragment, null, /* @__PURE__ */ import_react69.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react69.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react69.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react69.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react69.default.createElement(import_react69.default.Fragment, { key: shown }, /* @__PURE__ */ import_react69.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react69.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react69.default.createElement(TaskAttention, { team, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react69.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react69.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react69.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react69.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react69.default.createElement(ErrorToast, { ...views })));
 }
 function NativeBot({ ctx, requests }) {
-  const root = (0, import_react68.useRef)(null);
-  const [ready, setReady] = (0, import_react68.useState)(false);
-  const [viewport, setViewport] = (0, import_react68.useState)(0);
-  (0, import_react68.useLayoutEffect)(() => {
+  const root = (0, import_react69.useRef)(null);
+  const [ready, setReady] = (0, import_react69.useState)(false);
+  const [viewport, setViewport] = (0, import_react69.useState)(0);
+  (0, import_react69.useLayoutEffect)(() => {
     const release = mountScene(root.current);
     const measure = () => setViewport(root.current?.clientWidth ?? 0);
     const observer = new ResizeObserver(measure);
@@ -22865,7 +22993,7 @@ function NativeBot({ ctx, requests }) {
       release();
     };
   }, []);
-  return /* @__PURE__ */ import_react68.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react68.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS)), ready && /* @__PURE__ */ import_react68.default.createElement(TeamView, { ctx, requests, viewport }));
+  return /* @__PURE__ */ import_react69.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react69.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + WECHAT_LINKS_CSS)), ready && /* @__PURE__ */ import_react69.default.createElement(TeamView, { ctx, requests, viewport }));
 }
 
 // src/client/approval-notices.js
@@ -22975,7 +23103,7 @@ function startNativeNotices({ show: show2, shownSession = () => null }) {
 }
 
 // src/client/mek/index.jsx
-var import_react69 = __toESM(require("react"), 1);
+var import_react70 = __toESM(require("react"), 1);
 var inject = ["slots", "layout", "sessions", "uiWorkspace"];
 var PANEL = "mek-bot";
 function apply(ctx) {
@@ -22987,9 +23115,9 @@ function apply(ctx) {
     },
     shownSession: () => sceneRoot()?.querySelector("[data-mek-session]")?.dataset.mekSession ?? null
   }));
-  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react69.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react69.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react69.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
+  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react70.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react70.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react70.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
   ctx.slots.inject("main", () => {
-    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react69.default.createElement(NativeBot, { ctx, requests }));
+    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react70.default.createElement(NativeBot, { ctx, requests }));
     ctx.effect(() => rememberPanel(ctx.layout, PANEL));
   });
   ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));

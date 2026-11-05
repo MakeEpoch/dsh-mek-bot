@@ -101,14 +101,35 @@ const bot = { id: 'a', name: 'Chief', sessionId: 'a' }
 const room = { id: 'g', name: 'Writers', named: true, members: ['a'] }
 const roster = { byId: { a: bot }, roomsById: { g: room }, bots: [], exchangeTurns: {}, questions: {}, memory: false }
 const hook = value => select => select(value)
-const drawer = (sessionId, actions, liveRoster = roster) => DetailsDrawer({
-  sessionId, roster: liveRoster, actions,
+const drawer = (sessionId, actions, liveRoster = roster, startTab) => DetailsDrawer({
+  sessionId, roster: liveRoster, actions, startTab,
   useSessions: hook({ byId: {} }),
   useSessionStatus: hook(new Map()),
   useActivity: hook({}),
   useWork: hook({ bots: {}, approvals: [] }),
   useBrowserTabs: hook({}),
   useBrowserPages: hook({}),
+})
+
+test('WeChat settings keep the logical target across rotated Bot and group parts and restrict ordinary Bots', () => {
+  const WechatLinks = () => null
+  const find = node => {
+    if (Array.isArray(node)) return node.map(find).find(Boolean)
+    if (!node || typeof node !== 'object') return undefined
+    return node.type === WechatLinks ? node.props : find(node.children ?? [])
+  }
+  const chief = { ...bot, sessionId: 'chief-next', parts: ['a', 'chief-next'] }
+  const group = { ...room, sessionId: 'group-next', ownParts: ['g', 'group-next'] }
+  const live = { ...roster, byId: { a: chief, 'chief-next': chief }, roomsById: { g: group, 'group-next': group }, mainBotIds: ['a'] }
+  const privateProps = find(drawer('chief-next', { WechatLinks }, live, 'settings'))
+  assert.equal(privateProps.target.id, 'a')
+  assert.equal(privateProps.target.kind, 'bot')
+  assert.equal(privateProps.eligible, true)
+  const groupProps = find(drawer('group-next', { WechatLinks }, live, 'settings'))
+  assert.equal(groupProps.target.id, 'g')
+  assert.equal(groupProps.target.kind, 'room')
+  assert.equal(groupProps.eligible, true)
+  assert.equal(find(drawer('a', { WechatLinks }, { ...live, mainBotIds: [] }, 'settings')).eligible, false)
 })
 const moreButton = (node) => {
   if (Array.isArray(node)) return node.map(moreButton).find(found => found !== null) ?? null

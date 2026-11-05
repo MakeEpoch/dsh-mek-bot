@@ -2,9 +2,9 @@
 
 MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多 Bot 协作插件**。在现有 DeepSeek Harness 工作区中组织长期助手：由一个 Bot 接收需求，调用其他 Bot 分工处理，收集问题和结果，再审查、返工并向用户交付。
 
-本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.8**，已合并上游 **v0.2.7**（含此前版本）；逐版本的吸收情况见[上游合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)。
+本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.9**，已合并上游 **v0.2.7**（含此前版本）；逐版本的吸收情况见[上游合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)。
 
-0.2.8 优先复用上游群聊、记忆、模型与输入能力，并在现有任务体系中吸收阶段概览思想；WechatPad 关联通过可选服务接入。源码及隔离验证不代表正式 DSH 已安装生效。
+0.2.9 优先复用上游群聊、记忆、模型与输入能力，并在现有任务体系中吸收阶段概览思想；WechatPad 关联通过可选服务接入。源码及隔离验证不代表正式 DSH 已安装生效。
 
 ![dsh-mek-bot 0.2.4：顶部 Bot 导航、任务摘要与 Bot 详情](https://raw.githubusercontent.com/MakeEpoch/dsh-mek-bot/main/docs/images/mek-bot-0.2.4.png)
 
@@ -136,7 +136,7 @@ cd ds-bot
 npm ci
 npm run build
 npm pack --ignore-scripts
-dsh plugin --profile web add -w ./dsh-mek-bot-0.2.8.tgz
+dsh plugin --profile web add -w ./dsh-mek-bot-0.2.9.tgz
 ```
 
 启用 bundle 后重启 DSH，不要同时启用原 `ds-bot` bundle。生产安装必须使用打包文件，禁止 `link:`、符号链接或直连开发源码。profile 保持 `autoInstallPeers: false`；宿主 API 由 DSH 加载器提供，不能安装第二份 Cordis、scope、tools 或 LLM 核心。
@@ -194,8 +194,8 @@ npm run lint
 
 ## 2026-11-05 上游复用与微信关联
 
-已吸收上游 v0.2.7 的群聊运行修复、记忆变更历史/单次恢复、新 Bot 默认模型、Enter 发送偏好及失败处理；选择性吸收 dev 的 DSH 0.2.2 调度兼容。包号 0.2.8 是下游版本，上游基线仍以 `.makeepoch/upstream.json` 为准。
+已吸收上游 v0.2.7 的群聊运行修复、记忆变更历史/单次恢复、新 Bot 默认模型、Enter 发送偏好及失败处理；选择性吸收 dev 的 DSH 0.2.2 调度兼容。包号 0.2.9 是下游版本，上游基线仍以 `.makeepoch/upstream.json` 为准。
 
 群目标继续采用现有待办、依赖和逐层验收；吸收上游目标对齐、阶段概览和防空转思想。右侧任务展开后显示阶段和已验收数量，目标与验收条件可展开查看，成员回报与已验收证据分别展示；不会因为阶段回报齐全自动验收整个任务。现有导航和标签位置不变。
 
-WechatPad 0.1.8 可将微信私聊关联主 Bot、Pad 微信群关联 Bot 群，入口在微信设置的“会话 → Bot 关联”。普通 Bot 不能关联。绑定沿用目标的当前会话段，群成员可见文字带名字回传微信；不外发隐藏 Bot 回合或推理，不启用上游 IM 模块。仍遵守 WechatPad 访问控制；授权、密钥和交互卡在 DSH 处理。详见 [能力比较与关联设计](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/plans/2026-11-05-upstream-and-wechatpad.md)。
+WechatPad 0.1.9 可将微信私聊关联主 Bot、Pad 微信群关联 Bot 群，入口在主 Bot / Bot 群右侧详情面板的设置中。可选择 WechatPad 或微信机器人连接，再选择已发现的微信用户或微信群；用户发来消息后即可选择，无需查 ID。微信设置的“会话”页仅显示关联汇总。普通 Bot 不能关联。绑定沿用目标的当前会话段，群成员可见文字带名字回传微信；不外发隐藏 Bot 回合或推理，不启用上游 IM 模块。仍遵守 WechatPad 访问控制；授权、密钥和交互卡在 DSH 处理。详见 [能力比较与关联设计](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/plans/2026-11-05-upstream-and-wechatpad.md)。

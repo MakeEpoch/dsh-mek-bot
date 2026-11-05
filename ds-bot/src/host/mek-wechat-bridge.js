@@ -6,6 +6,11 @@ const invalid = message => Object.assign(new Error(message), { code: 'bot/invali
 // this plugin owns Bot identities, current parts and visible-message selection.
 export function install(rt) {
   const listeners = new Set()
+  let settingsService
+  if (rt.ctx.inject) rt.ctx.inject(['wechatBotLinks'], ctx => {
+    settingsService = ctx.get('wechatBotLinks')
+    ctx.effect(() => () => { settingsService = undefined }, 'mek-bot: WeChat settings service')
+  })
   const assertTarget = target => {
     if (target?.kind === 'room') {
       const room = rt.roomOf(target.id)
@@ -61,6 +66,18 @@ export function install(rt) {
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
   }
   rt.wechatBridge = bridge
+  rt.mekWechatAction = async (endpoint, body = {}) => {
+    await rt.load()
+    const target = { kind: body.target?.kind, id: body.target?.id }
+    assertTarget(target)
+    const service = settingsService ?? (!rt.ctx.inject ? rt.ctx.get?.('wechatBotLinks') : undefined)
+    const status = !service ? 'plugin-unavailable' : service.version !== 1 ? 'incompatible' : undefined
+    if (endpoint === 'mek-wechat-view') return status ? { status, connections: [], chats: [], links: [] } : service.view(target)
+    if (endpoint !== 'mek-wechat-update') throw invalid('Unknown WeChat settings action')
+    await ready()
+    if (status) throw invalid('Enable a compatible WechatPad plugin to manage links.')
+    return service.update(target, body.link)
+  }
   rt.ctx.on('session/event', (session, event) => {
     const botId = rt.chatOwners.get(session.id)
     if (!botId || !rt.isMain(botId)) return

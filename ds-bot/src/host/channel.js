@@ -130,6 +130,7 @@ export function install(rt) {
   const READS = new Set(['state', 'models', 'efforts', 'providers', 'provider-models', 'earlier', 'chat', 'run-stats', 'room-progress', 'room-chat', 'exchange', 'exchange-text', 'file-text', 'usage', 'schedules', 'memory-view', 'memory-history', 'browser-wait', 'browser-result', 'diagnostics', 'diagnostics-log', 'diagnostics-clear', 'update-check', 'update-install', 'dsh-update-install', 'repo-stars', 'approval-answer', 'thinking', 'avatar-library'])
   for (const endpoint of ['mek-task-list', 'mek-todo-list', 'mek-todo-schedule-list', 'mek-activity-list', 'mek-browser-state', 'mek-policy-view', 'mek-knowledge-list', 'mek-workflow-list', 'mek-resource-list']) READS.add(endpoint)
   READS.add('image')
+  READS.add('mek-wechat-view')
 
   async function setPrefs(body) {
     if (body.theme !== undefined) {
@@ -190,6 +191,7 @@ export function install(rt) {
       if (endpoint === 'mek-task-list') { await rt.load(); return ok(rt.mekTaskHistory?.(body) ?? { tasks: [], nextCursor: null }) }
         await rt.load()
         const handler = endpoint.startsWith('mek-todo-schedule-') ? rt.mekTodoScheduleAction
+          : endpoint.startsWith('mek-wechat-') ? rt.mekWechatAction
           : endpoint.startsWith('mek-todo-') ? rt.mekTodoAction
           : endpoint.startsWith('mek-browser-') ? rt.mekBrowserEndpoint
           : endpoint.startsWith('mek-policy-') ? rt.mekPolicyAction

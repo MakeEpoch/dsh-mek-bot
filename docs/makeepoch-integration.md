@@ -93,3 +93,7 @@ DSH remains the clock owner. The optional schedule adapter uses public durable d
 ## Optional WechatPad bridge (2026-11-05)
 
 The native entry provides `mekBotBridge` v1 using public Cordis service registration. WechatPad owns connections, access control and versioned chat bindings; the Bot plugin owns identity validation, current parts, queue admission and visible-message filtering. Only Main Bots and existing groups are eligible. No upstream IM runner is installed. Native task coordination skips upstream goal runtime/skills and keeps one task ledger, while reusing the upstream state-free interaction ideas. See the [integration design](plans/2026-11-05-upstream-and-wechatpad.md).
+
+## WeChat target settings (0.2.9)
+
+The native details settings render an optional WechatPad-owned link editor. `wechatBotLinks` v1 provides credential-free target views and revisioned updates; Bot resolves stable Main Bot/group identity before forwarding. Optional service references are obtained and released in the injected scope. Transport availability, account login and policy states remain distinct from plugin absence/version mismatch. WechatPad owns discovery and persistence; the native client never reads account credentials or reply context tokens.

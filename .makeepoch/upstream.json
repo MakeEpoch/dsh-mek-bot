@@ -2,7 +2,7 @@
   "repository": "https://github.com/Fei2411/DS-Bot",
   "ref": "main",
   "commit": "71d344bf193f3f18185f25de3d8e5c483046910a",
-  "adapterVersion": "0.2.8",
+  "adapterVersion": "0.2.9",
   "verifiedDsh": "0.2.2-rc.1",
   "sourceDirectory": "ds-bot",
   "uiEntry": "app/ui/src/app.js",

@@ -8,14 +8,14 @@ import { install } from '../src/host/mek-wechat-bridge.js'
 import { fakeContext } from './fake-ctx.js'
 import { taskProgress } from '../src/client/mek/task-progress.js'
 
-async function fixture(t) {
+async function fixture(t, services = {}) {
   const home = mkdtempSync(join(tmpdir(), 'mek-wechat-bridge-'))
   writeFileSync(join(home, 'state.json'), JSON.stringify({ version: 1, mainBotIds: ['chief'],
     bots: { chief: { id: 'chief', name: 'Chief', sessionId: 'chief-current' }, worker: { id: 'worker', name: 'Worker', sessionId: 'worker-current' } },
     rooms: { group: { id: 'group', sessionId: 'group-current', name: 'Group', members: ['chief', 'worker'], log: [], seq: 0, sessions: {}, seen: {} } },
     agents: {}, exchanges: [], exchangeTurns: { 'chief-current': [2] }, questions: {}, prefs: {}, revision: 0,
   }))
-  const ctx = fakeContext(), prompts = []
+  const ctx = fakeContext({ services }), prompts = []
   ctx.sessionController = { prompt: async request => { prompts.push(request) } }
   const rt = createRuntime(ctx, { home, coordinateTasks: true })
   await rt.load()
@@ -73,4 +73,21 @@ test('native failure rows retain the producing part and redact credential failur
   assert.equal(items[0].sessionId, 'chief-current')
   assert.equal(items[0].message, '')
   assert.deepEqual(rt.displayItems('chief-current', [{ ...event, data: { ...event.data, turn: 2 } }], undefined, 2), [])
+})
+
+test('target settings report missing and incompatible plugins, and validate Main Bot identity before calling the service', async t => {
+  const services = {}, { rt } = await fixture(t, services)
+  const target = { kind: 'bot', id: 'chief' }
+  assert.equal((await rt.mekWechatAction('mek-wechat-view', { target })).status, 'plugin-unavailable')
+  services.wechatBotLinks = { version: 0 }
+  assert.equal((await rt.mekWechatAction('mek-wechat-view', { target })).status, 'incompatible')
+  const calls = []
+  services.wechatBotLinks = { version: 1, view: async value => ({ status: 'ready', target: value }), update: async (...args) => { calls.push(args); return true } }
+  assert.equal((await rt.mekWechatAction('mek-wechat-view', { target })).target.id, 'chief')
+  await rt.mekWechatAction('mek-wechat-update', { target, link: { chatId: 'fixture-user' } })
+  assert.equal(calls[0][0].id, 'chief')
+  await assert.rejects(rt.mekWechatAction('mek-wechat-update', { target: { kind: 'bot', id: 'worker' } }), /Ordinary Bots/)
+  rt.state.mainBotIds = []
+  await assert.rejects(rt.mekWechatAction('mek-wechat-view', { target }), /Ordinary Bots/)
+  assert.equal(calls.length, 1)
 })

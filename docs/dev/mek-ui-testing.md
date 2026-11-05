@@ -407,3 +407,16 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 - 独立用户级 systemd 单元执行停服、标准安装、启动，均 exit 0；操作回执 `/tmp/mek-dual-update-20261105/receipt.json` 为 `completed`。正式安装分别核对 96 / 65 个文件与验收归档一致，另一次独立读取确认版本和全部文件哈希。
 - `dsh-web.service` 恢复 `active/running`，MainPID 从 `1127791` 变为 `1276525`；原 GUI `192.168.10.5:3080` 返回预期认证响应 401。服务恢复不等于真实微信收发、真实模型任务或页面效果已经业务验收，本次没有发送测试消息或更改绑定。
 - 安装前尝试读取活动数量时，自动审批拒绝从 systemd 日志提取认证令牌，该脚本未执行，也没有换路径获取凭据。已向用户说明活动数量未知，随后按其明确授权完成更新与重启；没有把未知写成“无运行任务”。默认 Git 凭据的 Bot 推送返回 403 后，使用本机已登录的 gh 凭据完成推送；没有修改持久凭据配置。
+
+## 右侧微信关联与扫码用户选择（2026-11-05）
+
+- 版本 Bot 0.2.9 / WechatPad 0.1.9：入口改为主 Bot / Bot 群右侧详情 → 设置，分别固定显示私聊/群关联。支持选择 WechatPad 或微信机器人（iLink）已发现用户；收到消息后列出 ID/可用名称，无需手工查 ID。旧绑定保留；全局微信设置仅汇总。
+- Bot 全量 1786 项：1784 通过、0 失败、2 跳过；lint 无错误，生成一致性通过。回归包括插件缺失/接口不兼容、普通 Bot 拒绝，以及实际详情组件在 Bot/群换段后仍传递稳定逻辑身份。WechatPad 全量 201 项：199 通过，仍为前次基线复现的两项语音失败；新增目录持久化/不存消息及凭证、按目标筛选、扫码用户、离线保留与解绑、抢占拒绝和过期修订均通过。`test:package` 的独立安装检查通过。
+- 本轮初次沙箱内 Node 测试子进程出现 `execution_async_id` 原生断言，部分仅显示文件级结果；未当作验收，通过正常运行环境重跑得到上述完整计数。隔离 UI 夹具首次使用改名 patch 被宿主按 name mismatch 跳过，改为公开 profile bundle 配置加独立传输夹具；重跑使用唯一群名及原生导航真实标签，未把失败轮计作通过。
+- 隔离 `.dsh-test-upstream-027`，DSH 0.2.2-rc.1 + Node 24.14.1，3198/8798 本地脚本模型。`mek-wechat-settings-probe.mjs` 在真实安装的 WechatPad 业务服务上提供假 pad/weixin 连接，以归一化入站消息发现用户/群；不连接真实微信。`mek-wechat-settings-ui.mjs` 用独立 Chromium 验证真实原生主 Bot/群设置、微信机器人用户发现、选择保存/解绑、普通 Bot 服务端拒绝、连接失败保留绑定且允许解绑、服务启动中提示；页面异常为空。
+- 相同安装包另以原装 WechatPad Host entry 启动（连接禁用），确认真实公开 `wechatBotLinks` 可由 Bot 注入，面板显示“连接未启用”；再只从隔离 profile 移除微信 bundle，确认“插件未安装或未启用”状态。均未修改 DSH 或使用其安装内部实现。
+- 宽/窄屏 1200 / 390px：主 Bot 和群的关联区均为 287/287、357/357px（clientWidth/scrollWidth），无横向溢出。截图目视复核：[主 Bot](../images/wechat-settings-main-1200.png)、[主 Bot 窄屏](../images/wechat-settings-main-390.png)、[群](../images/wechat-settings-group-1200.png)、[群窄屏](../images/wechat-settings-group-390.png)、[连接禁用](../images/wechat-settings-disabled.png)、[插件缺失](../images/wechat-settings-unavailable.png)。
+- dsh-mek-bot：最终归档 SHA-256 `7f2c2b5049d4e8e471cfe2b0c0785cf2ecab08cc3d5b0d901ccf2cc6753305b1`，客户端 `cb3a33a102220f24984ec7202d022541b1263199949bd3eea1bc03553f7c8729`；源码/归档/隔离安装 96 个文件逐字节一致。
+- dsh-mek-wechatpad：最终归档 SHA-256 `5f2ec510c0be5a7a134b7a6391f6485700ff41029f4755ea65aca8b523e12028`，客户端 `4fd384b65ad3926b393ba97e8ec2f0173900a9a5ba840a8671ca727f8893d761`；源码/归档/隔离安装 67 个文件逐字节一致。
+
+真实微信网络收发和真实模型质量未验收；本轮 UI 及关联数据均为隔离合成数据。正式更新另记安装回执，不将离线/隔离结果写成真实微信验收。
