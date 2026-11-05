@@ -2,6 +2,7 @@ import { createElement as h, useCallback, useEffect, useLayoutEffect, useMemo, u
 import { call } from '../../../ds-bot/src/client/api.js'
 import { Bubbles, ChatRows, Shimmer } from '../../../ds-bot/src/client/cells.js'
 import { ComposerPlus, ComposerVoice } from '../../../ds-bot/src/client/composer.js'
+import { sendsOnEnter } from '../../../ds-bot/src/client/enter-key.js'
 import { t } from '../../../ds-bot/src/client/i18n.js'
 import { ArrowUpIcon, CloseIcon } from '../../../ds-bot/src/client/icons.js'
 import { imageFiles, readImages, requestId } from './image-input.js'
@@ -133,6 +134,7 @@ export function Composer({ sessionId, placeholder, disabled, onSend, actions, us
       if (active.current) setPreparing(pending.current > 0)
     })
   }
+  const enterToSend = useRoster(state => sendsOnEnter(state.prefs))
   useLayoutEffect(() => {
     const node = field.current
     node.style.height = 'auto'
@@ -192,14 +194,16 @@ export function Composer({ sessionId, placeholder, disabled, onSend, actions, us
           },
           onKeyDown: (event) => {
             if (mentions.keydown(event)) return
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            if (event.key === 'Enter' && enterToSend && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && event.keyCode !== 229 && !event.nativeEvent.isComposing) {
               event.preventDefault()
-              void submit()
+              if (!text.trim() && images.length === 0 && actions.steerQueued && !event.repeat) {
+                void actions.steerQueued(sessionId).then(result => { if (result === 'failed') setError(t('Could not steer queued messages')) }, failure => setError(failure.message))
+              } else void submit()
             }
           },
         })),
       h('div', { className: 'dsb-composer-trailing' },
-        h(ComposerVoice, { sessionId, inputActions, actions, useUi }),
+        h(ComposerVoice, { sessionId, inputActions, actions, useUi, useRoster }),
         h('button', { type: 'button', className: 'dsb-send', disabled: disabled || sending || preparing || (text.trim() === '' && images.length === 0), 'aria-label': t('Send message'), title: t('Send message'), onClick: () => { void submit() } }, h(ArrowUpIcon)))))
 }
 
@@ -250,8 +254,8 @@ export function Chat({ sessionId, team, children }) {
           h(ChatRows, { items: view.items, sessionId, roster, actions, useUi: hooks.useUi, clock: true }),
           pending.length ? h('div', { className: 'dsb-pending' }, h(ChatRows, { items: pending, sessionId, roster, actions })) : null,
           stream?.text ? h(Bubbles, { texts: [stream.text], roster, selfId: bot?.id, actions, streaming: true, sessionId }) : null,
-          question ? h(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true }) : null,
-          pendingView ? h(PendingView, { key: JSON.stringify([sessionId, pendingView.id]), sessionId, view: pendingView, actions, inline: true }) : null,
+          question ? h(PendingQuestion, { key: JSON.stringify([sessionId, question.id]), sessionId, question, actions, inline: true, enterToSend: sendsOnEnter(roster.prefs) }) : null,
+          pendingView ? h(PendingView, { key: JSON.stringify([sessionId, pendingView.id]), sessionId, view: pendingView, actions, inline: true, enterToSend: sendsOnEnter(roster.prefs) }) : null,
           children,
           // This is transient presentation, never a row in the Session history.
           h('div', { 'data-chat-running': '' })))),

@@ -1,3 +1,5 @@
+import { steerQueued } from '../enter-steer.js'
+import { currentPart } from '../text.js'
 import { call } from '../api.js'
 
 // The Agent remains a row in the Bot team. Its plain conversations open through
@@ -8,6 +10,13 @@ export function attachAgentActions(team, ctx) {
   const open = sessionId => { ctx.uiWorkspace.openSession(sessionId); ctx.layout.selectPanel(null) }
   const recent = agentId => [...(roster().agentsById[agentId]?.sessions ?? [])].sort((a, b) => (ctx.sessions.list.getSnapshot().byId[b]?.updatedAt ?? 0) - (ctx.sessions.list.getSnapshot().byId[a]?.updatedAt ?? 0))
   Object.assign(team.actions, {
+    steerQueued: async id => {
+      if (!ctx.sessions.retain) return 'unavailable'
+      const bot = roster().byId[id]
+      if (!bot) return 'unavailable'
+      const reference = ctx.sessions.retain(currentPart(bot), { source: 'mekBotSteer' })
+      try { const binding = await reference.ready; return await steerQueued(binding.session) } finally { reference.release() }
+    },
     addAgent: async () => { const agent = await after(call('add-agent')); if (agent.sessions[0]) open(agent.sessions[0]); return agent },
     openAgentSession: open,
     beginAgentRename: sessionId => team.ui.set(state => ({ ...state, renameAgent: sessionId })),

@@ -381,3 +381,19 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 - 本轮不新建 GitHub Release、npm 或桌面发布渠道，不改上游 `v0.2.7` 标签。源码 push、tgz 生成与正式 DSH 安装是不同步骤；发布提交 `dfb636c` 已推送到 `main`，发布阶段未安装或重启。真实 DSH 界面、真实 Markdown、Desktop、触屏及其他浏览器/主题仍未验收。
 - **后续授权安装（2026-11-05 11:38，北京时间）**：用户随后明确要求安装并重启。使用当前服务同一 CLI（DSH `0.2.2-rc.1`），通过标准 `dsh plugin --profile web add -w` 将插件从 **0.2.6 → 0.2.7**；没有升级 DSH 主体。缓存 tgz SHA-256 为 `b2d85fac8e65fc4cb49edb360c9cfdb2bbde57a5c7522ed3aa674443739e4b0f`，安装目录客户端哈希与该发布包一致。
 - 安装由独立用户级 systemd 单元完成，停服、标准安装、启动命令均 exit 0；操作回执在 11:38:07 完成。原 `dsh-web.service` 已恢复 `active/running`、PID 已更换，原 GUI `192.168.10.5:3080` 返回预期认证响应 401。保留小范围 profile 元数据备份，其他依赖及 bundle 声明、peer 策略不变；未运行功能测试或浏览器验证，服务恢复不等于修复效果已验收。
+
+## 2026-11-05 上游 v0.2.7 与 WechatPad 关联验收
+
+- 基线：下游 `1b79bb5`；上游稳定版 `71d344b`，dev `1f5b21a` 中仅选择调度兼容、工具装配和群消息观察 seam。任务/目标的取舍见 [本次设计](../plans/2026-11-05-upstream-and-wechatpad.md)。
+- 源码版本：Bot 0.2.8、WechatPad 0.1.8。客户端 SHA-256：Bot `7e197454033b0e328b6736c0943a35cfc7a494f28fc9ed2f39c460747b4e104b`；WechatPad `23cca2f265ba8eea655fa3fea169d13393e7ca2131f797f847e7938e660da9b9`。
+- 最终包 SHA-256：Bot `706b108a1def3105d571f8e5bbc8770b4fd132c0ec848e4559e69fa2891f79a2`；WechatPad `3f1df70e5eec569103c1ca771c98be6f6cf3a0051f8a2602b38b0b0d3177d09c`。源码、归档、隔离安装分别核对 96 / 65 个文件，均逐字节一致。功能冻结后的包通过原生模型选择/委派/群回复与双插件桥联调；随后仅修正打包 README 的链接，最终包再次安装并核对文件。UI 与集成测试对应同一客户端和运行代码。
+- Bot 全量 1784 项：1782 通过、0 失败、2 跳过；lint 无错误、生成一致性通过。新增检查覆盖主 Bot 限制、当前分段、降级/删除拒绝、可见消息与隐藏回合隔离、验收计数以及错误记录的来源分段和凭据失败脱敏。
+- WechatPad 全量 198 项：196 通过、2 失败。失败为 `Pad sends real HTTP image/voice/file shapes, route credentials and do not retry uncertain uploads`、`pad api: voice benign ret is endpoint-scoped and structured errors stay readable`；在修改前 HEAD 的独立工作树运行同名测试也失败，本轮未修改语音接口。新增绑定/作用域检查均通过；`test:package` 在独立安装中通过 Host/Client 和运行依赖验证。不可将这份全量结果写为全绿。
+- 集成环境：独立 `.dsh-test-upstream-027`，DSH 0.2.2-rc.1、Node 24.14.1，3198/8798 本地脚本模型；单元 harness 保留 0.2.2-alpha.2。正式微信连接在隔离 profile 中禁用。
+- 实际 DSH 通过：模型选择、私聊委派、普通群回复；设计→用户批准→步骤验收→实现→整体验收的单一任务闭环；真实一次性时钟→持久回执→唯一待办，不派发成员。
+- `dev/mek-wechatpad-probe.mjs` 只在 `.dsh-test-*` 中提供模拟传输，`dev/mek-wechatpad-smoke.mjs` 驱动两个真实安装插件，验证主 Bot/微信私聊、Bot 群/微信群、成员名字回传、原设置 facade 的可选服务可用、普通 Bot 伪造绑定拒绝、删除目标后无普通 Session 回退；并核对 Bot Session 没有登记成普通微信会话。没有连接真实微信。
+- 真实 Chrome 确认 Bot 顶部导航、现有详情/待办/任务标签和微信设置入口。扩展截图接口出现 `Page.captureScreenshot` relay 超时，未把该截图算作通过。独立 Chromium 使用全新浏览器上下文访问同一隔离 DSH，以减少动态效果保存静态证据，页面异常为空。
+- 浏览器 `dev/mek-upstream-ui.mjs` 核对私聊候选只有“Chief”，不含 Coder/Tester；填写 `@chatroom` 后切成 Bot 群候选。1200 / 390px：任务阶段区为 269/269、339/339px（clientWidth/scrollWidth）；关联卡为 562/562、356/356px，均无横向溢出。截图经目视复核：[阶段宽屏](../images/mek-upstream-stages-1200.png)、[阶段窄屏](../images/mek-upstream-stages-390.png)、[关联宽屏](../images/wechatpad-bot-links-1200.png)、[关联窄屏](../images/wechatpad-bot-links-390.png)。
+- 初次集成夹具缺少假连接配置、群轮次尚未结算就检查历史；初次浏览器脚本命中菜单动画及选择器命名问题。调整夹具、等待实际状态并为选择器增加明确可访问名称后完整重跑通过。实际设置上下文暴露了可选服务应从注入子作用域保留的问题，已修复并补回归；失败轮不算最终通过。
+
+本轮没有安装或重启正式服务，没有推送或发布。真实微信账号/网络投递、Bot 产物文件自动回传、跨端审批、真实模型执行质量、Desktop 和完整主题矩阵未验收；这些不属于本轮已验证能力。隔离 web/mock 进程已停止，3198/8798 已确认关闭；浏览器工具确认关闭了可识别的测试标签，另一个旧 ownership 记录连续不在清单中，已按工具提示放弃该记录，无法宣称其原标签已确认关闭。

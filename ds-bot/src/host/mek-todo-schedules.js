@@ -2,7 +2,7 @@
 // reminder text is never interpreted as permission to dispatch a second task.
 import { randomUUID } from 'node:crypto'
 import { clone, own, refuse, safeText, teamTool, writable } from './mek-safe.js'
-import { selectorOf } from './schedules.js'
+import { selectorOf, scheduleSession, createSchedule, deleteSchedule, scheduleHistory } from './schedules.js'
 import { textOf } from './text.js'
 
 const marker = id => `[mek-todo-rule:${id}]`
@@ -45,14 +45,14 @@ export function install(rt) {
     for (const instance of Object.values(data().instances)) if (instance.notification === 'sending') instance.notification = 'unknown'
     const catalog = await service.catalog()
     for (const rule of Object.values(data().rules)) {
-      const bindings = catalog.filter(entry => entry.prompt.includes(marker(rule.id)))
-      rule.bindings = bindings.map(entry => ({ id: entry.id, sessionId: entry.sessionId }))
+      const bindings = catalog.filter(entry => entry.prompt?.includes(marker(rule.id)))
+      rule.bindings = bindings.map(entry => ({ id: entry.id, sessionId: scheduleSession(entry) }))
       rule.nextAt = bindings.filter(entry => entry.status === 'active').map(entry => entry.scheduledAt).sort()[0] ?? null
       if (rule.state === 'creating' && bindings.length) rule.state = 'active'
       if (!rule.enabled) continue
       const records = []
       for (const binding of bindings) {
-        const page = await service.history({ sessionId: binding.sessionId, id: binding.id, limit: 100 })
+        const page = await scheduleHistory(service, binding)
         for (const record of page.records ?? []) records.push(record)
       }
       for (const record of records.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))) {
@@ -80,7 +80,7 @@ export function install(rt) {
         }
         if (instance.notification === 'pending') await notify(rule, instance)
       }
-      if (rule.when.kind === 'at' && bindings.length && bindings.every(binding => binding.status === 'inactive') && Object.values(data().instances).some(item => item.ruleId === rule.id)) {
+      if (rule.when.kind === 'at' && bindings.length && bindings.every(binding => ['inactive', 'ended'].includes(binding.status)) && Object.values(data().instances).some(item => item.ruleId === rule.id)) {
         rule.enabled = false; rule.state = 'ended'; rule.nextAt = null
       }
     }
@@ -115,7 +115,7 @@ export function install(rt) {
         data().rules[rule.id] = rule; await save()
         try {
           const sessionId = rt.chatOf(coordinator(rule))
-          const record = await service.create(sessionId, { title, prompt: `${marker(rule.id)}\nInternal clock wake only. The plugin reads the persisted receipt. Do not create tasks, use tools, or perform this work from this message; end this turn silently.`, ...selector })
+          const record = await createSchedule(service, sessionId, { title, prompt: `${marker(rule.id)}\nInternal clock wake only. The plugin reads the persisted receipt. Do not create tasks, use tools, or perform this work from this message; end this turn silently.`, ...selector })
           rule.bindings = [{ id: record.id, sessionId }]; rule.nextAt = record.scheduledAt; rule.state = 'active'
         } catch (error) { rule.state = 'unknown'; rule.error = error.message }
         await save(); return clone(rule)
@@ -125,19 +125,19 @@ export function install(rt) {
       if (endpoint === 'mek-todo-schedule-resume') {
         if (rule.enabled) return clone(rule)
         const selector = selectorOf(rule.when)
-        const old = (await service.catalog()).filter(entry => entry.prompt.includes(marker(rule.id)))
+        const old = (await service.catalog()).filter(entry => entry.prompt?.includes(marker(rule.id)))
         if (old.length) refuse('A previous schedule binding still exists. Pause it again before resuming.')
         rule.enabled = true; rule.state = 'creating'; rule.acceptAfter = Date.now(); await save()
         try {
           const sessionId = rt.chatOf(coordinator(rule))
-          const record = await service.create(sessionId, { title: rule.title, prompt: `${marker(rule.id)}\nInternal clock wake only. The plugin handles the receipt; end silently without tools.`, ...selector })
+          const record = await createSchedule(service, sessionId, { title: rule.title, prompt: `${marker(rule.id)}\nInternal clock wake only. The plugin handles the receipt; end silently without tools.`, ...selector })
           rule.bindings = [{ id: record.id, sessionId }]; rule.nextAt = record.scheduledAt; rule.state = 'active'
         } catch (error) { rule.state = 'unknown'; rule.error = error.message }
         await save(); return clone(rule)
       }
       if (endpoint !== 'mek-todo-schedule-pause') refuse('This rule operation is not available.')
       rule.enabled = false; rule.state = 'paused'; await save()
-      for (const binding of await service.catalog()) if (binding.prompt.includes(marker(rule.id))) await service.delete({ sessionId: binding.sessionId, id: binding.id })
+      for (const binding of await service.catalog()) if (binding.prompt?.includes(marker(rule.id))) await deleteSchedule(service, binding)
       return clone(rule)
     })
   }

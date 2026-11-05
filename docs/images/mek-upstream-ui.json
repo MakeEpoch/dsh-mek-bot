@@ -1,0 +1,30 @@
+{
+  "widths": [
+    {
+      "viewport": 1200,
+      "width": 269,
+      "scroll": 269
+    },
+    {
+      "viewport": 390,
+      "width": 339,
+      "scroll": 339
+    },
+    {
+      "linksViewport": 1200,
+      "width": 562,
+      "scroll": 562
+    },
+    {
+      "linksViewport": 390,
+      "width": 356,
+      "scroll": 356
+    }
+  ],
+  "errors": [],
+  "choices": [
+    "请选择",
+    "Chief"
+  ],
+  "source": "isolated DSH with installed packages and real Chromium"
+}

@@ -89,3 +89,7 @@ DSH remains the clock owner. The optional schedule adapter uses public durable d
 ### 顶部收藏与临时会话（2026-11-03）
 
 顶部只保留主 Bot、收藏项及当前临时会话，其他 Bot/群收在右侧图标列表。点击列表会话直接选择；星标独立切换收藏而不切换会话。收藏沿用持久化 `pinned` 标记，既有置顶保留；取消收藏后若仍选中则保留到切走。列表包含非主 Bot 和群聊（含此前隐藏的会话），收藏会恢复其可见性；不创建第二套 Bot 身份或会话。收起条目的消息/交互/任务未读汇总到入口，原任务标签和条目已读规则继续生效。弹层限制在 scene 内，支持 Escape、键盘聚焦和退场；原生 DSH 侧栏保持不变。任务卡片标题在侧面板内收缩换行，不依赖样式加载顺序。
+
+## Optional WechatPad bridge (2026-11-05)
+
+The native entry provides `mekBotBridge` v1 using public Cordis service registration. WechatPad owns connections, access control and versioned chat bindings; the Bot plugin owns identity validation, current parts, queue admission and visible-message filtering. Only Main Bots and existing groups are eligible. No upstream IM runner is installed. Native task coordination skips upstream goal runtime/skills and keeps one task ledger, while reusing the upstream state-free interaction ideas. See the [integration design](plans/2026-11-05-upstream-and-wechatpad.md).

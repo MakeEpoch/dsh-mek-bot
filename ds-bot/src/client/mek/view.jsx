@@ -9,6 +9,7 @@ import { SHELL_CSS, CONVERSATION_CSS } from '../styles.js'
 import { SIDEBAR_CSS } from '../sidebar.js'
 import { BOT_SETTINGS_CSS } from '../bot-settings.js'
 import { GROUP_SETTINGS_CSS } from '../group-settings.js'
+import { TURN_ERROR_CSS } from '../turn-error.js'
 import { MODEL_CSS } from '../model-menu.js'
 import { FOLDER_CSS } from '../folder-menu.js'
 import { AVATAR_LIBRARY_CSS } from '../avatar-library.js'
@@ -36,16 +37,16 @@ import { TeamHeader, TEAM_HEADER_CSS } from './header.jsx'
 import { GroupChat } from './group-chat.jsx'
 import { NativeQuestion } from './native-question.jsx'
 import { SessionPermissions, PERMISSION_CSS } from './permissions.jsx'
-import { TODO_CSS } from './todos.jsx'
+import { TODO_CSS, TASK_PROGRESS_CSS } from './todos.jsx'
 import { TODO_SCHEDULE_CSS } from './todo-schedules.jsx'
 import { ConversationTaskPanel, TASK_PANEL_CSS } from './task-panel.jsx'
 import { createTaskInbox } from './task-inbox.js'
 import { mountScene, sceneRoot, scopeCss } from './dom.js'
 
-const STYLES = SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS + HANDOFF_CSS + SIDE_CSS + appCss
+const STYLES = TASK_PROGRESS_CSS + TURN_ERROR_CSS + SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS + HANDOFF_CSS + SIDE_CSS + appCss
 
 function TeamView({ ctx, requests, viewport }) {
-  const team = useMemo(() => { const value = createTeam(); value.taskInbox = createTaskInbox(); value.actions.schedules = undefined; attachAgentActions(value, ctx); return value }, [ctx])
+  const team = useMemo(() => { const value = createTeam(); value.taskInbox = createTaskInbox(); value.actions.schedules = undefined; value.actions.composeGoal = undefined; attachAgentActions(value, ctx); return value }, [ctx])
   useSyncExternalStore(team.taskInbox.subscribe, team.taskInbox.getSnapshot)
   useEffect(() => {
     const stopWatching = watchDeletedSubjects(team)

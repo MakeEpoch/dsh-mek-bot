@@ -8,6 +8,7 @@ import { install as installWorkflows } from './src/host/mek-workflows.js'
 import { install as installTeam } from './src/host/mek-team.js'
 import { install as installTodos } from './src/host/mek-todos.js'
 import { install as installTodoSchedules } from './src/host/mek-todo-schedules.js'
+import { install as installWechatBridge } from './src/host/mek-wechat-bridge.js'
 import { dshHomeOf } from './src/host/folders.js'
 
 export { inject }
@@ -28,4 +29,5 @@ export function apply(ctx, config = {}) {
   installTeam(rt)
   installTodos(rt)
   installTodoSchedules(rt)
+  installWechatBridge(rt)
 }
