@@ -6,6 +6,7 @@ import { registerTeamTool } from './team-registration.js'
 import { output } from './tools.js'
 import { textOf } from './text.js'
 import { SOURCE_KIND, TEXT_KEPT } from './constants.js'
+import { messagePreview } from './mek-message-preview.js'
 
 const final = task => ['completed', 'cancelled'].includes(task?.status)
 const completedReport = work => work.report?.status === 'completed'
@@ -35,6 +36,7 @@ const rules = `## Task ownership (takes precedence over the ordinary team messag
 - Tool approvals and secrets are not ordinary Bot decisions. Never approve your own tools, fabricate user authorization, or request credentials in an ordinary question. The user answers real approval cards and secure credential requests.`
 
 export function install(rt) {
+  rt.mekMessagePreview = (source, body) => messagePreview(rt.state, source, body)
   const { ctx, state } = rt
   const own = (table, id) => rt.own(table, id)
   const data = () => {

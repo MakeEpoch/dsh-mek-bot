@@ -302,7 +302,15 @@ export function AssistantCell({ node, groupPart, sessionId, openFile, fileMentio
     texts.length ? h(Bubbles, { texts, roster, selfId, actions, streaming: running, sessionId, msgKey: `${sessionId}:${data.turn}:${node.key ?? data.seq ?? ''}`, useUi, mentions, fold: FOLD_HUGE, time: speaker === undefined ? data.time : undefined }) : null)
 }
 
-function EventLine({ prefix, bots, joiner = t('and'), onOpen, whole = false }) {
+function EventLine({ prefix, bots, joiner = t('and'), onOpen, whole = false, preview, exchangeId }) {
+  if (whole && bots.length === 1 && preview) {
+    const title = preview.title || t(preview.kind === 'request' ? preview.formal ? 'Delegated task' : 'Incoming message' : preview.kind === 'reply' ? 'Work reply' : 'Stop request')
+    return h('div', { className: 'bt-event bt-event-preview' },
+      h('button', { type: 'button', className: 'bt-event-delegation', 'data-exchange-id': exchangeId, onClick: () => onOpen?.(bots[0]), 'aria-label': t('Open exchange details: {title}', { title }) },
+        h('span', { className: 'bt-event-identity' }, h('span', null, prefix), h(BotMark, { bot: bots[0], size: 16 }), h('span', null, bots[0].name)),
+        h('span', { className: 'bt-event-task-title' }, title),
+        preview.summary ? h('span', { className: 'bt-event-task-summary' }, preview.summary) : null))
+  }
   if (whole && bots.length === 1) {
     return h('div', { className: 'bt-event' },
       h('button', { type: 'button', className: 'bt-event-whole', title: bots[0].name, onClick: () => onOpen?.(bots[0]) },
@@ -638,7 +646,7 @@ function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDel
       if (row.role === 'report') return h(GroupEvent, { key, prefix: t('Replies from'), room: roster.roomsById[row.roomId], name: t('a group chat'), roster, actions })
       const other = roster.byId[row.botId] ?? { id: row.botId, name: row.name ?? t('a Bot'), color: 'gray' }
       const prefix = { stopped: t('Stopped by'), reply: t('Reply from') }[row.role] ?? t('Message from')
-      return h(EventLine, { key, prefix, bots: [other], onOpen: () => { if (selfId && other.id) actions.openExchange(selfId, other.id) }, whole: true })
+      return h(EventLine, { key, prefix, bots: [other], onOpen: () => { if (selfId && other.id) { if (row.exchangeId) actions.openExchange(selfId, other.id, row.exchangeId); else actions.openExchange(selfId, other.id) } }, whole: true, preview: row.preview, exchangeId: row.exchangeId })
     }
     default: return null
   }

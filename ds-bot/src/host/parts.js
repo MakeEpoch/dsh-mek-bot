@@ -1402,7 +1402,8 @@ export function install(rt) {
           time: event.time,
         })
       } else if (source?.kind === SOURCE_KIND && source.handoff !== true && source.deferred !== true && ['request', 'reply', 'report', 'stopped'].includes(source.role)) {
-        stamp(event, { kind: 'event', role: source.role, botId: source.senderSessionId ?? null, name: source.senderName ?? null, roomId: source.roomId ?? null, time: event.time })
+        const preview = rt.mekMessagePreview?.(source, textOf(event.data.content))
+        stamp(event, { kind: 'event', role: source.role, botId: source.senderSessionId ?? null, name: source.senderName ?? null, roomId: source.roomId ?? null, time: event.time, ...(preview ? { preview, exchangeId: source.exchangeId ?? null } : {}) })
       }
     }
     return items

@@ -126,7 +126,7 @@ export const TEAM_HEADER_CSS = `
 .mek-team-frame .dsb-scroll{padding-top:16px}
 .mek-team-frame .dsb-head{height:0;padding:0}
 .mek-team-frame .dsb-head::before{display:none}
-.bt-panel{top:40px}
+.bt-panel,.bt-pane{top:40px}
 .bt-panel[data-overlay]{width:100%}
 .bt-settings-team{padding:0;overflow:hidden;min-height:0}
 .bt-settings-team .mek-overview nav>button{flex:none;white-space:nowrap}

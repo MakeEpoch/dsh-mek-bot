@@ -1,0 +1,26 @@
+{
+  "widths": [
+    {
+      "viewport": 1200,
+      "width": 558,
+      "scroll": 558
+    },
+    {
+      "viewport": 390,
+      "width": 354,
+      "scroll": 354
+    },
+    {
+      "viewport": 390,
+      "detail": true,
+      "left": 0,
+      "width": 390,
+      "scroll": 390
+    }
+  ],
+  "errors": [],
+  "taskTitle": "调整编辑入口并完成验证",
+  "replySummary": "MEK_COORDINATOR_DESIGN design prepared for approval.",
+  "exactMessageFocused": true,
+  "source": "real isolated DSH and installed package with scripted model"
+}

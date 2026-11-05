@@ -447,3 +447,17 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 Bot `30545e8`、WechatPad `0259900` 已快进并推送各自 MakeEpoch main。沿用本会话更新/重启授权，以标准 CLI 离线安装 Bot **0.2.9 → 0.2.10**、WechatPad **0.1.9 → 0.1.10**；未升级 DSH，未创建外部发布。备份 `/home/hapi/.dsh/profiles/web/.plugin-manager/backups/mek-live-0210-0110-20261105`，回执 `/tmp/mek-live-update-20261105/receipt.json` 为 completed。
 
 停服/安装/启动均 exit 0，正式版本及 96 / 69 个文件再次独立校验与上方验收归档一致。其他 profile 声明、peer 策略和连接配置未变；停服后的 Bot 状态、绑定及发现目录在安装期间未改写。服务 active/running，MainPID `1354933 → 1459808`、NRestarts=0，原 GUI 返回预期认证响应 401。未读取认证令牌、未发送真实微信测试消息、未更改正式绑定或队列；手机端输入状态展示仍待真实验收。独立浏览器已退出，本轮隔离 web/mock 已停且 3198/8798 已关闭。
+
+## 委派往来上下文与精确定位（2026-11-05）
+
+- 基线 `116170c`，独立分支 `fix/delegation-preview`，Bot 0.2.11。保留过程折叠：正式派工默认显示任务标题，旧记录回退到原始派工摘要；回报显示该条消息的结构化结果摘要，叫停显示原因，排除协议 JSON 和内部验收提示。旧回报不借用后来修订的报告。点击定位并高亮具体往来，仅滚动详情日志，不影响外层页面。
+- 同时修复原生往来弹层保留旧 280px 侧栏空间，以及标题被原生导航遮挡的问题；弹层使用整个 Bot 场景宽度并位于现有导航下方。未移动 DSH 侧栏展开按钮。
+- 最终全量 1793 项：1791 通过、0 失败、2 跳过；lint 无错误，生成一致性及 `git diff --check` 通过。回归覆盖命名/旧委派、历史报告版本、摘要截断、协议排除、隐藏轮次不泄露、原生事件点击参数及现有新建会话行为。
+- 独立 `.dsh-test-delegation-preview`，DSH 0.2.2-rc.1、Node 24.14.1、Chrome 156.0.8078.79；3197/8797 本地脚本模型。实际候选包安装后，由主 Bot 创建正式任务、成员报告并返回原派发人。`dev/mek-delegation-preview-ui.mjs` 在真实 DSH 中验证收到消息/回报卡片、精确往来定位、导航与关闭按钮可见、页面无异常；查看前后目标任务及工作状态/报告一致。浏览器通过独立 Playwright 上下文运行，延续前轮 Chrome 扩展截图接口失败后的备用路径。
+- 1200/390px 卡片 clientWidth/scrollWidth 为 558/558、354/354；390px 详情为 390/390 且左边界为 0，无横向溢出。截图已目视复核：[宽屏派工](../images/mek-delegation-preview-1200.png)、[窄屏派工](../images/mek-delegation-preview-390.png)、[窄屏详情定位](../images/mek-delegation-focus-390.png)、[回报摘要](../images/mek-delegation-result-1200.png)，量测见 [JSON](../images/mek-delegation-preview.json)。截图中的两条同名委派来自隔离夹具重跑，不是正式任务。
+- 最终包 SHA-256 `67cfa9ef74e8e0d4d3be029cf818874167d8c033acc1e995c078886b0774544d`；客户端 `5932a526d173143c1496fcc346cf860abcf3ed583171e9a00cd2199f81d93944`。源码/归档/隔离安装共 97 个文件逐字节一致。
+- 首轮测试存在工作目录依赖和沙箱端口限制，改用既有 harness 及正常测试运行环境后完整重跑。集成夹具初次早于实际回报投递断言，改为等待真实 exchange；截图复核发现上述窄屏问题并补充几何与遮挡断言，失败轮不计最终通过。完整主题矩阵、Desktop、真实模型质量和微信网络未验收。
+
+本轮未安装或重启正式 DSH；正式实例有并行定时任务改造，未中断其执行，也未合入其未提交代码。测试使用合成数据，未向正式 Bot 或微信群发送测试消息。
+
+独立浏览器已在 finally 中退出；本轮隔离 web/mock 均已停止，3197/8797 端口确认关闭。

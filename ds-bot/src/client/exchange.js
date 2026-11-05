@@ -10,14 +10,23 @@ import { t } from './i18n.js'
 
 const SHEET_EXIT_MS = 220
 
-export function ExchangeDialog({ pair, roster, actions }) {
+export function ExchangeDialog({ pair, focusId, roster, actions }) {
   const [entries, setEntries] = useState(null)
   const [leaving, setLeaving] = useState(false)
   const log = useRef(null)
   const atEnd = useRef(true)
+  const focused = useRef(null)
   useLayoutEffect(() => {
+    if (entries !== null && focusId && focused.current !== focusId && log.current) {
+      const target = [...log.current.querySelectorAll('[data-exchange-id]')].find(node => node.dataset.exchangeId === focusId)
+      if (target) {
+        const box = target.getBoundingClientRect(), viewport = log.current.getBoundingClientRect()
+        log.current.scrollTop += box.top - viewport.top - Math.max(0, (log.current.clientHeight - box.height) / 2)
+        focused.current = focusId; atEnd.current = false; return
+      }
+    }
     if (entries !== null && atEnd.current && log.current) log.current.scrollTop = log.current.scrollHeight
-  }, [entries])
+  }, [entries, focusId])
   // The sheet slides back down before it unmounts.
   const close = () => {
     if (leaving) return
@@ -67,7 +76,7 @@ export function ExchangeDialog({ pair, roster, actions }) {
               const lead = h('span', { className: 'bt-lead' }, h(BotMark, { bot: bot, size: 22 }))
               return h(Fragment, { key: entry.id },
                 showDay ? h('time', { className: 'bt-time' }, dayLabel(entry.time)) : null,
-                h('div', { className: 'bt-group-msg' },
+                h('div', { className: 'bt-group-msg', 'data-exchange-id': entry.id, 'data-focused': entry.id === focusId || undefined },
                   h('span', { className: 'bt-group-name', style: flat ? undefined : { color: inkText(colorOf(bot)) } }, flat ? lead : null, bot.name),
                   h(Bubbles, { texts: [stripLongNote(entry.text)], roster, selfId: bot.id, actions, whole, lead: flat ? null : lead })))
             })),

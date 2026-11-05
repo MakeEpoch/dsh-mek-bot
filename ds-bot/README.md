@@ -2,9 +2,9 @@
 
 MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多 Bot 协作插件**。在现有 DeepSeek Harness 工作区中组织长期助手：由一个 Bot 接收需求，调用其他 Bot 分工处理，收集问题和结果，再审查、返工并向用户交付。
 
-本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.10**，已合并上游 **v0.2.7**（含此前版本）；逐版本的吸收情况见[上游合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)。
+本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.11**，已合并上游 **v0.2.7**（含此前版本）；逐版本的吸收情况见[上游合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)。
 
-0.2.10 优先复用上游群聊、记忆、模型与输入能力，并在现有任务体系中吸收阶段概览思想；WechatPad 关联通过可选服务接入。源码及隔离验证不代表正式 DSH 已安装生效。
+0.2.11 优先复用上游群聊、记忆、模型与输入能力，并在现有任务体系中吸收阶段概览思想；WechatPad 关联通过可选服务接入。源码及隔离验证不代表正式 DSH 已安装生效。
 
 ![dsh-mek-bot 0.2.4：顶部 Bot 导航、任务摘要与 Bot 详情](https://raw.githubusercontent.com/MakeEpoch/dsh-mek-bot/main/docs/images/mek-bot-0.2.4.png)
 
@@ -136,7 +136,7 @@ cd ds-bot
 npm ci
 npm run build
 npm pack --ignore-scripts
-dsh plugin --profile web add -w ./dsh-mek-bot-0.2.10.tgz
+dsh plugin --profile web add -w ./dsh-mek-bot-0.2.11.tgz
 ```
 
 启用 bundle 后重启 DSH，不要同时启用原 `ds-bot` bundle。生产安装必须使用打包文件，禁止 `link:`、符号链接或直连开发源码。profile 保持 `autoInstallPeers: false`；宿主 API 由 DSH 加载器提供，不能安装第二份 Cordis、scope、tools 或 LLM 核心。
@@ -194,7 +194,7 @@ npm run lint
 
 ## 2026-11-05 上游复用与微信关联
 
-已吸收上游 v0.2.7 的群聊运行修复、记忆变更历史/单次恢复、新 Bot 默认模型、Enter 发送偏好及失败处理；选择性吸收 dev 的 DSH 0.2.2 调度兼容。包号 0.2.10 是下游版本，上游基线仍以 `.makeepoch/upstream.json` 为准。
+已吸收上游 v0.2.7 的群聊运行修复、记忆变更历史/单次恢复、新 Bot 默认模型、Enter 发送偏好及失败处理；选择性吸收 dev 的 DSH 0.2.2 调度兼容。包号 0.2.11 是下游版本，上游基线仍以 `.makeepoch/upstream.json` 为准。
 
 群目标继续采用现有待办、依赖和逐层验收；吸收上游目标对齐、阶段概览和防空转思想。右侧任务展开后显示阶段和已验收数量，目标与验收条件可展开查看，成员回报与已验收证据分别展示；不会因为阶段回报齐全自动验收整个任务。现有导航和标签位置不变。
 
@@ -203,3 +203,5 @@ WechatPad 0.1.10 可将微信私聊关联主 Bot、Pad 微信群关联 Bot 群�
 微信私聊关联沿用微信插件的“新消息处理方式”：打断时先取消当前主 Bot 私聊轮次，再提交新消息；Bot 群仍排队，不停止全群成员。原生输入框上方显示 DSH 实际待处理队列，支持立即介入或移除，仅展示用户来源消息。微信机器人输入状态根据实际私聊工作续期，结束、停止或解绑后清理；WechatPad 协议不支持该状态。
 
 移动端/窄屏将 Bot 列表、任务列表和 Bot 搜索收入顶部“···”，顶部保留会话导航和更多按钮；未读提示汇总到更多按钮。保留 DSH 侧栏展开按钮原位置，不合并宿主顶栏；宽屏直接入口不变。
+
+委派往来继续折叠，但“收到消息”默认显示正式任务标题；旧任务回退到原始派工摘要。回报显示对应消息的结果摘要，叫停显示停止要求，不将结构化 JSON 或内部验收提示当作摘要。点击仍打开完整往来，并定位高亮所点的消息。不会展开隐藏轮次、推理或改变任务验收状态。

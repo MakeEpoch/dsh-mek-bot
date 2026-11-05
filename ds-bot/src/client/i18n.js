@@ -5,6 +5,11 @@
 export const NAMESPACE = 'ds-bot'
 
 const ZH = {
+  'Delegated task': '委派任务',
+  'Incoming message': '收到的消息',
+  'Work reply': '任务回报',
+  'Stop request': '停止要求',
+  'Open exchange details: {title}': '查看往来详情：{title}',
   'Search Bots': '搜索 Bot',
   'Pending messages': '待处理消息',
   'Entering current turn': '正在送入当前轮次',

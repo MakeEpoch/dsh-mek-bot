@@ -33,6 +33,17 @@ const roster = { byId: { b: { id: 'b', name: 'Writer' } }, roomsById: {} }
 const MINUTE = 60_000
 const shape = rows => [...rows].map(row => (row.props.className === 'bt-time-sep' ? 'clock' : row.type.name === 'Bubbles' ? `bot:${row.props.texts.join('+')}` : row.type.name))
 
+test('a delegation preview makes the task visible while the existing click still opens the exchange', () => {
+  const opened = [], actions = { openExchange: (...args) => opened.push(args) }
+  const [node] = [...ChatRows({ items: [{ kind: 'event', role: 'request', botId: 'chief', name: 'Chief', exchangeId: 'work-fixture', preview: { kind: 'request', formal: true, title: 'Fix schedule permissions', summary: '' } }], sessionId: 'b', roster, actions })]
+  const rendered = node.type(node.props), button = rendered.children[0]
+  assert.equal(rendered.props.className, 'bt-event bt-event-preview')
+  assert.equal(button.props['aria-label'], 'Open exchange details: Fix schedule permissions')
+  assert.equal(button.children[1].children[0], 'Fix schedule permissions')
+  button.props.onClick()
+  assert.deepEqual(opened, [['b', 'chief', 'work-fixture']])
+})
+
 test('a Bot\'s messages in a row are one block', () => {
   const items = [
     { kind: 'user', text: 'hi', time: MINUTE },

@@ -148,6 +148,11 @@ var scopedWindow = new Proxy({}, {
 // src/client/i18n.js
 var NAMESPACE = "ds-bot";
 var ZH = {
+  "Delegated task": "委派任务",
+  "Incoming message": "收到的消息",
+  "Work reply": "任务回报",
+  "Stop request": "停止要求",
+  "Open exchange details: {title}": "查看往来详情：{title}",
   "Search Bots": "搜索 Bot",
   "Pending messages": "待处理消息",
   "Entering current turn": "正在送入当前轮次",
@@ -2386,7 +2391,7 @@ function useEscape(onClose) {
   }, []);
 }
 function usePaneLeft() {
-  const [paneLeft, setPaneLeft] = (0, import_react3.useState)(280);
+  const [paneLeft, setPaneLeft] = (0, import_react3.useState)(() => scopedDocument.body?.classList?.contains("mek-bot-scene") ? 0 : 280);
   (0, import_react3.useLayoutEffect)(() => {
     const column = scopedDocument.querySelector('[class*="_footArea"]')?.parentElement;
     if (column) setPaneLeft(Math.round(scopedRect(column).right));
@@ -8108,7 +8113,21 @@ function AssistantCell({ node, groupPart, sessionId, openFile, fileMentions, use
     texts2.length ? (0, import_react21.createElement)(Bubbles, { texts: texts2, roster, selfId, actions, streaming: running, sessionId, msgKey: `${sessionId}:${data.turn}:${node.key ?? data.seq ?? ""}`, useUi, mentions, fold: FOLD_HUGE, time: speaker === void 0 ? data.time : void 0 }) : null
   );
 }
-function EventLine({ prefix, bots, joiner = t("and"), onOpen, whole = false }) {
+function EventLine({ prefix, bots, joiner = t("and"), onOpen, whole = false, preview, exchangeId }) {
+  if (whole && bots.length === 1 && preview) {
+    const title = preview.title || t(preview.kind === "request" ? preview.formal ? "Delegated task" : "Incoming message" : preview.kind === "reply" ? "Work reply" : "Stop request");
+    return (0, import_react21.createElement)(
+      "div",
+      { className: "bt-event bt-event-preview" },
+      (0, import_react21.createElement)(
+        "button",
+        { type: "button", className: "bt-event-delegation", "data-exchange-id": exchangeId, onClick: () => onOpen?.(bots[0]), "aria-label": t("Open exchange details: {title}", { title }) },
+        (0, import_react21.createElement)("span", { className: "bt-event-identity" }, (0, import_react21.createElement)("span", null, prefix), (0, import_react21.createElement)(BotMark, { bot: bots[0], size: 16 }), (0, import_react21.createElement)("span", null, bots[0].name)),
+        (0, import_react21.createElement)("span", { className: "bt-event-task-title" }, title),
+        preview.summary ? (0, import_react21.createElement)("span", { className: "bt-event-task-summary" }, preview.summary) : null
+      )
+    );
+  }
   if (whole && bots.length === 1) {
     return (0, import_react21.createElement)(
       "div",
@@ -8456,8 +8475,11 @@ function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDel
       const other = roster.byId[row.botId] ?? { id: row.botId, name: row.name ?? t("a Bot"), color: "gray" };
       const prefix = { stopped: t("Stopped by"), reply: t("Reply from") }[row.role] ?? t("Message from");
       return (0, import_react21.createElement)(EventLine, { key, prefix, bots: [other], onOpen: () => {
-        if (selfId && other.id) actions.openExchange(selfId, other.id);
-      }, whole: true });
+        if (selfId && other.id) {
+          if (row.exchangeId) actions.openExchange(selfId, other.id, row.exchangeId);
+          else actions.openExchange(selfId, other.id);
+        }
+      }, whole: true, preview: row.preview, exchangeId: row.exchangeId });
     }
     default:
       return null;
@@ -9110,8 +9132,8 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     closePalette: (token) => {
       ui2.set((state) => state.palette && (token === void 0 || state.palette.token === token) ? { ...state, palette: null } : state);
     },
-    openExchange: (a, b) => {
-      if (a && b) ui2.set((state) => ({ ...state, exchange: [a, b] }));
+    openExchange: (a, b, exchangeId) => {
+      if (a && b) ui2.set((state) => ({ ...state, exchange: [a, b], exchangeFocus: exchangeId ?? null }));
     },
     openVoice: (id) => {
       if (id) ui2.set((state) => ({ ...state, voice: id, menu: null }));
@@ -13464,14 +13486,25 @@ ${listed}`, { axis: "y", ...QUICK_EDGES });
 // src/client/exchange.js
 var import_react37 = require("react");
 var SHEET_EXIT_MS = 220;
-function ExchangeDialog({ pair, roster, actions }) {
+function ExchangeDialog({ pair, focusId, roster, actions }) {
   const [entries2, setEntries] = (0, import_react37.useState)(null);
   const [leaving, setLeaving] = (0, import_react37.useState)(false);
   const log = (0, import_react37.useRef)(null);
   const atEnd = (0, import_react37.useRef)(true);
+  const focused = (0, import_react37.useRef)(null);
   (0, import_react37.useLayoutEffect)(() => {
+    if (entries2 !== null && focusId && focused.current !== focusId && log.current) {
+      const target = [...log.current.querySelectorAll("[data-exchange-id]")].find((node) => node.dataset.exchangeId === focusId);
+      if (target) {
+        const box = scopedRect(target), viewport = scopedRect(log.current);
+        log.current.scrollTop += box.top - viewport.top - Math.max(0, (log.current.clientHeight - box.height) / 2);
+        focused.current = focusId;
+        atEnd.current = false;
+        return;
+      }
+    }
     if (entries2 !== null && atEnd.current && log.current) log.current.scrollTop = log.current.scrollHeight;
-  }, [entries2]);
+  }, [entries2, focusId]);
   const close = () => {
     if (leaving) return;
     setLeaving(true);
@@ -13538,7 +13571,7 @@ function ExchangeDialog({ pair, roster, actions }) {
             showDay ? (0, import_react37.createElement)("time", { className: "bt-time" }, dayLabel(entry.time)) : null,
             (0, import_react37.createElement)(
               "div",
-              { className: "bt-group-msg" },
+              { className: "bt-group-msg", "data-exchange-id": entry.id, "data-focused": entry.id === focusId || void 0 },
               (0, import_react37.createElement)("span", { className: "bt-group-name", style: flat ? void 0 : { color: inkText(colorOf(bot)) } }, flat ? lead : null, bot.name),
               (0, import_react37.createElement)(Bubbles, { texts: [stripLongNote(entry.text)], roster, selfId: bot.id, actions, whole, lead: flat ? null : lead })
             )
@@ -17271,6 +17304,7 @@ html[data-windows-titlebar]:not([data-fullscreen]) :is(.bt-pane,.bt-panel)::befo
 .bt-exchange .bt-dialog{position:relative}
 .bt-exchange .bt-dialog-log{max-width:none;margin:0;padding:39px max(16px,calc((100% - 960px)/2)) 116px;scrollbar-width:thin}
 .bt-exchange .bt-tools{display:none}
+.bt-exchange .bt-group-msg[data-focused]{outline:1px solid var(--bt-accent);outline-offset:4px;border-radius:8px;background:color-mix(in srgb,var(--bt-accent) 6%,transparent)}
 .bt-fold{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin-top:4px;white-space:normal}
 .bt-fold-code{position:relative}
 .bt-fold-code>.bt-tool{position:absolute;right:6px;bottom:6px}
@@ -17870,6 +17904,11 @@ body[data-bt-layout=flat] .bt-think{max-width:calc(var(--bt-flat-w) * 100%)}
 .bt-event-whole>span:first-child{margin-right:2px}
 /* One button cannot wrap like separate parts, so a long name is cut to fit the chat. */
 .bt-event-whole>.bt-event-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt-event.bt-event-preview{margin:8px 0;min-width:0}
+.bt-event button.bt-event-delegation{display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:min(560px,100%);max-width:100%;height:auto;min-height:40px;padding:10px 12px;border:1px solid var(--bt-line);border-radius:12px;background:var(--bt-card);text-align:left;white-space:normal}
+.bt-event-identity{display:flex;align-items:center;gap:4px;color:var(--bt-ink-2);font-size:12px;line-height:16px}
+.bt-event-task-title{max-width:100%;font-size:13px;line-height:18px;font-weight:500;color:var(--bt-ink);overflow-wrap:anywhere}
+.bt-event-task-summary{max-width:100%;font-size:12px;line-height:18px;color:var(--bt-ink-2);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}
 .bt-time-sep{display:flex;justify-content:center;align-items:center;height:28px;margin:14px 0 8px;font-size:12px;line-height:16px;color:var(--bt-ink-2);white-space:nowrap}
 [class*="_scroll"]>[class*="_column"]::before{content:var(--bt-first-sep,none);display:block;flex:none;height:28px;margin:17px 0 12px;font-size:12px;line-height:28px;text-align:center;color:var(--bt-ink-2);white-space:nowrap}
 .bt-activity{display:flex;align-items:center;gap:10px;margin:8px 0 4px 2px;font-size:14px;color:var(--bt-ink-2)}
@@ -20348,7 +20387,7 @@ function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity
     pane ? createPortal((0, import_react54.createElement)(BotPanel, { pane, leaving: shown === null, room: layout.room, overlay: layout.panel === "overlay", roster, actions, useSessions, useSessionStatus, useActivity, useWork, useBrowserTabs, useBrowserPages, useBrowserHolds }), scopedDocument.body) : null,
     ui2.newChat ? createPortal((0, import_react54.createElement)(NewChat, { key: ui2.newChat, mode: ui2.newChat, roster, actions }), scopedDocument.body) : null,
     ui2.palette ? createPortal((0, import_react54.createElement)(CommandPalette, { key: ui2.palette.token, start: ui2.palette.query, token: ui2.palette.token, roster, actions, useSessions }), scopedDocument.body) : null,
-    ui2.exchange ? createPortal((0, import_react54.createElement)(ExchangeDialog, { pair: ui2.exchange, roster, actions }), scopedDocument.body) : null,
+    ui2.exchange ? createPortal((0, import_react54.createElement)(ExchangeDialog, { pair: ui2.exchange, focusId: ui2.exchangeFocus, roster, actions }), scopedDocument.body) : null,
     ui2.voice ? createPortal((0, import_react54.createElement)(VoiceMode, { key: ui2.voice, sessionId: ui2.voice, roster, actions, useSessions, useSessionStatus }), scopedDocument.body) : null,
     menu ? createPortal((0, import_react54.createElement)(ContextMenu, { key: `${menu.kind ?? ""}:${menu.id}:${menu.x}:${menu.y}`, menu, roster, actions, leaving: menuLeaving }), scopedDocument.body) : null,
     settings ? createPortal((0, import_react54.createElement)(SettingsDialog, { page: settings.page, id: settings.id, roster, actions, useUpdate, TeamOverview: TeamOverview2, leaving: settingsLeaving }), scopedDocument.body) : null,
@@ -22403,7 +22442,7 @@ var TEAM_HEADER_CSS = `
 .mek-team-frame .dsb-scroll{padding-top:16px}
 .mek-team-frame .dsb-head{height:0;padding:0}
 .mek-team-frame .dsb-head::before{display:none}
-.bt-panel{top:40px}
+.bt-panel,.bt-pane{top:40px}
 .bt-panel[data-overlay]{width:100%}
 .bt-settings-team{padding:0;overflow:hidden;min-height:0}
 .bt-settings-team .mek-overview nav>button{flex:none;white-space:nowrap}

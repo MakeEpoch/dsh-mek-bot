@@ -22,7 +22,8 @@ export function useEscape(onClose) {
 
 // New chat and Bot exchanges show in place of the conversation, right of the sidebar.
 export function usePaneLeft() {
-  const [paneLeft, setPaneLeft] = useState(280)
+  // Native Bot overlays are contained by the scene; DSH's sidebar is outside it.
+  const [paneLeft, setPaneLeft] = useState(() => document.body?.classList?.contains('mek-bot-scene') ? 0 : 280)
   useLayoutEffect(() => {
     const column = document.querySelector('[class*="_footArea"]')?.parentElement
     if (column) setPaneLeft(Math.round(column.getBoundingClientRect().right))
