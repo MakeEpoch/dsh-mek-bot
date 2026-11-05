@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import { flatWidthOf, layoutOf, widthOf } from '../src/client/themes.js'
 
 const bundle = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+const appCss = readFileSync(new URL('../../app/ui/src/app.css', import.meta.url), 'utf8')
 // The declarations of the rule whose whole selector is `selector`.
 const ruleOf = (selector) => {
   const start = bundle.search(new RegExp(`(^|[\\n}\`])${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\{`))
@@ -36,4 +37,15 @@ test('a Bot bubble keeps room for the toolbar beside it; flat Bot text takes the
     assert.match(ruleOf(selector), /max-width:calc\(var\(--bt-flat-w\) \* 100%\)/, selector)
   }
   assert.match(ruleOf('body[data-bt-layout=flat] .bt-bubble'), /background:none/)
+})
+
+test('indented group bubbles subtract their avatar margin before reserving room for tools', () => {
+  assert.match(bundle, /\.bt-astack\[data-lead\]>\.bt-msg:not\(:last-child\)>\.bt-msg-line,[^\n]*\{margin-left:30px\}/)
+  assert.ok(appCss.includes('.dsb-flow .bt-astack[data-lead]>.bt-msg:not(:last-child)>.bt-msg-line{max-width:calc(100% - 30px)}'))
+  // Chat and GroupChat use these same app styles. Do not hide the transcript's
+  // overflow to mask a bad width: code and tables must remain locally scrollable.
+  assert.match(appCss, /\.dsb-chat\{[^}]*min-width:0/)
+  assert.doesNotMatch(appCss, /\.dsb-(?:chat|scroll|column|flow)\{[^}]*overflow-x:(?:hidden|clip)/)
+  assert.match(appCss, /\.md_markdown table\{[^}]*max-width:100%;overflow-x:auto/)
+  assert.match(appCss, /\.md-code pre\{[^}]*overflow-x:auto/)
 })

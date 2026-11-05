@@ -9488,7 +9488,7 @@ html[data-mac] .dsb-frame .dsb-side{padding-top:var(--dsb-band)}
 .dsb-head{position:absolute;top:0;left:0;right:0;z-index:8;display:flex;justify-content:center;padding:4px 0 0;pointer-events:none}
 .dsb-head::before{content:"";position:absolute;inset:0 0 auto;height:60px;background:linear-gradient(to bottom,var(--bt-main),color-mix(in srgb,var(--bt-main) 0%,transparent));pointer-events:none;z-index:-1}
 .dsb-head .bt-head{flex:1 1 auto;width:100%}
-.dsb-chat{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+.dsb-chat{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
 /* A thin gutter kept for the scrollbar, so the column does not move when one appears. */
 .dsb-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-gutter:stable;margin-right:2px;padding:60px 11px 16px 16px}
 .dsb-scroll::-webkit-scrollbar{width:5px}
@@ -9498,6 +9498,9 @@ html[data-mac] .dsb-frame .dsb-side{padding-top:var(--dsb-band)}
 /* Group avatars sit inside the row, but their hover tools still need 82px.
    The shared 52px allowance otherwise makes even hidden tools scroll the chat. */
 body:not([data-bt-layout=flat]) .dsb-flow .bt-astack[data-lead]>.bt-msg{max-width:min(calc(var(--bt-msg-w) * (100% - 30px) + 30px),calc(100% - 82px))}
+/* Earlier bubbles omit the avatar but keep its 30px indent. max-width:100% plus
+   that margin would extend their row (and right-hand tools) past the allowance. */
+.dsb-flow .bt-astack[data-lead]>.bt-msg:not(:last-child)>.bt-msg-line{max-width:calc(100% - 30px)}
 /* The first separator sits where DSH puts a transcript's opening time. */
 .dsb-flow>.bt-time-sep{margin:8px 0 2px}
 .dsb-flow>.bt-time-sep:first-child{margin:17px 0 6px}

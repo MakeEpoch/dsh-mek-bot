@@ -2,7 +2,9 @@
 
 MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多 Bot 协作插件**。在现有 DeepSeek Harness 工作区中组织长期助手：由一个 Bot 接收需求，调用其他 Bot 分工处理，收集问题和结果，再审查、返工并向用户交付。
 
-本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.6**，已合并上游 **v0.2.6**（含 v0.2.5）；逐版本的吸收情况见[上游合并记录](docs/fork-vs-upstream.md)。
+本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.7**，已合并上游 **v0.2.6**（含 v0.2.5）；逐版本的吸收情况见[上游合并记录](docs/fork-vs-upstream.md)。
+
+0.2.7 是对话框宽度补丁；按用户要求未追加验证，群聊浏览器复核尚未完成。源码推送及 tgz 交付不代表当前 DSH 已安装生效。
 
 ![dsh-mek-bot 0.2.4：顶部 Bot 导航、任务摘要与 Bot 详情](docs/images/mek-bot-0.2.4.png)
 
@@ -12,7 +14,7 @@ MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多
 
 - **精简顶部导航**：默认保留主 Bot 和收藏会话；右侧 Bot 列表浏览其他 Bot 与群聊，五角星收藏后固定显示在顶部。未收藏的当前会话临时显示，切走后收起；收起会话的新消息和任务在列表入口提示。任务卡片长标题自动换行。
 - **长期 Bot 团队**：为每个 Bot 配置名字、职责、指令、模型、工作目录和记忆；上下文轮换时身份保持不变，历史仍可查询。
-- **单聊与群聊**：可以直接找某个 Bot，也可以由 Bot 委派任务、组织群聊讨论。对话和执行沿用 DSH Session，不另外实现一套 Agent 运行时。
+- **单聊与群聊**：可以直接找某个 Bot，也可以由 Bot 委派任务、组织群聊讨论。长文本随聊天列换行，宽表格和代码块在各自区域横向滚动，群聊连续回复为头像缩进和工具栏保留空间。对话和执行沿用 DSH Session，不另外实现一套 Agent 运行时。
 - **负责人交付闭环**：用户最初联系的 Bot 持有任务，执行 Bot 的问题和结果回到这里；结果经过检查与验收后再交付；任务列表区分执行中、待补报告与待验收。
 - **团队运营**：集中查看任务和重要动态，配置执行策略、共享摘要、项目事实与可复用流程。
 - **融入现有 DSH**：保留宿主导航及其他插件，Bot 界面在自己的面板内渲染；模型、密钥和授权继续使用已有配置。
@@ -134,7 +136,7 @@ cd ds-bot
 npm ci
 npm run build
 npm pack --ignore-scripts
-dsh plugin --profile web add -w ./dsh-mek-bot-0.2.6.tgz
+dsh plugin --profile web add -w ./dsh-mek-bot-0.2.7.tgz
 ```
 
 启用 bundle 后重启 DSH，不要同时启用原 `ds-bot` bundle。生产安装必须使用打包文件，禁止 `link:`、符号链接或直连开发源码。profile 保持 `autoInstallPeers: false`；宿主 API 由 DSH 加载器提供，不能安装第二份 Cordis、scope、tools 或 LLM 核心。
