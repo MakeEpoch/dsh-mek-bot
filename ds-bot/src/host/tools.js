@@ -782,7 +782,7 @@ export function install(rt) {
   // the live Agents back: a reload lifts their scope while they are still
   // live, and agent/created does not fire for them again, so without the walk
   // their next request would come without the team tools.
-  /** @type {Map<string, {agent: any, relay: boolean, tools: boolean, restricted: boolean, filtered: boolean, disposers: Array<() => void>, unlisted: Set<string>}>} */
+  /** @type {Map<string, {agent: any, relay: boolean, restricted: boolean, filtered: boolean, disposers: Array<() => void>, unlisted: Set<string>, added?: Set<string>, missed?: Set<string>}>} */
   const scoped = new Map()
   const unscope = (id) => {
     const held = scoped.get(id)
@@ -804,13 +804,13 @@ export function install(rt) {
     // A reload lifts the scope of Agents that are still live, and an adopted
     // file can newly own one that already runs: scope each live Agent the team
     // owns before its next request. hideBotUnusedTools does nothing for a
-    // Session that stays unowned, and nothing twice for one already scoped.
+    // Session that stays unowned and only fills missing tools on one already scoped.
     for (const agent of ctx.get?.('agents')?.list?.() ?? []) hideBotUnusedTools(agent)
   }
   ctx.effect(() => () => { for (const id of scoped.keys()) unscope(id) }, 'ds-bot: scoped team tools')
 
   // A wanted Session whose Agent cannot take scoped tools yet is warned about
-  // once; held.tools stays unset, so the next step's check tries again.
+  // once and checked again at the next step.
   const registerless = new WeakSet()
   const shareBotTools = (agent) => {
     if (agent === undefined) return
@@ -825,7 +825,7 @@ export function install(rt) {
       unscope(id)
       held = undefined
     }
-    if (!wanted || held?.tools === true) return
+    if (!wanted) return
     if (typeof agent.ctx?.tools?.register !== 'function') {
       if (!registerless.has(agent)) {
         registerless.add(agent)
@@ -833,30 +833,28 @@ export function install(rt) {
       }
       return
     }
-    const disposers = []
+    held ??= { relay: relayOnly, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
+    const added = held.added ??= new Set()
+    const missed = held.missed ??= new Set()
     const failed = []
-    const registered = []
     for (const def of rt.teamTools) {
-      if (relayOnly && def.name !== 'group_relay') continue
+      if ((relayOnly && def.name !== 'group_relay') || added.has(def.name)) continue
       try {
         const dispose = agent.ctx.tools.register(def)
-        if (typeof dispose === 'function') disposers.push(dispose)
-        registered.push(def.name)
+        if (typeof dispose === 'function') held.disposers.push(dispose)
+        added.add(def.name)
+        held.unlisted.add(def.name)
       } catch (error) {
-        // A tool another plugin already scoped onto this agent stays missing
-        // rather than stopping the team; the rest still land.
-        failed.push(`${def.name}: ${error.message ?? error}`)
+        // The old runtime may still hold this name. Retry at the next assembly.
+        const message = String(error?.message ?? error)
+        if (/already registered/i.test(message) || missed.has(def.name)) continue
+        missed.add(def.name)
+        failed.push(`${def.name}: ${message}`)
       }
     }
-    held ??= { relay: relayOnly, tools: false, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
     held.agent = agent
     held.relay = relayOnly
-    held.tools = true
-    held.disposers.push(...disposers)
     scoped.set(id, held)
-    // A scope made outside creation never reached a collected tool list; the
-    // assemble adds the pending names to the step's list once, then clears them.
-    for (const name of registered) held.unlisted.add(name)
     if (failed.length > 0) rt.warn('ds-bot: team tools not served to %s: %s', id, failed.join('; '))
   }
 
@@ -924,13 +922,13 @@ export function install(rt) {
     // the team lifts them like the rest, and the Agent can be scoped again.
     const shadows = rt.shadowShells?.(agent) ?? []
     if (shadows.length > 0) {
-      const held = scoped.get(id) ?? { relay: false, tools: false, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
+      const held = scoped.get(id) ?? { relay: false, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
       held.agent = agent
       held.disposers.push(...shadows)
       scoped.set(id, held)
     }
     if (agent === undefined || !rt.isBotSession(id)) return
-    const held = scoped.get(id) ?? { relay: false, tools: false, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
+    const held = scoped.get(id) ?? { relay: false, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
     held.agent = agent
     scoped.set(id, held)
     filterBotAssembly(agent, held)

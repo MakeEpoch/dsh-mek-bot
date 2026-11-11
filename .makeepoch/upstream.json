@@ -13,5 +13,9 @@
     "scoped-tool-assembly",
     "host-wide-schedules",
     "room-line-observer"
+  ],
+  "selectedReleaseFixes": [
+    { "tag": "v0.3.2", "pullRequest": 1005, "commit": "8e823d900bf3af89f4e65a72b7f59da9e26c28d1" },
+    { "tag": "v0.3.2", "pullRequest": 1143, "commit": "8c9f6269f958f39e71c4639c44bbf98f1eec2284" }
   ]
 }

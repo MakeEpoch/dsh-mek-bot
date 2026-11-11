@@ -103,6 +103,39 @@ test('task usage prevents the next budgeted model call; absent provider usage st
   assert.equal(h.state.mekPolicy.tasks.r.usageComplete, false)
 })
 
+test('unloading the policy preserves live model and tool results and records unsettled accounting', async t => {
+  const h = host(t); policy(h.rt)
+  h.root(); h.turn('b', 'r')
+  const meter = h.ctx.listeners.get('llm/stream').at(-1)
+  const execute = h.ctx.listeners.get('tools/execute').at(-1)
+  const toolStarted = Promise.withResolvers()
+  const releaseTool = Promise.withResolvers()
+  async function* response() {
+    yield { type: 'text', text: 'partial' }
+    yield { type: 'usage', usage: { inputTokens: 6, outputTokens: 5 } }
+  }
+  const stream = meter({ sessionId: 'b' }, response)
+  assert.equal((await stream.next()).value.text, 'partial')
+  const tool = execute(h.exec('b', 'apply_patch'), async () => {
+    toolStarted.resolve()
+    await releaseTool.promise
+    return 'success'
+  })
+  await toolStarted.promise
+  await h.ctx.dispose()
+  const policyState = h.snapshots.at(-1).mekPolicy
+  assert.equal(policyState.tasks.r.usageComplete, false)
+  const [lease] = Object.values(policyState.leases)
+  assert.equal(lease.status, 'stale')
+  assert.equal(lease.uncertain, true)
+  h.rt.save = async () => { throw new Error('The Bot team cannot be saved after this host stopped.') }
+
+  assert.equal((await stream.next()).value.type, 'usage')
+  assert.equal((await stream.next()).done, true)
+  releaseTool.resolve()
+  assert.equal(await tool, 'success')
+})
+
 test('project facts require membership and preserve conflicts, source versions and history', async t => {
   const h = host(t); knowledge(h.rt)
   const project = await h.rt.mekKnowledgeAction('mek-knowledge-project', { name: 'Release', owner: 'a', members: ['b'] })

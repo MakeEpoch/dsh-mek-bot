@@ -26,6 +26,10 @@ Small UI seams export existing Composer/GroupReplies/GroupMessage components and
 
 `ds-bot/mek.js` wraps upstream `index.js`. Team state defaults to `DSH_HOME/mek-bot`. `team-registration.js` uses DSH 0.2.2's tool admission condition for team sessions; ordinary DSH sessions do not receive team tools. Optional browser tools use the same seam. `autoGreet: false` avoids automatic model greetings, and downstream automatic update checking is disabled.
 
+During an in-place plugin reload, the runtime rebuilds activity from the live DSH agent registry and restores surviving turn records from `inflight.json`. Owned agents regain their core and downstream tools after extension setup. The surviving turn keeps its original delegation route, and a later request gets its own reply.
+
+Unloading the policy marks in-flight model usage incomplete and in-flight resource leases stale and uncertain. Completion callbacks from that policy instance let the DSH result through after its state lock has been released.
+
 The bundle adds only this plugin. It does not change DSH search, presets, native sidebar/composer settings or other plugins. The original `ds-bot` bundle must not be enabled at the same time, because both implement the same Bot API.
 
 Use `npm pack --ignore-scripts` and a content-hashed archive for production. Keep `autoInstallPeers: false`. Host API modules are optional peers, supplied by DSH's loader; never install a second Cordis/tools/scope/LLM core to satisfy raw Node imports. Development dependencies stay in `dev/harness`.

@@ -44,10 +44,10 @@ export function install(rt) {
   if (configured.maxTokens !== undefined && configured.maxTokens !== null) defaults.maxTokens = integer(configured.maxTokens, 1, 1000000000, 'Token budget')
   const inFlightLeases = new Map()
   const executing = new Map()
+  const activeMeters = new Set()
   const waiters = new Set()
   const stopped = new AbortController()
   const wake = () => { for (const done of [...waiters]) done() }
-  ctx.effect(() => () => { stopped.abort(new Error('The Bot plugin was unloaded.')); wake() }, 'mek-bot: resource waiters')
   const countedUsage = new WeakSet()
   const rootOf = id => rt.mekTaskRoot?.(id) ?? own(state.mekTasks?.roots, id)
   const rootForSession = id => rt.mekTaskForSession?.(id)
@@ -56,6 +56,20 @@ export function install(rt) {
   const taskPolicy = root => data().tasks[root.id] ??= { limits: {}, usage: { input: 0, output: 0, total: 0, calls: 0 }, usageComplete: true }
   const save = () => rt.save({ required: true })
   const noteSave = () => { void save().catch(error => rt.warn('mek-bot: execution policy save failed: %s', error)) }
+  ctx.effect(() => () => {
+    stopped.abort(new Error('The Bot plugin was unloaded.'))
+    wake()
+    if (activeMeters.size === 0 && inFlightLeases.size === 0) return
+    // DSH can finish these operations after this runtime has released its state lock.
+    for (const { root } of activeMeters) taskPolicy(root).usageComplete = false
+    for (const id of inFlightLeases.keys()) {
+      const lease = own(data().leases, id)
+      if (lease === undefined) continue
+      lease.uncertain = true
+      lease.status = 'stale'
+    }
+    return save().catch(error => rt.warn('mek-bot: recording unsettled execution policy state failed: %s', error))
+  }, 'mek-bot: execution policy unload')
   function guard({ root, action, work }) {
     if (!root || action === 'finish') return
     const policy = taskPolicy(root)
@@ -250,7 +264,7 @@ export function install(rt) {
           if ((!invoked && !previousIds.has(id)) || (!lease.uncertain && !runningJobs(lease) && (lease.scope === 'call' || lease.releasePending))) finishLease(lease)
         }
       }
-      if (claimed.length) {
+      if (claimed.length && !stopped.signal.aborted) {
         if (invoked) await save()
         else noteSave()
       }
@@ -262,6 +276,8 @@ export function install(rt) {
     // The owner still needs one ordinary response after accepting a task.
     if (!(root.status === 'completed' && rt.selfOf(options.sessionId) === root.owner)) guard({ root, action: 'request' })
     return (async function* taskMeter() {
+      const meter = { root }
+      activeMeters.add(meter)
       let usage, sawUsage = false
       try {
         for await (const chunk of next()) {
@@ -272,14 +288,17 @@ export function install(rt) {
           yield chunk
         }
       } finally {
-        const record = taskPolicy(root)
-        if (usage) {
-          const tokens = value => Number.isFinite(value) ? Math.max(0, value) : 0
-          const input = tokens(usage.inputTokens), output = tokens(usage.outputTokens)
-          if (!Number.isFinite(usage.inputTokens) || !Number.isFinite(usage.outputTokens)) record.usageComplete = false
-          record.usage.input += input; record.usage.output += output; record.usage.total += input + output; record.usage.calls += 1
-        } else if (!sawUsage) record.usageComplete = false
-        await save()
+        activeMeters.delete(meter)
+        if (!stopped.signal.aborted) {
+          const record = taskPolicy(root)
+          if (usage) {
+            const tokens = value => Number.isFinite(value) ? Math.max(0, value) : 0
+            const input = tokens(usage.inputTokens), output = tokens(usage.outputTokens)
+            if (!Number.isFinite(usage.inputTokens) || !Number.isFinite(usage.outputTokens)) record.usageComplete = false
+            record.usage.input += input; record.usage.output += output; record.usage.total += input + output; record.usage.calls += 1
+          } else if (!sawUsage) record.usageComplete = false
+          await save()
+        }
       }
     })()
   })

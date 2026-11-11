@@ -110,6 +110,8 @@ const subEndText = (data) => {
 
 const RETRY_TEXT = 'Your last reply wrote a tool call as plain text (<tool_call>…), so it did not run and nothing happened. Call the tool through the tool interface now, then reply as you meant to.'
 const RETRY_PROMISE_TEXT = 'Your last reply said you would start working, but you ended the turn without calling any tool, so nothing ran. Call the tools you need and do the work now. If your last reply already was your whole answer, reply [PASS]; it stays posted.'
+// DSH numbers turns from 1. A reload can see that an Agent is running without its turn number.
+const RECOVERED_TURN = -1
 
 // A reply that only promises to start investigating/checking/running tools now without
 // actually calling a tool or handing off with @Name (#469). A verb followed by 过了,
@@ -287,6 +289,35 @@ export function install(rt) {
     if (value === undefined) delete next[id]
     else next[id] = value
     activity = next
+  }
+
+  async function adoptLiveWork() {
+    const agents = ctx.get?.('agents')
+    if (typeof agents?.list !== 'function') return
+    await rt.load()
+    const known = id => rt.isBotSession(id) || rt.roomOf(id) !== undefined
+    for (const agent of agents.list()) {
+      const sessionId = agent?.session?.id ?? agent?.id
+      if (agent?.status !== 'running' || typeof sessionId !== 'string') continue
+      const header = agent.session?.header
+      const parentId = header?.parentSession
+      if (header?.origin === 'subagent' && typeof parentId === 'string' && known(parentId)) {
+        noteSubagentStart(parentId, sessionId)
+        continue
+      }
+      if (!known(sessionId)) continue
+      const entry = liveOf(sessionId)
+      if (entry.turn !== undefined) continue
+      const record = rt.takeLiveTurnNote(sessionId)
+      entry.turn = RECOVERED_TURN
+      entry.recovered = record
+      entry.since = record?.since ?? Date.now()
+      if (record?.trigger) entry.info = { kind: SOURCE_KIND, ...record.trigger }
+      // New input belongs to a later turn, even when the old turn had no Bot trigger.
+      entry.opened = true
+      entry.answers = true
+      setActivity(sessionId, 'thinking')
+    }
   }
   // The newest call still running, a program's sub-calls included, is what the Session
   // is doing.
@@ -652,6 +683,7 @@ export function install(rt) {
         entry.shown = 0
         entry.step = undefined
         entry.info = undefined
+        entry.recovered = undefined
         entry.toolCount = 0
         entry.suppressedSubagent = false
         // A turn turned away before its first step may end without a turn/end.
@@ -883,6 +915,7 @@ export function install(rt) {
           entry.carry = { info: entry.info, joined: entry.joined ?? [], later: entry.later ?? [], texts: entry.texts.slice(0, cut.texts), shown: entry.shown, answers: entry.answers, toolCount: entry.toolCount ?? 0 }
         }
         const info = entry.info
+        const recovered = entry.recovered
         const joined = entry.joined ?? []
         // What the group already saw of the turn is not posted again.
         const texts = entry.texts.slice(entry.shown)
@@ -894,6 +927,7 @@ export function install(rt) {
         const switched = entry.switched === true
         entry.turn = undefined
         entry.info = undefined
+        entry.recovered = undefined
         entry.texts = []
         entry.shown = 0
         entry.step = undefined
@@ -1005,7 +1039,13 @@ export function install(rt) {
             .catch(error => rt.warn('ds-bot: answer from %s not sent: %s', name, error))
         }
         // A retried turn answers the same waiter or sender, so this one passes nothing on.
-        if (!retry && rt.mekHandlesGroupTurn?.(id, info)) {
+        if (!retry && recovered && reason?.kind === 'completed' && texts.length === 0
+          && rt.ownsWork?.(rt.selfOf(id), rt.workOf?.(info))) {
+          // The answer can have been written before the reload. Use the durable log
+          // when this runtime did not see any new text from the original turn.
+          void ctx.sessions.flush(session).then(() => rt.reconcileEnded(id, recovered, event.data))
+            .catch(error => rt.warn('ds-bot: settling the reloaded work of %s failed: %s', id, error))
+        } else if (!retry && rt.mekHandlesGroupTurn?.(id, info)) {
           finish(info, groupReply())
         } else if (!retry && info?.role === 'room') {
           const waiter = roomWaiters.get(info.exchangeId)
@@ -1129,5 +1169,5 @@ export function install(rt) {
     }, 'ds-bot: prompt rejection reasons')
   }
 
-  Object.assign(rt, { live, liveOf, roomWaiters, roomProgress, roomInbox, activityView, workView, roomWorkView, turnsView, steeredView, callDetail, doingOf, stopRoomTurn, releaseBot, unblockBots, resumeBot, markSteerCut, hasSubagents, stopSubagents })
+  Object.assign(rt, { live, liveOf, roomWaiters, roomProgress, roomInbox, activityView, workView, roomWorkView, turnsView, steeredView, callDetail, doingOf, stopRoomTurn, releaseBot, unblockBots, resumeBot, markSteerCut, hasSubagents, stopSubagents, adoptLiveWork })
 }

@@ -32,9 +32,10 @@ const started = new Map()
 
 // The durable logs DSH keeps, by Session: what a Session's turns did and said.
 // `inspect` stands in for DSH reading that log, when a test cannot read it.
-async function start(home, logs, inspect) {
-  const ctx = fakeContext()
-  const agents = new Map()
+async function start(home, logs, inspect, liveAgents) {
+  const agents = liveAgents ?? new Map()
+  const services = liveAgents === undefined ? {} : { agents: { list: () => [...agents.values()], get: id => agents.get(id) } }
+  const ctx = fakeContext({ services })
   const agentOf = (sessionId) => {
     if (!agents.has(sessionId)) {
       const calls = []
@@ -231,6 +232,69 @@ const writerLog = (request, said, reason = { kind: 'completed' }) => [
   ...(said === undefined ? [] : [{ type: 'assistant/message', seq: 3, data: { turn: 1, message: { content: [{ type: 'text', text: said }] } } }]),
   { type: 'turn/end', seq: 4, data: { turn: 1, reason } },
 ]
+
+test('a running delegated turn retains its original reply route through a plugin reload', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const home = freshHome(t)
+  const first = await start(home)
+  const request = await askWriter(first, home)
+  const writer = first.agentOf('b')
+  writer.status = 'running'
+  writer.calls.length = 0
+  await first.stop()
+
+  const second = await start(home, undefined, undefined, new Map([['b', writer]]))
+  t.mock.timers.tick(3000)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(writer.calls.length, 0, 'the live turn was not restarted')
+  await second.tool('message_bot', { to: 'Writer', message: 'Check the figures', when: 'queue' }, 'a')
+  const [newRequest] = writer.calls
+  second.emit('b', 'user/message', { content: newRequest.content, source: newRequest.source })
+  second.emit('b', 'assistant/message', { message: { content: [{ type: 'text', text: 'The plan is ready.' }] } })
+  second.emit('b', 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+  await settle(() => second.agentOf('a').calls.length === 1 && writer.calls.length === 2)
+  assert.equal(second.agentOf('a').calls[0].source.replyTo, request.source.exchangeId)
+  assert.match(text(second.agentOf('a').calls[0]), /The plan is ready\./)
+
+  const [, deferred] = writer.calls
+  assert.equal(deferred.source.exchangeId, newRequest.source.exchangeId)
+  run(second, 'b', 2, deferred)
+  second.emit('b', 'assistant/message', { message: { content: [{ type: 'text', text: 'The figures check out.' }] } })
+  second.emit('b', 'turn/end', { turn: 2, reason: { kind: 'completed' } })
+  await settle(() => second.agentOf('a').calls.length === 2)
+  assert.equal(second.agentOf('a').calls[1].source.replyTo, newRequest.source.exchangeId)
+  assert.match(text(second.agentOf('a').calls[1]), /The figures check out\./)
+})
+
+test('a surviving turn can return text written before the plugin reloaded', async (t) => {
+  const home = freshHome(t)
+  const logs = new Map()
+  const first = await start(home, logs)
+  const request = await askWriter(first, home)
+  const writer = first.agentOf('b')
+  writer.status = 'running'
+  await first.stop()
+
+  const second = await start(home, logs, undefined, new Map([['b', writer]]))
+  logs.set('b', writerLog(request, 'The plan was ready before the reload.'))
+  second.emit('b', 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+  await settle(() => second.agentOf('a').calls.length === 1)
+  assert.equal(second.agentOf('a').calls[0].source.replyTo, request.source.exchangeId)
+  assert.match(text(second.agentOf('a').calls[0]), /The plan was ready before the reload\./)
+  await settle(() => inflight(home).b === undefined)
+})
+
+test('group stop can see a running member and its subagent after the plugin loads again', async (t) => {
+  const home = freshHome(t)
+  const stopped = []
+  const liveAgents = new Map([
+    ['gb', { id: 'gb', session: { id: 'gb' }, status: 'running', cancel: () => stopped.push('gb') }],
+    ['child', { id: 'child', session: { id: 'child', header: { origin: 'subagent', parentSession: 'gb' } }, status: 'running', cancel: () => stopped.push('child') }],
+  ])
+  const host = await start(home, undefined, undefined, liveAgents)
+  assert.deepEqual(await host.call('stop-member-work', { roomId: 'r1', botId: 'b' }), { ok: true, value: true })
+  assert.deepEqual(stopped, ['child', 'gb'])
+})
 
 for (const role of ['reply', 'report', 'resume']) {
   test(`a completed ${role} turn hands its continued work back after a plugin restart`, async (t) => {
