@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { FishLogo } from './dsh-primitives.js'
 import { isMainOf } from './sources.js'
 import { currentPart, previewOf, relativeShort } from './text.js'
-import { PlusIcon, SearchIcon, SidebarIcon, GaugeIcon, ClockIcon, GearIcon, PinMarkIcon, ConnectorIcon, SwitchIcon, CloudDownloadIcon, SignInIcon, SignOutIcon, SlidersIcon, GoArrow } from './icons.js'
+import { PlusIcon, SearchIcon, SidebarIcon, GaugeIcon, ClockIcon, GearIcon, PinMarkIcon, ConnectorIcon, SwitchIcon, CloudDownloadIcon, SignInIcon, SignOutIcon, SlidersIcon } from './icons.js'
 import { lookOf, MAIN_LOOK } from './characters.js'
 import { botState, BotMark, BotAvatar, RoomAvatar } from './mark.js'
 import { reducedMotion } from './activity-row.js'
@@ -27,6 +27,9 @@ function useMarkedUnread(id, active, marked, actions) {
 }
 
 const PinMark = () => h('span', { className: 'bt-pin', 'aria-hidden': true }, h(PinMarkIcon))
+
+const NavigationAvatar = ({ children, unread, taskNews, active }) => h('span', { className: 'mek-nav-avatar' }, children,
+  taskNews || unread && !active ? h('span', { className: 'mek-nav-unread', 'aria-hidden': true, title: taskNews ? t('Unread tasks') : t('Unread activity') }) : null)
 
 // The rail shows a row's name only on hover; the wide list does so when the name is
 // cut, which only the laid-out row can tell, so it is measured as the pointer enters.
@@ -100,18 +103,16 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
     'aria-expanded': navigation && active ? details === part : undefined,
     'data-bot-id': id, title: wide ? undefined : bot.name, onMouseEnter: wide ? nameIfCut : undefined, onClick: () => actions.openSession(id), onContextMenu,
   },
-  h(BotAvatar, { bot, size: navigation ? 22 : wide ? 36 : 44, state, main }),
+  navigation ? h(NavigationAvatar, { unread, taskNews, active }, h(BotAvatar, { bot, size: 22, state, main })) : h(BotAvatar, { bot, size: wide ? 36 : 44, state, main }),
   pinned && !wide ? h(PinMark) : null,
   wide ? h('span', { className: 'bt-row-body' },
-    h('span', { className: 'bt-row-name' }, h('span', { className: 'bt-row-title' }, bot.name), pinned ? h(PinMark) : null),
+    h('span', { className: 'bt-row-name' }, h('span', { className: 'bt-row-title' }, bot.name), pinned && !navigation ? h(PinMark) : null),
     runningLine ? h('span', { className: 'bt-row-preview' }, runningLine)
       : awayLine ? h('span', { className: 'bt-row-preview' }, awayLine)
         : waitsFor ? h('span', { className: 'bt-row-preview' }, waitsFor)
           : preview ? h('span', { className: 'bt-row-preview' }, preview) : null) : null,
-  navigation && (taskNews || unread && !active) ? h('span', { className: 'mek-nav-unread', 'aria-hidden': true, title: taskNews ? t('Unread tasks') : t('Unread activity') })
-    : wide && unread && !active ? h('span', { className: 'bt-unread', 'aria-hidden': true })
-    : !wide && !active && (alert || unread) ? h('span', { className: `bt-dot${alert ? ' bt-dot-wait' : ''}`, 'aria-hidden': true }) : null,
-  navigation && active ? h('span', { className: 'bt-pill-go', 'aria-hidden': true }, h(GoArrow)) : null)
+  !navigation && wide && unread && !active ? h('span', { className: 'bt-unread', 'aria-hidden': true })
+    : !navigation && !wide && !active && (alert || unread) ? h('span', { className: `bt-dot${alert ? ' bt-dot-wait' : ''}`, 'aria-hidden': true }) : null)
 }
 
 function RoomRow({ room, roster, actions, useSessions, useSessionStatus, useSessionRetainInfo, useWork, wide, marked, navigation, details, showHidden }) {
@@ -137,16 +138,14 @@ function RoomRow({ room, roster, actions, useSessions, useSessionStatus, useSess
     'data-room-id': id, title: wide ? undefined : room.name, onMouseEnter: wide ? nameIfCut : undefined, onClick: () => actions.openSession(id),
     onContextMenu: (event) => { event.preventDefault(); actions.openMenu({ kind: 'room', id, x: event.clientX, y: event.clientY }) },
   },
-  h(RoomAvatar, { room, roster, size: navigation ? 22 : wide ? 36 : 44 }),
+  navigation ? h(NavigationAvatar, { unread, taskNews, active }, h(RoomAvatar, { room, roster, size: 22 })) : h(RoomAvatar, { room, roster, size: wide ? 36 : 44 }),
   pinned && !wide ? h(PinMark) : null,
   wide ? h('span', { className: 'bt-row-body' },
-    h('span', { className: 'bt-row-name' }, h('span', { className: 'bt-row-title' }, room.name), pinned ? h(PinMark) : null),
+    h('span', { className: 'bt-row-name' }, h('span', { className: 'bt-row-title' }, room.name), pinned && !navigation ? h(PinMark) : null),
     workingLine ? h('span', { className: 'bt-row-preview' }, workingLine) : preview ? h('span', { className: 'bt-row-preview' }, preview) : null) : null,
-  navigation && (taskNews || unread && !active) ? h('span', { className: 'mek-nav-unread', 'aria-hidden': true, title: taskNews ? t('Unread tasks') : t('Unread activity') })
-    : wide && approval && !active ? h('span', { className: 'bt-unread bt-unread-wait', 'aria-hidden': true })
-    : wide && unread && !active ? h('span', { className: 'bt-unread', 'aria-hidden': true })
-      : !wide && !active && (approval || unread) ? h('span', { className: `bt-dot${approval ? ' bt-dot-wait' : ''}`, 'aria-hidden': true }) : null,
-  navigation && active ? h('span', { className: 'bt-pill-go', 'aria-hidden': true }, h(GoArrow)) : null)
+  !navigation && wide && approval && !active ? h('span', { className: 'bt-unread bt-unread-wait', 'aria-hidden': true })
+    : !navigation && wide && unread && !active ? h('span', { className: 'bt-unread', 'aria-hidden': true })
+      : !navigation && !wide && !active && (approval || unread) ? h('span', { className: `bt-dot${approval ? ' bt-dot-wait' : ''}`, 'aria-hidden': true }) : null)
 }
 
 // One expanded DSH Agent Session row: title, relative stamp, rename field, and a

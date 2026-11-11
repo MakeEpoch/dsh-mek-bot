@@ -42,7 +42,7 @@ Question resumes use a fresh delivery id with the same handoff id; revisions use
 
 The downstream entry installs `mek-policy.js`, `mek-knowledge.js`, `mek-workflows.js` and `mek-team.js` after coordination. Their versioned state lives in the existing atomic team store; unknown future formats are refused without replacement. Task events carry metadata only; authorized summaries are separately recorded and delivered through durable notices without changing task ownership. User sharing controls are channel-only, not model tools.
 
-Execution restrictions use public tool guards, tool dispatch and LLM stream hooks. They add restrictions without bypassing DSH approvals. Cooperative resource claims cover known mutators and explicit bindings, not arbitrary background subprocesses. Token limits gate subsequent calls; they cannot stop all in-flight provider output at an exact monetary amount. Project facts require an explicit scope and source. Workflow activation requires an accepted validation task tied to an immutable version digest. Scheduling remains a DSH responsibility.
+Execution restrictions use public tool guards, tool dispatch and LLM stream hooks. They add restrictions without bypassing DSH approvals. Cooperative resource claims cover known mutators and explicit bindings, not arbitrary background subprocesses. Token limits gate subsequent calls; they cannot stop all in-flight provider output at an exact monetary amount. Project facts require an explicit scope and source. Workflow activation requires an accepted validation task tied to an immutable version digest. Scheduling remains a DSH responsibility. The schedule adapter keeps stable team management ownership separately from DSH delivery targets: Main Bots can manage non-private team Bot/group schedules; ordinary Bots remain in their logical chat. New independent targets are captured from successful tool creation, not inferred from directories or the mixed involved-session notification set. Legacy known team targets and durable to-do bindings are adopted; unverified independent tasks remain outside the managed set. Edits carry the read revision to DSH, and to-do clock changes pass through the rule adapter and original tool pipeline rather than editing only the binding. See the [schedule ownership contract](plans/2026-11-03-mek-conversation-tasks.md#20-团队定时管理归属2026-11-05).
 
 Native views remain under `src/client/mek/`; the existing controller exposes optional `mekTeam` state. Artifact previews use public workspace-file APIs and the producing session. The optional browser adapter exposes observation/control of existing sessions through the authenticated Bot channel and serializes human actions with Bot actions. No browser is launched by observation, and screenshot masking does not grant access to credentials. See [team operations design](plans/2026-10-30-mek-team-operations.md).
 
@@ -97,3 +97,17 @@ The native entry provides `mekBotBridge` v1 using public Cordis service registra
 ## WeChat target settings (0.2.9)
 
 The native details settings render an optional WechatPad-owned link editor. `wechatBotLinks` v1 provides credential-free target views and revisioned updates; Bot resolves stable Main Bot/group identity before forwarding. Optional service references are obtained and released in the injected scope. Transport availability, account login and policy states remain distinct from plugin absence/version mismatch. WechatPad owns discovery and persistence; the native client never reads account credentials or reply context tokens.
+
+
+## 微信附件与顶部状态展示（2026-11-05）
+
+原生顶部会话标签保持单行，只显示头像、名称及贴头像的未读点，不绘制置顶图标或详情箭头。收藏持久化、列表星标及点击当前项切换详情的行为保留。微信入站附件的固定说明和路径清单仅在展示层转为折叠卡片，语音转写和其他文案直接显示，图片使用已有的真实缩略图；原始持久消息、模型输入及安全提示不改写。旧历史与新消息采用相同规则，解析失败保留原文。
+
+`mekBotBridge` v1 新增可选 `supportsMedia` 和 `send(..., { beforePrompt })`。回调由 WechatPad 提供，Bot 在取消/能力准备及逻辑身份重新解析之后、实际 prompt 之前传入最终 sessionId/requestId；prompt 失败撤销登记。WechatPad 在真实 inbox claimed 事件中只为该微信请求打开附件 consumer，沿用已有的 `wechatpad_return_file`、`present` 快照和连接 `sendFile`。文件在成功轮次结束后发回原连接/聊天，不跟随可见文字向所有绑定广播；网页输入、混合来源、隐藏 Bot 回合、取消及解绑不能借用投递权限。群不继承成员隐藏轮次的产物权限；只有已发布的正式群发言中的显式附件标记进入发送。两插件均需包含本次能力扩展，版本号/既有绑定无需迁移。
+
+
+## 定时管理全面复查（2026-11-06，已正式安装）
+
+管理索引的读/认领使用同一个异步写入队列，未落盘的 owner 不为并发目标修改提供授权。规则编辑在首次意图保存失败或宿主明确未写入时恢复原规则与本次补齐的快照；未知结果仍保留意图核对。回执只来自已保存 clock id，复制 marker 的其他任务不被纳入；零/多绑定停止规则处理，创建响应未知但唯一绑定可被核实时恢复。时间字段无效或投递早于计划的回执，包括旧 pending 实例，不启动业务工作。
+
+内部定时 guard 忽略宿主上下文快照。schedule 注入清理与引用身份绑定，旧 catalog/history 检查在服务替换/卸载或只读后退出。未新增宿主依赖、页面、后台调度器或正式数据迁移；后续获部署授权，隔离 rc.1 验证及卡片浏览器验证通过后，已通过标准 CLI 安装包含定时修复的 Bot 0.2.10 内容修订包。WechatPad 0.1.10 保持原包，未修改正式定时记录；部署回执见 UI 测试文档。

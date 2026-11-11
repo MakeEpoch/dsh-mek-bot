@@ -149,7 +149,7 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
     setBotCapability: (botId, name, attached) => after(call('bot-capability', { botId, name, attached })),
     schedules: () => call('schedules'),
     scheduleCreate: task => call('schedule-create', task),
-    scheduleDelete: (sessionId, id) => call('schedule-delete', { sessionId, id }),
+    scheduleDelete: (sessionId, id, expectedUpdatedAt) => call('schedule-delete', { sessionId, id, expectedUpdatedAt }),
     exchange: (a, b) => call('exchange', { a, b }).catch(() => []),
     exchangeText: id => call('exchange-text', { id }).catch(() => undefined),
     fileText: file => call('file-text', { file }).catch(() => undefined),

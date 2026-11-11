@@ -107,3 +107,16 @@ test('linked private interrupt cancels before admission, while groups keep queue
   rt.workView = () => ({ chief: { roomId: 'group' } })
   assert.equal((await bridge.activity({ kind: 'bot', id: 'chief' })).busy, false, 'group work does not masquerade as private typing')
 })
+
+
+test('linked media admission uses the latest part and revokes tracking after prompt failure', async t => {
+  const { rt, ctx, bridge } = await fixture(t), sessions = [], cancellations = []
+  assert.equal(bridge.supportsMedia, true)
+  rt.ensureCapabilities = async () => { rt.state.bots.chief.sessionId = 'latest-part' }
+  const beforePrompt = (sessionId, requestId) => { sessions.push([sessionId, requestId]); return () => cancellations.push(requestId) }
+  await bridge.send({ kind: 'bot', id: 'chief' }, { text: 'Send a file', requestId: 'wx-file', beforePrompt })
+  assert.deepEqual(sessions, [['latest-part', 'wx-file']])
+  ctx.sessionController.prompt = async () => { throw new Error('admission failed') }
+  await assert.rejects(bridge.send({ kind: 'bot', id: 'chief' }, { text: 'Fail', requestId: 'wx-failed', beforePrompt }), /admission failed/)
+  assert.deepEqual(cancellations, ['wx-failed'])
+})

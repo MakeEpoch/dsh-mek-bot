@@ -86,7 +86,7 @@ function TaskRow({ task, actions, onView, showBot, roster }) {
   const remove = () => {
     if (!confirming) { setConfirming(true); return }
     setBusy(true)
-    void actions.scheduleDelete(task.sessionId, task.id).then(onView, () => setBusy(false))
+    void actions.scheduleDelete(task.sessionId, task.id, task.updatedAt ?? null).then(onView, () => setBusy(false))
   }
   const room = task.roomId ? roster.roomsById[task.roomId] : undefined
   return h('div', { className: 'bt-set-row bt-task', 'data-done': task.status === 'active' ? undefined : '', 'data-busy': busy || undefined },

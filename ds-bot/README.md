@@ -2,17 +2,17 @@
 
 MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多 Bot 协作插件**。在现有 DeepSeek Harness 工作区中组织长期助手：由一个 Bot 接收需求，调用其他 Bot 分工处理，收集问题和结果，再审查、返工并向用户交付。
 
-本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.10**，已合并上游 **v0.2.7**（含此前版本）；逐版本的吸收情况见[上游合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)。
+本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.10**，已合并上游 **v0.2.7**（含此前版本）；逐版本的吸收情况见[上游合并记录](docs/fork-vs-upstream.md)。
 
 0.2.10 优先复用上游群聊、记忆、模型与输入能力，并在现有任务体系中吸收阶段概览思想；WechatPad 关联通过可选服务接入。源码及隔离验证不代表正式 DSH 已安装生效。
 
-![dsh-mek-bot 0.2.4：顶部 Bot 导航、任务摘要与 Bot 详情](https://raw.githubusercontent.com/MakeEpoch/dsh-mek-bot/main/docs/images/mek-bot-0.2.4.png)
+![dsh-mek-bot 0.2.4：顶部 Bot 导航、任务摘要与 Bot 详情](docs/images/mek-bot-0.2.4.png)
 
 截图于 2026-10-31，来自 DSH 0.2.2-alpha.2 中安装的 dsh-mek-bot 0.2.4；使用隔离环境和本地模拟模型，展示顶部导航、负责人任务摘要与 Bot 详情。
 
 ## 项目提供什么
 
-- **精简顶部导航**：默认保留主 Bot 和收藏会话；右侧 Bot 列表浏览其他 Bot 与群聊，五角星收藏后固定显示在顶部。未收藏的当前会话临时显示，切走后收起；收起会话的新消息和任务在列表入口提示。任务卡片长标题自动换行。
+- **精简顶部导航**：默认保留主 Bot 和收藏会话；右侧 Bot 列表浏览其他 Bot 与群聊，五角星收藏后固定显示在顶部。未收藏的当前会话临时显示，切走后收起；收起会话的新消息和任务在列表入口提示。顶部保持单行圆角标签，不显示详情箭头或置顶图标；未读红点贴在头像右上角，点击当前标签仍可展开详情。任务卡片长标题自动换行。
 - **长期 Bot 团队**：为每个 Bot 配置名字、职责、指令、模型、工作目录和记忆；上下文轮换时身份保持不变，历史仍可查询。
 - **单聊与群聊**：可以直接找某个 Bot，也可以由 Bot 委派任务、组织群聊讨论。长文本随聊天列换行，宽表格和代码块在各自区域横向滚动，群聊连续回复为头像缩进和工具栏保留空间。对话和执行沿用 DSH Session，不另外实现一套 Agent 运行时。
 - **负责人交付闭环**：用户最初联系的 Bot 持有任务，执行 Bot 的问题和结果回到这里；结果经过检查与验收后再交付；任务列表区分执行中、待补报告与待验收。
@@ -93,9 +93,13 @@ Bot 详情中的“当前会话权限”读取 DSH 实际权限；点击“在 D
 
 依赖要求所有前置结果通过检查后才派工，主任务的前置也约束子任务，支持同会话范围的任务关联，并拒绝循环（包含父子完成关系）。等待不启动模型轮次；前置返工后，已运行或已验收后继的旧输入版本会显示阻塞，需要管理员重新核对，不能据此继续派工或验收主任务。完成仍经过现有结构化报告、证据和整体检查，不把一轮聊天结束当作完成。
 
-定时支持提醒、生成周期待办和自动通知管理员安排执行，默认北京时间；界面支持单次、每天、工作日，工具还支持指定每周日期。时钟复用 DSH 公开 `schedule` 服务，插件读取其持久化投递凭据，按规则和计划时间去重。上期未结束时跳过本期，同批恢复的回执也遵循此规则；超过计划时间一分钟才投递或处理的实例保留为错过，不自动补跑。暂停阻止后续触发，恢复创建新的宿主绑定。仅有提醒、没有投递历史接口的宿主显示不可用。
+定时支持提醒、生成周期待办和自动通知管理员安排执行，默认北京时间；界面支持单次、每天、工作日，工具还支持指定每周日期。时钟复用 DSH 公开 `schedule` 服务，插件读取其持久化投递凭据，按规则和计划时间去重。上期未结束时跳过本期，同批恢复的回执也遵循此规则；超过计划时间一分钟才投递或处理的实例保留为错过，不自动补跑。暂停阻止后续触发；当前 Host-wide 调度服务在原绑定上暂停/恢复，保留 id、历史和执行目标；旧 Session 级服务仍沿用原适配。仅有提醒、没有投递历史接口的宿主显示不可用。
 
-自动执行先建立主任务，再通过持久通知要求管理员拆分和启动，实际模型安排能力仍需真实模型验收。宿主的时钟提醒会进入绑定 Bot 的 Session，插件禁止该内部唤醒直接调用工具，业务执行以凭据创建的事项为准。未知通知不盲目重发；规则编辑、未知结果的完整自助对账、完成后重开及任意外部条件仍待补齐。设计及本轮验证边界见 [完整方案](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/plans/2026-11-03-mek-conversation-tasks.md)。
+自动执行先建立主任务，再通过持久通知要求管理员拆分和启动，实际模型安排能力仍需真实模型验收。宿主的时钟提醒会进入绑定 Bot 的 Session，插件禁止该内部唤醒直接调用工具，业务执行以凭据创建的事项为准。未知通知不盲目重发。
+
+通过 DSH 的 `schedule_list/view/edit` 管理团队调度：Main Bot 可管理本团队非隐私 Bot 和群的任务，普通 Bot 只管理当前逻辑聊天（含旧会话段），不开放普通 DSH 或其他隐私 Bot 的任务。管理归属与执行目标分开，支持 `this_session`、`new_once`、`new`；独立执行仍使用 DSH 新会话，不冒充 Bot 聊天。新建成功后持久保存 Bot/群身份；可确认的已有团队会话目标或待办规则绑定会纳管，不凭标题、目录或 `involvedSessionIds`（其中包含编辑者）认领独立旧任务，旧独立任务需另行核实真实创建来源。编辑带回最新 `updatedAt` 作为 `expectedUpdatedAt`，陈旧或缺少版本时拒绝覆盖。
+
+定时待办的 `schedule_edit` 会经过规则层同步标题、业务指令和时间，保留内部时钟提示与执行目标，旧实例保留内容快照；不允许把规则绑定改成独立执行。规则写入结果未知时保留意图、停止该规则处理并按绑定修订标记核对，不删除重建或自动重发。无法确定回执对应版本时保留为待核对，不套用当前指令；启停及删除带回页面看到的版本，防止陈旧页面覆盖新修改。归属落盘失败会撤回内存认领，团队只读时禁止继续编辑宿主定时任务。并发改目标前先确认归属已保存；编辑意图保存失败后可安全重试。已保存的时钟绑定不被复制提示的其他时钟替换，绑定丢失或多个绑定进入待核对；异常回执不启动工作，内部时钟限制不被宿主上下文清除。完整自助对账、完成后重开及任意外部条件仍待补齐；2026-11-06 已完成隔离 DSH 0.2.2-rc.1 与卡片浏览器验证，并安装到正式环境；未操作正式定时记录，旧独立任务归属仍需核对。设计及本轮验证边界见 [完整方案](docs/plans/2026-11-03-mek-conversation-tasks.md)。
 
 ## 团队协作与复用
 
@@ -123,9 +127,9 @@ Bot 详情中的“当前会话权限”读取 DSH 实际权限；点击“在 D
 
 ## 当前能力边界
 
-上游 v0.2.4 的私有 Bot、Office 文档、技能建议、AGENTS.md 更新建议、群聊全部停止和 Deep View 代码，以及 v0.2.5–v0.2.6 的群聊轮次调整与投递修复均已并入。私有 Bot 的工具/路径限制不构成系统级隔离；Office 在 DSH Web 中依赖额外运行环境，完整文档处理链路尚未验证；与独立 Deep View 插件共存也尚未实测。不要将“源码已合并”理解为所有部署环境都已验收，逐项状态见[版本合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)。
+上游 v0.2.4 的私有 Bot、Office 文档、技能建议、AGENTS.md 更新建议、群聊全部停止和 Deep View 代码，以及 v0.2.5–v0.2.6 的群聊轮次调整与投递修复均已并入。私有 Bot 的工具/路径限制不构成系统级隔离；Office 在 DSH Web 中依赖额外运行环境，完整文档处理链路尚未验证；与独立 Deep View 插件共存也尚未实测。不要将“源码已合并”理解为所有部署环境都已验收，逐项状态见[版本合并记录](docs/fork-vs-upstream.md)。
 
-自动化与隔离 DSH 验证使用本地脚本模型，只证明相应系统流程，不代表真实模型或实际业务必然正确。UI 的分层测试、用例及验收记录方式见 [UI 测试方案](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/dev/mek-ui-testing.md)。
+自动化与隔离 DSH 验证使用本地脚本模型，只证明相应系统流程，不代表真实模型或实际业务必然正确。UI 的分层测试、用例及验收记录方式见 [UI 测试方案](docs/dev/mek-ui-testing.md)。
 
 ## 安装
 
@@ -168,7 +172,7 @@ dsh plugin --profile web add -w ./dsh-mek-bot-0.2.10.tgz
 
 ## 开发与文档维护
 
-保留上游目录、Apache 许可证和公开 Git 历史，基线见 [.makeepoch/upstream.json](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/.makeepoch/upstream.json)。插件入口是 `ds-bot/mek.js`，原生界面位于 `ds-bot/src/client/mek/`，任务协调和团队运营位于 `ds-bot/src/host/mek-*.js`。保留的上游入口不安装本项目协调扩展。
+保留上游目录、Apache 许可证和公开 Git 历史，基线见 [.makeepoch/upstream.json](.makeepoch/upstream.json)。插件入口是 `ds-bot/mek.js`，原生界面位于 `ds-bot/src/client/mek/`，任务协调和团队运营位于 `ds-bot/src/host/mek-*.js`。保留的上游入口不安装本项目协调扩展。
 
 ```sh
 cd ds-bot
@@ -182,15 +186,15 @@ npm run lint
 
 项目介绍、当前特性和上下游差异统一维护在本中文版 README；`ds-bot/README.md` 是安装包内的同步副本，`README.zh.md` 仅保留兼容链接。新增功能或改变交互、权限、持久化及恢复行为，必须在同一改动中更新这里及相关集成/设计文档；界面变化同步更新 UI 测试矩阵，合并上游则更新版本记录。
 
-- [上游版本与合并记录](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/fork-vs-upstream.md)：每个版本上游改了什么、本项目采用什么、保留什么及验证状态。
-- [集成边界](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/makeepoch-integration.md)：宿主职责、适配位置、运行及恢复约束。
-- [任务所有权设计](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/plans/2026-10-30-mek-task-ownership.md)、[团队运营设计](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/plans/2026-10-30-mek-team-operations.md)：底层机制与契约。
-- [UI 测试方案](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/dev/mek-ui-testing.md)：组件、真实浏览器、隔离 DSH 和安装包的验证层次。
-- [上游原始说明](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/README.upstream.zh.md)：保留上游介绍，不作为本项目功能与验收声明。
+- [上游版本与合并记录](docs/fork-vs-upstream.md)：每个版本上游改了什么、本项目采用什么、保留什么及验证状态。
+- [集成边界](docs/makeepoch-integration.md)：宿主职责、适配位置、运行及恢复约束。
+- [任务所有权设计](docs/plans/2026-10-30-mek-task-ownership.md)、[团队运营设计](docs/plans/2026-10-30-mek-team-operations.md)：底层机制与契约。
+- [UI 测试方案](docs/dev/mek-ui-testing.md)：组件、真实浏览器、隔离 DSH 和安装包的验证层次。
+- [上游原始说明](README.upstream.zh.md)：保留上游介绍，不作为本项目功能与验收声明。
 
 ## 许可证
 
-继承上游 **Apache-2.0**，保留 [LICENSE](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/LICENSE) 与 [NOTICE](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/NOTICE)。本项目是独立社区集成，与 DeepSeek 官方无隶属关系。
+继承上游 **Apache-2.0**，保留 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。本项目是独立社区集成，与 DeepSeek 官方无隶属关系。
 
 ## 2026-11-05 上游复用与微信关联
 
@@ -198,7 +202,7 @@ npm run lint
 
 群目标继续采用现有待办、依赖和逐层验收；吸收上游目标对齐、阶段概览和防空转思想。右侧任务展开后显示阶段和已验收数量，目标与验收条件可展开查看，成员回报与已验收证据分别展示；不会因为阶段回报齐全自动验收整个任务。现有导航和标签位置不变。
 
-WechatPad 0.1.10 可将微信私聊关联主 Bot、Pad 微信群关联 Bot 群，入口在主 Bot / Bot 群右侧详情面板的设置中。可选择 WechatPad 或微信机器人连接，再选择已发现的微信用户或微信群；用户发来消息后即可选择，无需查 ID。微信设置的“会话”页仅显示关联汇总。普通 Bot 不能关联。绑定沿用目标的当前会话段，群成员可见文字带名字回传微信；不外发隐藏 Bot 回合或推理，不启用上游 IM 模块。仍遵守 WechatPad 访问控制；授权、密钥和交互卡在 DSH 处理。详见 [能力比较与关联设计](https://github.com/MakeEpoch/dsh-mek-bot/blob/main/docs/plans/2026-11-05-upstream-and-wechatpad.md)。
+WechatPad 0.1.10 可将微信私聊关联主 Bot、Pad 微信群关联 Bot 群，入口在主 Bot / Bot 群右侧详情面板的设置中。可选择 WechatPad 或微信机器人连接，再选择已发现的微信用户或微信群；用户发来消息后即可选择，无需查 ID。微信设置的“会话”页仅显示关联汇总。普通 Bot 不能关联。绑定沿用目标的当前会话段，群成员可见文字带名字回传微信；不外发隐藏 Bot 回合或推理，不启用上游 IM 模块。仍遵守 WechatPad 访问控制；授权、密钥和交互卡在 DSH 处理。详见 [能力比较与关联设计](docs/plans/2026-11-05-upstream-and-wechatpad.md)。 微信发起的主 Bot 回合可用 `wechatpad_return_file` 或宿主 `present` 回传音频、图片和文件，附件只投递给发起该回合的原连接/聊天；生成与登记不等于送达。扫码机器人音频走文件通道，Pad 支持的短音频走原生语音。群附件须由成员在正式发言中显式附上文件链接。微信入站消息以文案和图片缩略图为主，附件路径、格式和大小默认收在可展开详情中；模型仍收到原始信息。
 
 微信私聊关联沿用微信插件的“新消息处理方式”：打断时先取消当前主 Bot 私聊轮次，再提交新消息；Bot 群仍排队，不停止全群成员。原生输入框上方显示 DSH 实际待处理队列，支持立即介入或移除，仅展示用户来源消息。微信机器人输入状态根据实际私聊工作续期，结束、停止或解绑后清理；WechatPad 协议不支持该状态。
 
