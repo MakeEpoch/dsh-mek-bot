@@ -26,7 +26,7 @@ Bot 是长期身份。登录应该跟着 Bot 走，而不是跟着某一段对�
 - 已授权的发帖、上传、下载、删除若结果未知，会按来源记录，要求先用快照核实；页面仍未观察前，不允许重复同来源的操作。下载文件保存到 Bot 的工作目录；没有工作目录时保存到团队目录。
 - 三个插件：
   - `refs`：打开、快照、按编号点击和填写、截图。每一步留在会话里，可以核对。快照会读进开放的 Shadow DOM 和同源 iframe。
-  - `script`：一次提交一段 JavaScript，帮手已经在作用域里。这是 Hermes `browser_exec` 和 ego heredoc 的形状。
+  - `script`：一次提交一段 JavaScript，帮手已经在作用域里。这是 Hermes `browser_exec` 和 ego heredoc 的形状。每段脚本在独立的 Node 子进程和 VM 上下文运行，浏览器操作通过 JSON 消息交回宿主原有接口校验。子进程不继承宿主的凭据环境变量，超时 20 秒由宿主终止。
   - `task`：一个目标进去，插件自己用 `refs` 的工具跑完，交回答案和步骤。
 - 截图作为图片块交给模型。后面的模型按多模态来用，不把 Flash 当成纯文本。
 - 在桌面应用中，Playwright 插件连接到主进程拥有的浏览器页；Bot 和用户看到同一组标签页。DSH Desktop 仍使用独立的 Chromium profile。Bot 的 profile 和下载目录按 Bot 隔离。
