@@ -15,6 +15,9 @@ export function apply(ctx) {
     const service = new WechatPadService({ ctx: fixtureCtx, config, logger: () => {},
       createConnection: async cfg => ({ id: cfg.provider, label: 'Fixture ' + cfg.provider, capabilities: {},
         async start(value) { handlers[cfg.provider] = value; value.onState({ phase: 'connected' }) }, async stop() {},
+        async groupNames(ids) {
+          return new Map(ids.filter(id => ['settings-fixture@chatroom', 'same-name@chatroom'].includes(id)).map(id => [id, '项目讨论群']))
+        },
         async typing(chatId, on) { sent.push({ kind: "typing", provider: cfg.provider, chatId, on, at: Date.now() }); return true },
         status() { return { connected: true } },
         async send(message) { sent.push({ provider: cfg.provider, chatId: message.chatId, text: message.text }); return { ok: true, delivered: 1 } },

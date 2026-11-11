@@ -100,7 +100,7 @@ The native entry provides `mekBotBridge` v1 using public Cordis service registra
 
 ## WeChat target settings (0.2.9)
 
-The native details settings render an optional WechatPad-owned link editor. `wechatBotLinks` v1 provides credential-free target views and revisioned updates; Bot resolves stable Main Bot/group identity before forwarding. Optional service references are obtained and released in the injected scope. Transport availability, account login and policy states remain distinct from plugin absence/version mismatch. WechatPad owns discovery and persistence; the native client never reads account credentials or reply context tokens.
+The native details settings render an optional WechatPad-owned link editor. `wechatBotLinks` v1 provides credential-free target views and revisioned updates; Bot resolves stable Main Bot/group identity before forwarding. Optional service references are obtained and released in the injected scope. Transport availability, account login and policy states remain distinct from plugin absence/version mismatch. WechatPad owns discovery and persistence; the native client never reads account credentials or reply context tokens. WechatPad enriches existing group candidates with cached group names; the Bot client keeps the chat ID as the binding key and displays it alongside the name to distinguish duplicates.
 
 
 ## 微信附件与顶部状态展示（2026-11-05）

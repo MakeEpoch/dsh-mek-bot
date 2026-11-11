@@ -22,6 +22,7 @@ const ZH = {
   "WeChat robot": "微信机器人",
   "WeChat connection": "微信连接",
   "WeChat group": "微信群",
+  "Group name unavailable": "未获取到群名",
   "WeChat user": "微信用户",
   "WeChat chat ID": "微信聊天 ID",
   "Private chat ID": "私聊 ID",
