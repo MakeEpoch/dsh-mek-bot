@@ -94,10 +94,14 @@ test('without a usable standard preset a Bot Session keeps DSH\'s default', asyn
 test('a group round calls group_relay directly when the Session declares it', async (t) => {
   const { relay, stop } = start()
   t.after(stop)
+  const ids = new Set()
   for (const tools of [declared('read', 'group_relay'), declared('run_code', 'group_relay')]) {
     const block = await relayCall(relay, tools)
-    assert.deepEqual([block.name, block.arguments], ['group_relay', '{}'])
+    assert.equal(block.name, 'group_relay')
+    assert.deepEqual(JSON.parse(block.arguments), { roundId: block.id })
+    ids.add(block.id)
   }
+  assert.equal(ids.size, 2)
 })
 
 test('a group made under the PTC preset relays through run_code', async (t) => {
@@ -107,7 +111,7 @@ test('a group made under the PTC preset relays through run_code', async (t) => {
   assert.equal(block.name, 'run_code')
   assert.deepEqual(JSON.parse(block.arguments), {
     description: 'Relay the group chat to its Bots',
-    code: 'return await tools.group_relay({})',
+    code: `return await tools.group_relay(${JSON.stringify({ roundId: block.id })})`,
     timeoutMs: 600_000,
   })
 })

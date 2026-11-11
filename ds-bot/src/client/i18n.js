@@ -578,6 +578,7 @@ const ZH = {
   'Group settings': '群设置',
   'Rename group': '重命名群聊',
   'Copy conversation ID': '复制对话 ID',
+  'Give up waiting for {name}': '放弃等待 {name}',
   'Hide from the Bot list': '从 Bot 列表隐藏',
   '{name} actions': '{name} 的操作',
   // The DSH Agent's own row and Session list. "DSH Agent" is a product name and

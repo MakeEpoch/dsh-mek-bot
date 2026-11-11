@@ -95,6 +95,7 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
     deleteAvatar: id => call('avatar-delete', { id }),
     createRoom: (members, options = {}) => after(call('create-room', { members, ...options })),
     updateBot: (id, patch) => after(call('update-bot', { id, ...patch })),
+    abandonWork: id => after(call('abandon-work', { id })),
     refreshModels: () => after(call('models')).catch(() => {}),
     efforts: ref => call('efforts', { ref }),
     // Model providers and their API keys; DSH keeps them, and a key only travels to the host.

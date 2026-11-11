@@ -52,6 +52,14 @@ export function install(rt) {
   const workOf = id => own(data().works, id)
   const rootOf = id => own(data().roots, workOf(id)?.rootId ?? id)
   const currentWorks = root => Object.values(data().works).filter(work => work.rootId === root.id && work.status !== 'superseded')
+  function branchOf(id) {
+    const branch = new Set([id])
+    for (let grew = true; grew;) {
+      grew = false
+      for (const child of Object.values(data().works)) if (branch.has(child.parent) && !branch.has(child.id)) { branch.add(child.id); grew = true }
+    }
+    return branch
+  }
   const reviewAdvice = work => {
     const planned = rt.mekTodoReviewAdvice?.(work)
     if (planned) return planned
@@ -76,10 +84,12 @@ export function install(rt) {
     const root = rootOf(entry?.info?.replyTo) ?? rootOf(decision?.workId) ?? rootOf(entry?.mekRoot)
     return root?.owner === rt.selfOf(sessionId) ? root : undefined
   }
-  const activeWork = sessionId => {
+  const activeWork = (sessionId, { allowAbandoned = false } = {}) => {
     const ids = current(sessionId)
     if (ids.length > 1) refuse('Several delegated tasks reached this turn. Use list_tasks and finish each in its own resumed turn; do not attach a question to an arbitrary task.')
-    return workOf(ids[0])
+    const work = workOf(ids[0])
+    if (!allowAbandoned && work?.status === 'abandoned') refuse('The user gave up waiting for this assignment. Retain any result without starting more work.')
+    return work
   }
   const touch = root => { if (root && !final(root)) { root.status = 'running'; root.updatedAt = Date.now() } }
   const save = () => rt.save({ required: true })
@@ -124,6 +134,7 @@ export function install(rt) {
     try { upstreamOpen(id, options) } finally { rt.mekDeferWorkSave = false }
   }
   rt.openWork = (id, options) => {
+    if (workOf(options.parent)?.status === 'abandoned') refuse('The user gave up waiting for this assignment.')
     const root = rootOf(options.rootId) ?? rootFor(options.from, options.parent, options.sessionId)
     if (final(root)) refuse('This task has ended. Start a new task explicitly.')
     rt.mekPolicyGuard?.({ root, action: 'delegate', work: options })
@@ -163,18 +174,20 @@ export function install(rt) {
   let recovering = false
   const sending = new Set()
   async function send(item) {
-    if (stopped || sending.has(item.id) || final(rootOf(item.rootId)) || item.status === 'taken') return
+    if (stopped || sending.has(item.id) || final(rootOf(item.rootId)) || item.status === 'taken' || !item.args) return
     sending.add(item.id)
     try {
       await rt.mekPrepareTodoDelivery?.(item.rootId, item.args)
+      if (!item.args) return
       item.status = 'sending'
       await save()
-      if (final(rootOf(item.rootId))) return
+      if (final(rootOf(item.rootId)) || !item.args) return
       await rt.deliver(item.args)
-      if (item.status !== 'taken') item.status = 'sent'
+      if (item.args) item.status = 'sent'
       delete item.error
       await save()
     } catch (error) {
+      if (!item.args) return
       if (error.code === 'bot/todo-waiting') { item.status = 'pending'; await save(); return }
       if (item.status !== 'taken') { item.status = 'uncertain'; item.error = 'Delivery outcome needs reconciliation; work was not repeated.' }
       await save().catch(() => {})
@@ -296,11 +309,21 @@ export function install(rt) {
   rt.mekSuspended = id => ['waiting_decision', 'waiting_secret', 'waiting_browser'].includes(workOf(id)?.status)
   rt.mekFailWork = (id, status) => {
     const work = workOf(id)
-    if (work) { work.outcome = status; work.failureReason = status; changed() }
+    if (work && work.status !== 'abandoned') { work.outcome = status; work.failureReason = status; changed() }
   }
   rt.mekAnswerSender = (sessionId, source, text, long) => {
     const work = workOf(source.exchangeId)
     if (!work) return false
+    if (work.status === 'abandoned') {
+      if (work.lateResultAt) return true
+      work.lateResult = text.slice(0, TEXT_KEPT)
+      work.lateResultAt = Date.now()
+      work.sourceSessionId ??= sessionId
+      drop(work.id)
+      void save().then(() => announce('late-result', rootOf(work.id), work))
+        .catch(error => rt.warn('mek-bot: could not retain late task result: %s', error))
+      return true
+    }
     const plannedReturn = rt.mekTodoReturnOwner?.(work.rootId)
     if (plannedReturn && !work.parent) source = { ...source, senderSessionId: plannedReturn.botId, senderRoomId: plannedReturn.roomId }
     if (final(rootOf(work.rootId)) || ['cancelled', 'superseded'].includes(work.status) || (work.resultExchangeId && !own(state.works, work.id))) return true
@@ -342,8 +365,12 @@ export function install(rt) {
     return true
   }
 
+  rt.mekWorkDeliveryAllowed = args => workOf(args.work)?.status !== 'abandoned'
+    && workOf(args.exchangeId)?.status !== 'abandoned'
+    && (args.abandoned === true || workOf(args.replyTo)?.status !== 'abandoned')
   const deliver = rt.deliver
   rt.deliver = async args => {
+    if (!rt.mekWorkDeliveryAllowed(args)) { rt.forgetDelivery?.(args.exchangeId); return args.exchangeId }
     const associated = workOf(args.work) ?? workOf(args.replyTo) ?? workOf(args.exchangeId)
     if (associated && ['request', 'resume'].includes(args.role) && rt.mekTodoAllowsDelivery?.(associated.id) === false) throw Object.assign(new Error('The to-do is waiting or paused.'), { code: 'bot/todo-waiting' })
     if (associated && (['cancelled', 'superseded'].includes(associated.status) || rootOf(associated.rootId)?.status === 'cancelled')) return args.exchangeId
@@ -408,7 +435,7 @@ export function install(rt) {
     const work = workOf(rt.workOf(record.trigger))
     if (!work) return false
     const root = rootOf(work.rootId)
-    if (final(root) || work.resultAt || rt.mekSuspended(work.id)) return true
+    if (final(root) || work.resultAt || work.status === 'abandoned' || rt.mekSuspended(work.id)) return true
     const prior = own(data().outbox, work.restartResumeId)
     if (prior && prior.status !== 'taken') return true
     if (record.resumed || prior) {
@@ -429,14 +456,14 @@ export function install(rt) {
     const member = rt.botOf(memberId)
     if (!member || !room.members.includes(memberId)) refuse('Choose a member still in this group.')
     if (rt.upstreamOf([parent]).has(memberId)) refuse('A selected group member is waiting for this task. Ask the owner a question instead of delegating back to an ancestor.')
-    const { sessionId, context, files } = prepared ?? await rt.prepareGroupMemberTask(room, member)
+    const { sessionId, context, images, files } = prepared ?? await rt.prepareGroupMemberTask(room, member)
     const id = randomUUID()
     const fromSession = room.sessions?.[from]
     const returnInGroup = fromSession && (!groupRoot || parent !== groupRoot)
     rt.openWork(id, { from, to: memberId, parent, groupRoot, ...(rootId ? { rootId } : {}), room: room.id, sessionId,
       ...(returnInGroup ? { fromRoom: room.id } : {}), instruction })
     const args = { fromId: from, toId: memberId, sessionId, role: 'request', exchangeId: id,
-      ...(returnInGroup ? { fromRoomId: room.id } : {}), text: groupInstruction(instruction, context), files }
+      ...(returnInGroup ? { fromRoomId: room.id } : {}), text: groupInstruction(instruction, context), images, files }
     return { id, item: prepare(rootOf(id).id, args) }
   }
   // `delegated` says the post is a dispatch that must reach members: message_bot's
@@ -460,7 +487,7 @@ export function install(rt) {
     await dispatchGroup(work)
   }
   async function dispatchGroup(work) {
-    if (final(rootOf(work.id)) || !work.dispatching) return
+    if (final(rootOf(work.id)) || !work.dispatching || work.status === 'abandoned') return
     const room = rt.roomOf(work.room)
     if (!room || !rt.botOf(work.from)) { work.outcome = 'blocked'; work.result = 'The group or task owner is unavailable.'; work.dispatching = false; await completeGroup(work); return }
     if (!work.members) {
@@ -468,10 +495,12 @@ export function install(rt) {
       // it names, and only a dispatch with no target at all falls back to the group's
       // opening pick. An ordinary post that names nobody wakes no one.
       work.members = await rt.prepareGroupTask(room, rt.botOf(work.from), work.instruction, work.groupFiles ?? [], { delegated: work.delegated === true, mentions: work.groupMentions })
+      if (!work.dispatching) return
       await save()
     }
     const items = []
     for (const member of work.members ?? []) {
+      if (!work.dispatching) return
       if (Object.values(data().works).some(child => child.parent === work.id && child.to === member && child.status !== 'superseded')) continue
       if (!rt.botOf(member) || !room.members.includes(member)) { work.outcome = 'blocked'; work.result = 'A selected group member is no longer available.'; continue }
       try {
@@ -479,6 +508,7 @@ export function install(rt) {
         items.push(created.item)
         await save()
       } catch (error) {
+        if (!work.dispatching) return
         const changed = work.dispatchError !== String(error.message)
         work.dispatchError = String(error.message)
         rootOf(work.id).status = 'blocked'
@@ -535,15 +565,16 @@ export function install(rt) {
     await completeGroup(workOf(work.groupRoot))
   }
   async function completeGroup(work) {
-    if (!work || work.dispatching || work.resultExchangeId || final(rootOf(work.id)) || ['cancelled', 'superseded'].includes(work.status)) return
+    if (!work || work.dispatching || work.resultExchangeId || final(rootOf(work.id)) || ['abandoned', 'cancelled', 'superseded'].includes(work.status)) return
     const children = Object.values(data().works).filter(child => child.parent === work.id && child.status !== 'superseded')
-    if (children.some(child => !['review', 'completed', 'failed', 'blocked', 'unknown', 'cancelled'].includes(child.status))) return
+    if (children.some(child => !['review', 'completed', 'failed', 'blocked', 'unknown', 'cancelled', 'abandoned'].includes(child.status))) return
     const root = rootOf(work.id)
-    const bad = children.find(child => ['failed', 'blocked', 'unknown', 'cancelled'].includes(child.status))
-    if (bad) work.outcome = bad.status === 'cancelled' ? 'blocked' : bad.status
+    const bad = children.find(child => ['failed', 'blocked', 'unknown', 'cancelled', 'abandoned'].includes(child.status))
+    if (bad) work.outcome = ['cancelled', 'abandoned'].includes(bad.status) ? 'blocked' : bad.status
     const result = children.map(child => `${rt.botOf(child.to)?.name ?? 'Bot'}:\n${child.result ?? 'No result retained.'}`).join('\n\n') || work.result || 'No group result.'
+    const returned = children.filter(child => child.status !== 'abandoned')
     work.report = { status: bad || work.outcome === 'blocked' ? 'blocked' : children.some(needsReport) ? 'needs_report' : 'completed', summary: result.slice(0, TEXT_KEPT),
-      evidence: children.map(child => child.report?.evidence ?? 'Structured verification was not returned.').join('\n'), artifacts: children.flatMap(child => child.report?.artifacts ?? []) }
+      evidence: returned.map(child => child.report?.evidence ?? 'Structured verification was not returned.').join('\n'), artifacts: returned.flatMap(child => child.report?.artifacts ?? []) }
     const id = randomUUID()
     work.resultExchangeId = id
     const parent = own(state.works, work.id)?.parent
@@ -561,7 +592,7 @@ export function install(rt) {
     const before = [...(rt.roomOf(id)?.members ?? [])]
     const result = await updateRoom(id, patch, actor)
     const removed = new Set(before.filter(member => !result.room.members.includes(member)))
-    for (const work of Object.values(data().works).filter(item => item.room === id && removed.has(item.to) && !item.resultAt && !final(rootOf(item.id)) && !['cancelled', 'superseded'].includes(item.status))) {
+    for (const work of Object.values(data().works).filter(item => item.room === id && removed.has(item.to) && !item.resultAt && !final(rootOf(item.id)) && !['abandoned', 'cancelled', 'superseded'].includes(item.status))) {
       const descendants = new Set([work.id])
       let grew = true
       while (grew) {
@@ -590,7 +621,7 @@ export function install(rt) {
 
   const deleteRoom = rt.deleteRoom
   rt.deleteRoom = async id => {
-    const affected = Object.values(data().works).filter(work => work.room === id && !final(rootOf(work.id)) && !['completed', 'cancelled', 'superseded'].includes(work.status))
+    const affected = Object.values(data().works).filter(work => work.room === id && !final(rootOf(work.id)) && !['abandoned', 'completed', 'cancelled', 'superseded'].includes(work.status))
     const active = affected.filter(work => work.to && !work.resultAt)
     for (const work of active) {
       work.outcome = 'blocked'
@@ -642,7 +673,7 @@ export function install(rt) {
     let routed = false
     for (const request of requests) {
       const work = workOf(request.workId)
-      if (!work || final(rootOf(work.rootId))) continue
+      if (!work || work.status === 'abandoned' || final(rootOf(work.rootId))) continue
       rt.mekPolicyGuard?.({ root: rootOf(work.rootId), action: 'resume', work })
       request.taskResumed = true
       work.status = 'queued'
@@ -730,12 +761,8 @@ export function install(rt) {
     if (work.acceptance && work.status === 'completed') return JSON.stringify(work.acceptance)
     if (work.status !== 'review' || !completedReport(work) || !work.resultAt) refuse('Read a returned completed report with verification evidence before accepting this assignment.')
     if (rt.mekTodoReviewAdvice?.(work)) refuse('This assignment belongs to a to-do. Use control_todo accept with its current revision.')
-    const branch = new Set([work.id])
-    for (let grew = true; grew;) {
-      grew = false
-      for (const child of Object.values(data().works)) if (branch.has(child.parent) && !branch.has(child.id)) { branch.add(child.id); grew = true }
-    }
-    if (Object.values(data().works).some(child => child.id !== work.id && branch.has(child.id) && !['completed', 'cancelled', 'superseded'].includes(child.status))
+    const branch = branchOf(work.id)
+    if (Object.values(data().works).some(child => child.id !== work.id && branch.has(child.id) && !['completed', 'abandoned', 'cancelled', 'superseded'].includes(child.status))
       || Object.values(data().decisions).some(decision => branch.has(decision.workId) && decision.status === 'open')
       || Object.values(data().outbox).some(item => branch.has(item.id) && ['pending', 'sending', 'uncertain'].includes(item.status))) refuse('Resolve this assignment’s outstanding work, decisions and delivery before accepting it.')
     if (!String(summary ?? '').trim() || !String(evidence ?? '').trim()) refuse('Record the accepted result and concrete evidence.')
@@ -773,7 +800,7 @@ export function install(rt) {
     evidence: { type: 'string', required: true, description: 'Checks actually run and their results; explicitly identify anything unverified' },
     artifacts: { type: 'array', items: { type: 'string' }, description: 'Paths or URLs of deliverables and evidence' },
   }, async (args, exec) => {
-    const work = activeWork(exec.agent?.id)
+    const work = activeWork(exec.agent?.id, { allowAbandoned: true })
     if (!work || final(rootOf(work.rootId))) {
       const ordinaryGroup = rt.groupOwners.has(exec.agent?.id) && rt.live.get(exec.agent?.id)?.info?.role === 'room'
       refuse(ordinaryGroup ? 'No active delegated work in this turn. This is an ordinary group reply: write your result in the group; its caller receives substantive results automatically. report_bot_task is for tracked delegations created with message_bot or post_to_group.' : 'No active delegated work in this turn.')
@@ -849,6 +876,68 @@ export function install(rt) {
     announce('completed', root)
     return 'Task accepted. Deliver the result and supporting evidence in your conversation with the user.'
   })
+
+  async function abandonTracked(work, text) {
+    const root = rootOf(work.id)
+    const parentId = own(state.works, work.id)?.parent
+    const parent = own(state.works, parentId)
+    if (!root || final(root) || work.status === 'abandoned' || work.resultAt || !parent?.open.includes(work.id)) return false
+    const branch = branchOf(work.id)
+    const detached = new Set()
+    for (const id of branch) {
+      const item = workOf(id)
+      if (!item || item.resultAt || ['abandoned', 'cancelled', 'completed', 'superseded'].includes(item.status)) continue
+      detached.add(id)
+      item.status = 'abandoned'
+      item.result = id === work.id ? text : 'The user gave up waiting for the parent assignment.'
+      item.abandonedAt = Date.now()
+      item.dispatching = false
+      const waiting = own(state.works, id)
+      if (waiting) { delete waiting.parent; waiting.open = [] }
+    }
+    parent.open = parent.open.filter(id => id !== work.id)
+    const decisions = new Set()
+    for (const decision of Object.values(data().decisions)) {
+      if (detached.has(decision.workId) && decision.status === 'open') { decision.status = 'cancelled'; decisions.add(decision.id) }
+    }
+    for (const list of Object.values(state.secretRequests ?? {})) for (const request of list) {
+      if (detached.has(request.workId) && request.status === 'pending') { request.status = 'canceled'; request.settledAt = Date.now() }
+    }
+    const cancelled = []
+    for (const item of Object.values(data().outbox)) {
+      if (item.args && (decisions.has(item.id) || [item.id, item.args.work, item.args.replyTo].some(id => detached.has(id)))) {
+        cancelled.push({ id: item.id, sessionId: item.args.sessionId ?? rt.chatOf(item.args.toId) })
+        item.status = 'cancelled'
+        delete item.args
+      }
+    }
+    root.updatedAt = Date.now()
+    // The group aggregate already delivers one combined result to its caller.
+    const aggregate = work.groupRoot === parentId ? workOf(parentId) : undefined
+    const toId = parent.to
+    const sessionId = rt.roomOf(work.fromRoom)?.sessions?.[toId]
+    const item = !aggregate && rt.botOf(toId) ? prepare(root.id, {
+      toId, ...(sessionId ? { sessionId } : {}), ...(rt.botOf(work.to) ? { fromId: work.to } : {}),
+      fromName: rt.botOf(work.to)?.name ?? rt.roomOf(work.room)?.name ?? 'Bot',
+      role: 'reply', work: parentId, replyTo: work.id, abandoned: true, text,
+    }) : undefined
+    await save()
+    for (const { id, sessionId: target } of cancelled) {
+      rt.forgetDelivery?.(id)
+      const inbox = ctx.get?.('agents')?.get?.(target)?.inbox
+      for (const message of [...(inbox?.nextStep ?? []), ...(inbox?.nextTurn ?? [])]) {
+        if (message.source?.kind === SOURCE_KIND && message.source.exchangeId === id) inbox.remove(message.id)
+      }
+    }
+    if (item) await send(item)
+    if (aggregate) await completeGroup(aggregate)
+    announce('abandoned', root, work)
+    return true
+  }
+  rt.mekAbandonWork = (id, text) => {
+    const work = workOf(id)
+    return work === undefined ? undefined : abandonTracked(work, text)
+  }
 
   async function cancel(root) {
     root.status = 'cancelled'; root.updatedAt = Date.now()

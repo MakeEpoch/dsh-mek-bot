@@ -14,6 +14,7 @@ const states = {
   waiting_approval: ['Waiting for approval', '等待授权'], unknown: ['Outcome unknown', '结果待核对'],
   completed: ['Accepted', '已验收'], cancelled: ['Cancelled', '已取消'], failed: ['Needs attention', '需要处理'],
   blocked: ['Blocked', '遇到阻塞'], superseded: ['Revised', '已安排修正'],
+  abandoned: ['Wait given up', '已放弃等待'],
   waiting_browser: ['Waiting for browser control', '等待浏览器交接'],
 }
 export const taskStatus = value => label(...(states[value] ?? [value, value]))
@@ -53,9 +54,11 @@ export function TaskCard({ task, roster, team, ctx, compact = false, onChanged }
         {task.status === 'review' && <p role="status">{label('The results are ready for the owner to review and accept. The task is not still executing.', '结果已返回，等待负责人检查证据并验收。')}</p>}
         {(task.work ?? []).filter(item => item.status !== 'superseded').map(item => <div key={item.id} className="mek-task-step">
           <strong>{item.name}</strong><span>{taskStatus(item.status)}</span>
-          {item.report && <p>{item.report.summary}<br />{item.report.evidence}</p>}
-          {!item.report && item.result && <p>{item.result}</p>}
-          {item.report?.artifacts?.length > 0 && <Artifacts values={item.report.artifacts} sessionId={item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to} ctx={ctx} />}
+          {item.status === 'abandoned' && item.result && <p>{item.result}</p>}
+          {item.lateResultAt && <p><strong>{label('Late result', '迟到结果')}</strong><br />{item.lateResult}</p>}
+          {item.report && (item.status !== 'abandoned' || item.lateResultAt) && <p>{item.report.summary}<br />{item.report.evidence}</p>}
+          {item.status !== 'abandoned' && !item.report && item.result && <p>{item.result}</p>}
+          {item.report?.artifacts?.length > 0 && (item.status !== 'abandoned' || item.lateResultAt) && <Artifacts values={item.report.artifacts} sessionId={item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to} ctx={ctx} />}
         </div>)}
         {(task.decisions ?? []).filter(item => item.status === 'open').map(item => <p key={item.id}>{label('Question being handled by the owner: ', '负责人正在处理的问题：')}{item.question}</p>)}
         {task.deliveries?.some(item => item.status === 'uncertain') && <p role="status">{label('A delivery is being reconciled. The task has not been repeated.', '消息送达情况待核对，未重复执行任务。')}</p>}

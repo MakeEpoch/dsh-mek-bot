@@ -22,7 +22,7 @@ import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { GROUP_LINE_READ, ROOM_IDLE_RELAY_LIMIT, ROOM_REPLY_TIMEOUT_MS, ROOM_STEP_GAP_MS, ROOM_WORK_GRACE_MS, SOURCE_KIND, TEAM_TOOLS, TEXT_KEPT } from './constants.js'
+import { GROUP_LINE_READ, LATE_ANSWER, ROOM_IDLE_RELAY_LIMIT, ROOM_REPLY_TIMEOUT_MS, ROOM_STEP_GAP_MS, ROOM_WORK_GRACE_MS, SOURCE_KIND, TEAM_TOOLS, TEXT_KEPT } from './constants.js'
 import { escapeRegExp, headOf, splitRef, textOf } from './text.js'
 import { mentionSpans, speakerOf } from '../shared/mentions.js'
 import { GROUP_REF, output } from './tools.js'
@@ -309,7 +309,7 @@ export function install(rt) {
 
   // Lines from before the round's opening message are kept apart from this round, so
   // an earlier round (an old count-off, say) never reads as part of the current one.
-  // `files` are the files of the lines shown, which go to the member with the prompt.
+  // The attachments of the lines shown go to the member with the prompt.
   function roomPrompt(room, member, round, slot) {
     const peers = room.members.filter(id => id !== member.id).map(rt.botOf).filter(Boolean)
       .map(bot => `${bot.name}${rt.isAdminOf(room, bot.id) ? ' (admin)' : ''}`)
@@ -320,7 +320,7 @@ export function install(rt) {
     const spokeThisRound = (room.seen[member.id] ?? 0) >= round.startSeq
     const members = `Members: the user${peers.length ? `, ${peers.join(', ')}` : ''} and you${leads ? ' (admin)' : ''}. ${ROOM_CALLS}`
     const notice = room.notice ? `Group notice (shared instructions for every member):\n${room.notice}` : ''
-    if (round.kickoff) return { text: [members, notice, leads ? adminNote(room) : '', roomKickoff(rt.uiLanguage?.())].filter(Boolean).join('\n\n'), files: [] }
+    if (round.kickoff) return { text: [members, notice, leads ? adminNote(room) : '', roomKickoff(rt.uiLanguage?.())].filter(Boolean).join('\n\n'), images: [], files: [] }
     const goal = rt.goalBlock?.(room, member, { nudge: round.goalNudge === true, resume: round.goalResume === true }) ?? ''
     // Members answering in this round are named with the round below.
     const answering = new Set(round.slots.filter(other => other.status === 'speaking').map(other => other.id))
@@ -340,7 +340,8 @@ export function install(rt) {
       ...placeLines(round, slot),
       ROOM_REPLY,
     ].filter(Boolean).join('\n\n')
-    return { text, files: [...earlier, ...current].flatMap(line => line.files ?? []) }
+    const shown = [...earlier, ...current]
+    return { text, images: shown.flatMap(line => line.images ?? []), files: shown.flatMap(line => line.files ?? []) }
   }
 
   // Where a turn stands in its round: its place in the order when members take turns,
@@ -470,7 +471,7 @@ export function install(rt) {
   // called it, which answers what the turn posts after the round moved on. What the
   // member writes before its last step is posted at once and collected in `said`, and
   // `heard` takes each such line once it is posted.
-  async function roomTurn(room, member, sessionId, { text, files }, note, signal, round, by, said = [], heard = () => {}, onWork = () => {}) {
+  async function roomTurn(room, member, sessionId, { text, images, files }, note, signal, round, by, said = [], heard = () => {}, onWork = () => {}) {
     if (signal.aborted) return null
     const startedAt = Date.now()
     const exchangeId = randomUUID()
@@ -511,7 +512,7 @@ export function install(rt) {
       signal.addEventListener('abort', () => finish(null), { once: true })
     })
     try {
-      await rt.deliver({ fromId: undefined, toId: member.id, sessionId, role: 'room', roomId: room.id, exchangeId, note, text, files, steer: busy, ...(by ? { askedBy: by } : {}) })
+      await rt.deliver({ fromId: undefined, toId: member.id, sessionId, role: 'room', roomId: room.id, exchangeId, note, text, images, files, steer: busy, ...(by ? { askedBy: by } : {}) })
       // The prompt reached the member: its read position moves on.
       room.seen[member.id] = seenAt
       // Still held by an earlier request: this turn cannot start until the user answers.
@@ -803,7 +804,7 @@ export function install(rt) {
       markBatchWorked(room.id, member.id)
     }
     const reply = await roomTurn(
-      room, member, session.id, { text, files: prompt.files }, slot.note ?? 'your turn', signal, round, slot.by, said,
+      room, member, session.id, { ...prompt, text }, slot.note ?? 'your turn', signal, round, slot.by, said,
       line => callFrom(room, round, member, line, called, { worked, byBot: slot.by !== undefined }),
       onWork,
     )
@@ -878,7 +879,7 @@ export function install(rt) {
   rt.teamTools.push(defineTool({
     name: 'group_relay',
     description: 'Group chat relay only. Deliver the latest user message to the Bots it calls in this group chat, and collect their replies.',
-    parameters: {},
+    parameters: { roundId: { type: 'string', description: 'Unique id of this relay round' } },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
     async execute(_args, exec) {
       await rt.load()
@@ -913,12 +914,12 @@ export function install(rt) {
       const stoppedOnly = posts.length > 0 && posts.every(item => event(item) && item.stopped === true)
       for (const post of posts.filter(item => !item.kickoff && !event(item) && item.logged === undefined)) {
         // Image readings go into the log only; `@` names are picked from what the user typed.
-        // A file stays with its line and reaches each member the line is shown to.
-        const readings = post.images === undefined ? [] : await rt.imagesForGroup(post.images, room.id)
+        const readings = post.images === undefined ? [] : await rt.imagesForGroup(post.images, rt.sessionOfRoom(room))
         const text = [post.text, ...readings, ...(post.files ?? []).map(fileLine)].filter(Boolean).join('\n')
         appendRoom(room, {
           ...(post.botId ? { who: rt.botOf(post.botId)?.name ?? post.name ?? 'Bot', botId: post.botId } : { who: 'User' }),
           text,
+          ...(post.images === undefined ? {} : { images: post.images }),
           ...(post.files === undefined ? {} : { files: post.files }),
         })
       }
@@ -1005,7 +1006,10 @@ export function install(rt) {
         rt.roomProgress.delete(exec.callId)
       }
       if (exec.signal?.aborted) {
-        for (const turn of round.started) void rt.stopRoomTurn?.(room.sessions?.[turn.botId] ?? turn.sessionId, turn.exchangeId)
+        for (const turn of round.started) {
+          void rt.stopRoomTurn?.(room.sessions?.[turn.botId] ?? turn.sessionId, turn.exchangeId)
+            ?.catch(error => rt.warn('ds-bot: stopping a turn of the round in %s failed: %s', room.name, error))
+        }
       } else if (rt.goalDrive !== undefined) {
         // A round that ends with an active goal and nothing running may wake the admin.
         try {
@@ -1189,7 +1193,7 @@ export function install(rt) {
     await loadGroupLines(room)
     const slot = { id: member.id, name: member.name, status: 'speaking', ordered: false }
     const prompt = roomPrompt(room, member, { roomId: room.id, members: room.members, startSeq: room.seq, slots: [slot], replies: [] }, slot)
-    return { sessionId: session.id, context: [session.brief, prompt.text].filter(Boolean).join('\n\n'), files: prompt.files }
+    return { sessionId: session.id, context: [session.brief, prompt.text].filter(Boolean).join('\n\n'), images: prompt.images, files: prompt.files }
   }
   rt.appendGroupTaskResult = async (roomId, botId, text) => {
     const room = rt.roomOf(roomId)
@@ -1389,15 +1393,27 @@ export function install(rt) {
   // The user stops everything at work in this group at once: the round the group's own
   // Session runs, which takes the member turns it started with it, then each member's
   // turn here. The round goes first, so it calls no one else meanwhile. Work the same
-  // Bots do in their own chats or other groups goes on.
+  // Bots do in their own chats or other groups goes on. What cannot be stopped does not
+  // keep the rest going; the first failure is reported once the others are stopped.
   async function stopRoomWork(roomId) {
     await rt.load()
     const room = rt.roomOf(roomId)
     if (room === undefined) return false
+    const failures = []
+    const attempt = async (work) => {
+      try {
+        return await work()
+      } catch (error) {
+        rt.warn('ds-bot: stopping work in %s failed: %s', room.name, error)
+        failures.push(error)
+        return false
+      }
+    }
     const round = rt.roomBusy(room.id)
-    if (round) (await rt.resolveAgent(rt.sessionOfRoom(room))).cancel({ kind: 'user' })
+    if (round) await attempt(async () => (await rt.resolveAgent(rt.sessionOfRoom(room))).cancel({ kind: 'user' }))
     let stopped = false
-    for (const botId of room.members) stopped = (await stopMemberWork(room.id, botId)) || stopped
+    for (const botId of room.members) stopped = (await attempt(() => stopMemberWork(room.id, botId))) || stopped
+    if (failures.length > 0) throw failures[0]
     return round || stopped
   }
   rt.stopRoomWork = stopRoomWork
@@ -1452,10 +1468,11 @@ export function install(rt) {
     ].filter(Boolean).join('\n\n')
     // Replies the poster waited for go on with the work it posted for.
     const work = post.sub === undefined ? undefined : rt.closeWork(post.sub, `Group "${room.name}"`, text)
+    const late = work === undefined && post.sub !== undefined && rt.abandonedWork?.(post.sub) !== undefined
     // The report goes back to the conversation the post was written from: its
     // Session in that group when the post came from one, else the own chat.
     const back = rt.roomOf(post.fromRoomId)?.sessions?.[post.botId]
-    await rt.deliver({ toId: post.botId, ...(back ? { sessionId: back } : {}), role: 'report', roomId: room.id, text, ...(work ? { work, replyTo: post.sub } : {}) })
+    await rt.deliver({ toId: post.botId, ...(back ? { sessionId: back } : {}), role: 'report', roomId: room.id, text: late ? LATE_ANSWER + text : text, ...(work ? { work, replyTo: post.sub } : {}) })
       .catch(error => rt.warn('ds-bot: group report to %s failed: %s', post.name, error))
   }
 
@@ -1497,11 +1514,13 @@ export function install(rt) {
         return
       }
       const id = `toolu_relay_${randomUUID().replace(/-/g, '')}`
+      // The repeat-call detector compares arguments, so every round must differ.
+      const relayArgs = JSON.stringify({ roundId: id })
       // Only for a group made under the PTC preset, which can call nothing but run_code;
       // new group Sessions get the standard preset.
       const [name, args] = declared.has('run_code') && !declared.has('group_relay')
-        ? ['run_code', JSON.stringify({ description: 'Relay the group chat to its Bots', code: 'return await tools.group_relay({})', timeoutMs: 600_000 })]
-        : ['group_relay', '{}']
+        ? ['run_code', JSON.stringify({ description: 'Relay the group chat to its Bots', code: `return await tools.group_relay(${relayArgs})`, timeoutMs: 600_000 })]
+        : ['group_relay', relayArgs]
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: args }
       yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: args } }

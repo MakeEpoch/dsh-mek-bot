@@ -583,7 +583,9 @@ test('a Bot\'s answer waits for the work it handed on, and carries what came bac
   assert.deepEqual(Object.values(await worksIn(team)).map(work => [work.from, work.to, work.open.length, work.held]), [['a', 'b', 1, 'handed it to Tester'], ['b', 'c', 0, undefined]])
   assert.deepEqual(callsOf(agents, 'a'), [])
   // Its mark shows it waits, and its row whom for.
-  assert.deepEqual(await shown(), [true, { b: { bots: ['c'], rooms: [], for: ['a'] } }])
+  assert.deepEqual(await shown(), [true, {
+    b: { bots: ['c'], rooms: [], for: ['a'], waits: [{ id: callsOf(agents, 'c')[0][1].source.exchangeId, to: 'c', name: 'Tester' }] },
+  }])
 
   take('c')
   end('c', 'two things to fix')

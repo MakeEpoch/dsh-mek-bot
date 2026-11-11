@@ -4,7 +4,7 @@
 // Turn tracking: which turns were triggered by another Bot, and what they said.
 import { randomUUID } from 'node:crypto'
 import { carrierKeyOf } from '@deepseek-ai/dsh-scope'
-import { HANDOFF_ACK, MESSAGE_INLINE_MAX, REFERENCE_KIND, REPLY_KIND, SOURCE_KIND, STEER_CUT } from './constants.js'
+import { HANDOFF_ACK, LATE_ANSWER, MESSAGE_INLINE_MAX, REFERENCE_KIND, REPLY_KIND, SOURCE_KIND, STEER_CUT } from './constants.js'
 import { cleanText } from './diagnostics.js'
 import { absoluteLinks } from './links.js'
 import { splitRef, textOf } from './text.js'
@@ -41,13 +41,19 @@ export function answerSender(rt, id, source, text, long) {
   const back = rt.roomOf(source.senderRoomId)?.sessions?.[source.senderSessionId]
   const name = rt.botOf(rt.selfOf(id))?.name ?? 'The other Bot'
   const work = rt.closeWork?.(source.exchangeId, name, text)
+  // A reply that arrives after the user gave up the wait is a late answer: it closes
+  // nothing, opens nothing, and says on it that the wait was already over.
+  const late = work === undefined ? rt.abandonedWork?.(source.exchangeId) : undefined
+  const marker = late === undefined ? '' : LATE_ANSWER
+  const body = marker === '' ? (long?.text ?? text) : `${marker}${long?.text ?? text}`
+  const length = long === undefined ? undefined : late === undefined ? long.length : (long.length ?? text.length) + marker.length
   const exchangeId = randomUUID()
   void rt.deliver({
     fromId: rt.selfOf(id),
     toId: source.senderSessionId,
     ...(back ? { sessionId: back } : {}),
-    text: long?.text ?? text,
-    ...(long?.length === undefined ? {} : { files: long.files, length: long.length }),
+    text: body,
+    ...(length === undefined ? {} : { files: long.files, length }),
     role: 'reply',
     replyTo: source.exchangeId,
     exchangeId,
@@ -85,12 +91,21 @@ export function attachReference(queued, source, text) {
 }
 
 // A tool call some models write into their text instead of making it (the XML-like
-// form of their own chat template).
-const WRITTEN_CALL = /<tool_call>\s*<function=|<function=[\w.-]+>\s*<parameter=/
+// form of their own chat template). A reply cut off in the middle of such a call can
+// keep only its closing tags, so those count as one too, or only the first tags of a
+// parameter. Some models write the CJK brackets, so both forms match.
+const TAG_OPEN = '[<＜]'
+const TAG_CLOSE = '[>＞]'
+const TOOL_CALL_TAG = `${TAG_OPEN}tool_call${TAG_CLOSE}`
+const FUNCTION_TAG = `${TAG_OPEN}function=[\\w.-]+${TAG_CLOSE}`
+const PARAMETER_TAG = `${TAG_OPEN}parameter=[\\w.-]+${TAG_CLOSE}`
+const CLOSING_TAG = `${TAG_OPEN}/(?:parameter|function|tool_call)${TAG_CLOSE}`
+const WRITTEN_CALL = new RegExp(`${TOOL_CALL_TAG}\\s*${TAG_OPEN}function=|${FUNCTION_TAG}\\s*${TAG_OPEN}parameter=|${CLOSING_TAG}`)
 export const writesToolCall = text => typeof text === 'string' && WRITTEN_CALL.test(text)
 export const stripWrittenCalls = text => text
-  .replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)/g, '')
-  .replace(/<function=[\w.-]+>[\s\S]*?(?:<\/function>|$)/g, '')
+  .replace(new RegExp(`${TOOL_CALL_TAG}[\\s\\S]*?(?:${TAG_OPEN}/tool_call${TAG_CLOSE}|$)`, 'g'), '')
+  .replace(new RegExp(`${FUNCTION_TAG}[\\s\\S]*?(?:${TAG_OPEN}/function${TAG_CLOSE}|$)`, 'g'), '')
+  .replace(new RegExp(`(?:${CLOSING_TAG}|${PARAMETER_TAG})\\s*`, 'g'), '')
   .trim()
 
 // Under DSH's PTC presentation the model calls only this tool; the program's sub-calls
@@ -112,6 +127,9 @@ const RETRY_TEXT = 'Your last reply wrote a tool call as plain text (<tool_call>
 const RETRY_PROMISE_TEXT = 'Your last reply said you would start working, but you ended the turn without calling any tool, so nothing ran. Call the tools you need and do the work now. If your last reply already was your whole answer, reply [PASS]; it stays posted.'
 // DSH numbers turns from 1. A reload can see that an Agent is running without its turn number.
 const RECOVERED_TURN = -1
+const CUT_OFF_NOTE = "[cut off at the model's output limit; the answer is not complete]"
+const CUT_OFF_EMPTY_NOTE = "[cut off at the model's output limit before it wrote anything]"
+export const cutOffText = text => text === '' ? CUT_OFF_EMPTY_NOTE : `${text}\n\n${CUT_OFF_NOTE}`
 
 // A reply that only promises to start investigating/checking/running tools now without
 // actually calling a tool or handing off with @Name (#469). A verb followed by 过了,
@@ -225,7 +243,9 @@ export function install(rt) {
     const map = subagentsByParent.get(sessionId)
     const childIds = [...(map?.keys() ?? [])]
     for (const agent of ctx.get?.('agents')?.list?.() ?? []) {
-      if (agent?.session?.header?.parentSession === sessionId && typeof agent.id === 'string' && !childIds.includes(agent.id)) {
+      const header = agent?.session?.header
+      // A fork names its parent too, but it is the user's own Session, not work to stop.
+      if (header?.parentSession === sessionId && header.origin === 'subagent' && typeof agent.id === 'string' && !childIds.includes(agent.id)) {
         childIds.push(agent.id)
       }
     }
@@ -234,7 +254,8 @@ export function install(rt) {
     stoppedSubagentParents.add(sessionId)
     for (const childId of childIds) {
       rememberStopped(stoppedSubagents, childId)
-      await Promise.resolve(ctx.subagents?.interrupt?.(childId, { kind: 'user', parentSessionId: sessionId })).catch(() => {})
+      // Not in the plugin's inject list, where ctx.subagents throws; interrupt can throw too.
+      try { await ctx.get?.('subagents')?.interrupt?.(childId, { kind: 'user', parentSessionId: sessionId }) } catch {}
       const childAgent = ctx.get?.('agents')?.get?.(childId)
       if (childAgent !== undefined) {
         try { childAgent.cancel?.({ kind: 'user' }) } catch {}
@@ -550,6 +571,19 @@ export function install(rt) {
   const placeOf = (id) => {
     const room = rt.roomOf(rt.groupOwners.get(id)?.roomId) ?? rt.roomOf(id)
     return room ? `group "${room.name}"` : 'own chat'
+  }
+  rt.noteCutOff = (id, { empty, route, tokens }) => {
+    const facts = [
+      route?.provider && route?.model ? `${route.provider}/${route.model}` : undefined,
+      Number.isFinite(tokens) && tokens > 0 ? `${tokens} tokens in` : undefined,
+    ].filter(Boolean)
+    rt.noteFailure({
+      level: 'warn', source: 'turn', code: 'MAX_TOKENS',
+      text: `${empty ? 'the turn was cut off at the output limit before it wrote anything' : 'the turn was cut off at the output limit, so its answer is not complete'}${facts.length ? ` (${facts.join(', ')})` : ''}`,
+      bot: rt.botOf(rt.selfOf(id))?.name,
+      where: placeOf(id),
+      sessionId: id,
+    })
   }
   const noteTurnFailure = (id, failure) => {
     rt.noteFailure({
@@ -919,6 +953,8 @@ export function install(rt) {
         const joined = entry.joined ?? []
         // What the group already saw of the turn is not posted again.
         const texts = entry.texts.slice(entry.shown)
+        const wroteText = entry.texts.some(text => stripWrittenCalls(text) !== '')
+        const watched = entry.turn !== undefined
         const shown = entry.shown > 0 || (info?.retried === true && promisedOpenings.delete(info.exchangeId))
         const { lastText, lastCalled } = entry
         const toolCount = entry.toolCount ?? 0
@@ -969,6 +1005,13 @@ export function install(rt) {
         }
         const held = rt.groupOwners.has(id) ? rt.takeRoomSteps?.(id) ?? '' : ''
         if (switched) break
+        const cutOff = watched && reason?.kind === 'max-tokens'
+        const recoveredNeedsLog = recovered && texts.length === 0
+          && (reason?.kind === 'completed' || cutOff) && rt.ownsWork?.(rt.selfOf(id), rt.workOf?.(info))
+        if (watched && !recoveredNeedsLog) {
+          rt.noteCutOffTurn?.(id, cutOff && !wroteText && !recovered)
+          if (cutOff) rt.noteCutOff(id, { empty: !wroteText && !recovered, route: session.requestHeader?.()?.config, tokens: rt.sessionTokens?.(session) })
+        }
         const owner = rt.chatOwners.get(id)
         if (failure !== undefined) {
           if (blockBot(id, session, failure) && owner !== undefined && info?.role === 'kickoff') rt.holdKickoffAgain(owner)
@@ -1000,7 +1043,8 @@ export function install(rt) {
           }
         }
         const replyText = () => {
-          const reply = (wroteCall ? texts.map(stripWrittenCalls) : texts).join('\n\n').trim()
+          const reply = (wroteCall || cutOff ? texts.map(stripWrittenCalls) : texts).join('\n\n').trim()
+          if (cutOff) return reply === '' && wroteText ? CUT_OFF_NOTE : cutOffText(reply)
           return wroteCall && reply === '' ? 'Tried to run a tool but wrote the call as text, so it did not run.' : reply
         }
         const groupReply = () => rt.withRoomSteps?.(held, replyText()) ?? replyText()
@@ -1031,6 +1075,7 @@ export function install(rt) {
           }
           if (rt.mekSuspended?.(work)) return rt.holdWork(work, reply)
           if (rt.waitsWork(work)) return rt.holdWork(work, reply)
+          if (cutOff) rt.mekFailWork?.(work, 'blocked')
           // With what came back, the answer may pass what one message carries.
           const text = rt.answerText(work, reply, name)
           if (text.length <= MESSAGE_INLINE_MAX) return tellSender(id, asker, text)
@@ -1039,8 +1084,7 @@ export function install(rt) {
             .catch(error => rt.warn('ds-bot: answer from %s not sent: %s', name, error))
         }
         // A retried turn answers the same waiter or sender, so this one passes nothing on.
-        if (!retry && recovered && reason?.kind === 'completed' && texts.length === 0
-          && rt.ownsWork?.(rt.selfOf(id), rt.workOf?.(info))) {
+        if (!retry && recoveredNeedsLog) {
           // The answer can have been written before the reload. Use the durable log
           // when this runtime did not see any new text from the original turn.
           void ctx.sessions.flush(session).then(() => rt.reconcileEnded(id, recovered, event.data))

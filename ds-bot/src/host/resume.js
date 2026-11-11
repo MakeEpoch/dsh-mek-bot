@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { HISTORY_TIMEOUT_MS, MESSAGE_INLINE_MAX, SOURCE_KIND, STEER_CUT } from './constants.js'
-import { answerSender, failureLine, turnFailure } from './turns.js'
+import { answerSender, cutOffText, failureLine, stripWrittenCalls, turnFailure } from './turns.js'
 import { textOf } from './text.js'
 
 // Long enough for DSH to finish opening its workspaces after a start.
@@ -386,15 +386,23 @@ export function install(rt) {
       answerSender(rt, sessionId, asker, `${name} was stopped before it could answer your message.`)
       return
     }
+    const cutOff = reason.kind === 'max-tokens'
+    const written = cutOff ? turn.texts.map(stripWrittenCalls).join('\n\n').trim() : said
+    if (cutOff) {
+      const route = events.findLast(event => event.type === 'request/context')?.data
+      rt.noteCutOff?.(sessionId, { empty: written === '', route })
+    }
+    const answer = cutOff ? cutOffText(written) : written
     // The turn ended with what it said: the answer goes up the way a finished turn's
     // does, with the results that came back for it and the text it held. A work that
     // still waits for what it handed on keeps its part until that comes back.
     if (rt.mekSuspended?.(workId)) return
     if (rt.waitsWork(workId)) {
-      rt.holdWork(workId, said)
+      rt.holdWork(workId, answer)
       return
     }
-    const text = rt.answerText(workId, said, name)
+    if (cutOff) rt.mekFailWork?.(workId, 'blocked')
+    const text = rt.answerText(workId, answer, name)
     const long = text.length > MESSAGE_INLINE_MAX ? await rt.attachLong(text, `Answer from ${name}.txt`) : undefined
     answerSender(rt, sessionId, asker, text, long)
   }

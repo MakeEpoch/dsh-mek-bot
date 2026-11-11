@@ -30,6 +30,8 @@ During an in-place plugin reload, the runtime rebuilds activity from the live DS
 
 Unloading the policy marks in-flight model usage incomplete and in-flight resource leases stale and uncertain. Completion callbacks from that policy instance let the DSH result through after its state lock has been released.
 
+Group relays carry image attachments from the lines a member can read, including formal group dispatches. Each synthesized relay gets unique arguments for DSH’s repeat-tool detector. On two consecutive empty output cut-offs, the idle part checks whether its history fits a fresh Session before switching without a generated note.
+
 The bundle adds only this plugin. It does not change DSH search, presets, native sidebar/composer settings or other plugins. The original `ds-bot` bundle must not be enabled at the same time, because both implement the same Bot API.
 
 Use `npm pack --ignore-scripts` and a content-hashed archive for production. Keep `autoInstallPeers: false`. Host API modules are optional peers, supplied by DSH's loader; never install a second Cordis/tools/scope/LLM core to satisfy raw Node imports. Development dependencies stay in `dev/harness`.
@@ -37,6 +39,8 @@ Use `npm pack --ignore-scripts` and a content-hashed archive for production. Kee
 Uninstalling leaves team state and DSH history in place. Native visual scoping is not an access-control sandbox: normal DSH authentication and model/tool permissions still apply.
 
 ## Task coordination
+
+Giving up an open handoff detaches that wait from its parent. Formal task records keep the abandoned branch and its late output. The same state write retains the notification for the original waiting conversation and cancels pending outbox entries for the detached branch. Existing workers retain their task association while they return late output.
 
 `src/host/mek-coordination.js` is installed only by the downstream entry. It reuses upstream handoffs and delivery, adding a persistent original task owner, suspended decisions, structured results, revisions, acceptance and cancellation. Small optional hooks in tools/turns/resume/approvals/secrets/channel preserve upstream behavior without the adapter. `mek/tasks.jsx` adds collapsible native progress and reuses the real approval and credential cards in the owner's chat.
 

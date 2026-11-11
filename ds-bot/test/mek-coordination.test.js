@@ -89,6 +89,39 @@ async function delegate(h) {
   return task(h)
 }
 
+test('giving up a tracked wait keeps the other assignment and records a late result without waking its caller again', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const parent = root.work[0].id
+  await h.tool('b', 'message_bot', { to: 'Tester', message: 'Check the change.' })
+  await h.tool('b', 'message_bot', { to: 'Other chief', message: 'Check the rollout.' })
+  const abandoned = h.agentOf('c').calls[0].source.exchangeId
+  const remaining = h.agentOf('d').calls[0].source.exchangeId
+  h.take('c')
+  h.take('d')
+  h.end('b', 'Waiting for both checks')
+  const before = h.agentOf('b').calls.length
+  assert.ok((await h.call('state')).value.work.waiting.b.waits.some(item => item.id === abandoned))
+  assert.deepEqual(await h.call('abandon-work', { id: abandoned }), { ok: true, value: true })
+  assert.equal((await h.call('abandon-work', { id: abandoned })).error.code, 'bot/stale')
+  const notice = h.agentOf('b').calls.at(-1)
+  assert.equal(notice.source.work, parent)
+  assert.equal(notice.source.abandoned, true)
+  assert.deepEqual(h.rt.state.works[parent].open, [remaining])
+  await assert.rejects(ask(h, 'c', 'Can I do more?'), /gave up waiting/)
+  await h.tool('c', 'report_bot_task', { status: 'completed', summary: 'The old check passed.', evidence: 'Late fixture check.' })
+  h.end('c', 'Late check result')
+  await settled(() => task(h).work.find(item => item.id === abandoned)?.lateResultAt)
+  assert.equal(h.agentOf('b').calls.length, before + 1)
+  const branch = task(h).work.find(item => item.id === abandoned)
+  assert.equal(branch.status, 'abandoned')
+  assert.equal(branch.lateResult, 'Late check result')
+  assert.match(branch.result, /gave up waiting/)
+  assert.equal(h.rt.state.works[abandoned], undefined)
+  h.end('d', 'The rollout check is ready.')
+  await settled(() => h.agentOf('b').calls.some(message => message.source.replyTo === remaining))
+})
+
 test('two questions resume the same work, user answers stay in Chief, review and revision close the loop', async t => {
   const h = await host(t)
   const root = await delegate(h)
@@ -489,14 +522,16 @@ const groupTeam = () => {
 test('an administrator group dispatch retains the user goal and nested return chain through revision', async t => {
   const team = groupTeam()
   const goal = 'Review, repair defects, verify again, then prepare the final delivery.'
+  const screenshot = { attachmentId: 'sha256:abcd1234', name: 'fixture.png', mediaType: 'image/png', bytes: 12, width: 1, height: 1 }
   Object.assign(team.rooms.r, { admin: 'a', sessions: { a: 'ga', b: 'gb', c: 'gc' }, seq: 1,
-    log: [{ seq: 1, who: 'User', text: goal }] })
+    log: [{ seq: 1, who: 'User', text: goal, images: [screenshot] }] })
   const h = await host(t, undefined, team)
   h.begin('ga', { content: text(goal), source: { kind: 'bot', role: 'room', roomId: 'r', exchangeId: 'opening' } })
   const dispatch = { to: 'Tester', message: 'Review the patch and arrange any necessary fixes.', request_id: 'first-review' }
   await h.tool('ga', 'message_bot', dispatch)
   await h.tool('ga', 'message_bot', dispatch)
   assert.equal(h.agentOf('gc').calls.length, 1, 'a named retry must not duplicate dispatch')
+  assert.deepEqual(h.agentOf('gc').calls[0].content.filter(block => block.type === 'image').map(block => block.attachment), [screenshot])
   const root = task(h)
   assert.equal(root.goal, goal)
   assert.equal(root.originSessionId, 'ga')

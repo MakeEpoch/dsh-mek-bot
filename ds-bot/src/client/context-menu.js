@@ -1,12 +1,14 @@
 import { createElement as h, Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { isMainOf } from './sources.js'
 import { currentPart } from './text.js'
-import { GearIcon, PinIcon, UnreadIcon, PencilIcon, StarLineIcon, CopyIcon, HideIcon, TrashIcon, DuplicateIcon } from './icons.js'
+import { GearIcon, PinIcon, UnreadIcon, PencilIcon, StarLineIcon, CopyIcon, HideIcon, TrashIcon, DuplicateIcon, SignOutIcon } from './icons.js'
 import { useEscape } from './overlay-hooks.js'
 import { useViewport, viewBottom } from './motion.js'
 import { t } from './i18n.js'
 
-export function ContextMenu({ menu, roster, actions, leaving = false }) {
+const noWaits = []
+
+export function ContextMenu({ menu, roster, actions, useWork = () => noWaits, viewport, leaving = false }) {
   useEscape(() => actions.closeMenu())
   useEffect(() => {
     const onDown = (event) => { if (!(event.target instanceof Element) || !event.target.closest('.bt-menu')) actions.closeMenu() }
@@ -16,11 +18,14 @@ export function ContextMenu({ menu, roster, actions, leaving = false }) {
   const ref = useRef(null)
   const [place, setPlace] = useState({ left: menu.x, top: menu.y })
   const tick = useViewport()
+  const waits = useWork(work => work.waiting?.[menu.id]?.waits ?? noWaits)
   useLayoutEffect(() => {
     const box = ref.current?.getBoundingClientRect()
     if (!box) return
-    setPlace({ left: Math.max(8, Math.min(menu.x, window.innerWidth - box.width - 8)), top: Math.max(8, Math.min(menu.y, viewBottom() - box.height - 8)) })
-  }, [menu.x, menu.y, tick])
+    const width = viewport || window.innerWidth
+    const bottom = viewBottom()
+    setPlace({ left: Math.max(8, Math.min(menu.x, width - box.width - 8)), top: Math.max(8, Math.min(menu.y, bottom - box.height - 8)), maxHeight: Math.max(0, bottom - 16), overflowY: 'auto' })
+  }, [menu.x, menu.y, tick, viewport, waits])
   if (menu.kind === 'agent' || menu.kind === 'agent-session') return h(AgentMenu, { menu, roster, actions, leaving })
   const bot = roster.byId[menu.id]
   const room = roster.roomsById[menu.id]
@@ -44,18 +49,20 @@ export function ContextMenu({ menu, roster, actions, leaving = false }) {
       bot && isMainBot && mainCount > 1 ? [t('Remove Main Bot role'), StarLineIcon, () => actions.setMain(bot.id, false)] : null,
     ],
     [[t('Copy conversation ID'), CopyIcon, () => navigator.clipboard?.writeText(bot ? currentPart(bot) : menu.id)]],
+    bot && !roster.readOnly ? waits.map(item => [t('Give up waiting for {name}', { name: item.name ?? t('a Bot') }), SignOutIcon, () => actions.abandonWork(item.id), false, item.id]) : [],
     [
       isMainBot ? null : [t('Hide from the Bot list'), HideIcon, () => actions.setFlags(menu.id, { hidden: true })],
       isMainBot ? null : [room ? t('Delete group') : t('Delete'), TrashIcon, () => (bot ? actions.deleteBot(bot.id) : actions.deleteRoom(menu.id)), true],
     ],
   ].map(group => group.filter(Boolean)).filter(group => group.length > 0)
-  return h('div', { ref, className: 'bt-menu', role: 'menu', 'aria-label': t('{name} actions', { name: bot?.name ?? room.name }), style: place, 'data-leaving': leaving || undefined },
+  const limit = viewport > 16 ? { minWidth: Math.min(200, viewport - 16), maxWidth: viewport - 16 } : {}
+  return h('div', { ref, className: 'bt-menu', role: 'menu', 'aria-label': t('{name} actions', { name: bot?.name ?? room.name }), style: { ...place, ...limit }, 'data-leaving': leaving || undefined },
     groups.map((group, index) => h(Fragment, { key: index },
       index > 0 ? h('div', { className: 'bt-menu-sep', role: 'separator' }) : null,
-      group.map(([label, Icon, run, danger]) => h('button', {
-        key: label, type: 'button', role: 'menuitem', className: danger ? 'bt-danger' : undefined,
+      group.map(([label, Icon, run, danger, key]) => h('button', {
+        key: key ?? label, type: 'button', role: 'menuitem', className: danger ? 'bt-danger' : undefined,
         onClick: () => { actions.closeMenu(); void Promise.resolve(run()).catch(error => actions.reportError(error, 'menu')) },
-      }, h(Icon), label)))))
+      }, h(Icon), h('span', { style: { minWidth: 0, overflowWrap: 'anywhere' } }, label))))))
 }
 
 // Menus for the DSH Agent row and its Sessions; none of the Bot entries apply.

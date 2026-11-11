@@ -354,8 +354,11 @@ test('replies a post waits for are work handed on: the answer to the Bot that as
   assert.match(posted, /your answer goes to Tester once all of it is back\.$/)
   host.finish('a', '已经让 Writer 去看了。')
   const waiting = (await host.call('state', {})).value
-  assert.deepEqual([waiting.activity.a, waiting.work.waiting], ['waiting', { a: { bots: [], rooms: ['r1'], for: ['c'] } }])
-  const done = host.round('c1', host.takePost())
+  const post = host.takePost()
+  assert.deepEqual([waiting.activity.a, waiting.work.waiting], ['waiting', {
+    a: { bots: [], rooms: ['r1'], for: ['c'], waits: [{ id: post.source.sub, room: 'r1', name: 'Ops' }] },
+  }])
+  const done = host.round('c1', post)
   await settle(() => host.agentOf('gb').calls.length === 1)
   host.begin('gb')
   host.finish('gb', '文档没问题。')
@@ -1025,6 +1028,17 @@ test('one press stops the group\'s round and every member at work there, and not
   assert.deepEqual(kinds(first()).filter(([kind]) => kind === 'stopped'), [['stopped', 'Chief'], ['stopped', 'Writer']])
 })
 
+test('a failed member cancellation still stops the other members', async (t) => {
+  const host = await start(t)
+  host.emit('ga', 'turn/start', { turn: 1 })
+  host.emit('gb', 'turn/start', { turn: 1 })
+  host.agentOf('ga').cancel = () => { throw new Error('fixture cancellation refused') }
+  const stopped = await host.call('stop-room-work', { roomId: 'r1' })
+  assert.equal(stopped.ok, false)
+  assert.match(stopped.error.message, /fixture cancellation refused/)
+  assert.deepEqual(host.agentOf('gb').cancelled, [{ kind: 'user' }])
+})
+
 test('members still at work show in the team view and in the prompts of the others', async (t) => {
   const host = await start(t)
   host.emit('gb', 'turn/start', { turn: 1 })
@@ -1562,9 +1576,11 @@ test('consecutive 0-tool ack ping-pong relays pause after 6 turns and go on only
 test('a group member with a running DSH subagent stays working and stop-room-work interrupts the subagent (#701)', async (t) => {
   const host = await start(t)
   const interrupted = []
-  host.ctx.subagents = {
+  const get = host.ctx.get
+  const subagents = {
     interrupt: async (childId, opts) => { interrupted.push({ childId, opts }) },
   }
+  host.ctx.get = name => name === 'subagents' ? subagents : get(name)
   const first = host.round('c1', host.say('@Writer 派子代理跑长任务'))
   await settle(() => host.agentOf('gb').calls.length === 1)
   host.begin('gb')

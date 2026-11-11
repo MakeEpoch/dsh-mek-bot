@@ -743,6 +743,7 @@ var ZH = {
   "Group settings": "群设置",
   "Rename group": "重命名群聊",
   "Copy conversation ID": "复制对话 ID",
+  "Give up waiting for {name}": "放弃等待 {name}",
   "Hide from the Bot list": "从 Bot 列表隐藏",
   "{name} actions": "{name} 的操作",
   // The DSH Agent's own row and Session list. "DSH Agent" is a product name and
@@ -9253,6 +9254,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     deleteAvatar: (id) => call2("avatar-delete", { id }),
     createRoom: (members, options = {}) => after(call2("create-room", { members, ...options })),
     updateBot: (id, patch) => after(call2("update-bot", { id, ...patch })),
+    abandonWork: (id) => after(call2("abandon-work", { id })),
     refreshModels: () => after(call2("models")).catch(() => {
     }),
     efforts: (ref) => call2("efforts", { ref }),
@@ -16773,7 +16775,8 @@ function SettingsDialog({ page, id, roster, actions, useUpdate, TeamOverview: Te
 
 // src/client/context-menu.js
 var import_react50 = require("react");
-function ContextMenu({ menu, roster, actions, leaving = false }) {
+var noWaits = [];
+function ContextMenu({ menu, roster, actions, useWork = () => noWaits, viewport, leaving = false }) {
   useEscape(() => actions.closeMenu());
   (0, import_react50.useEffect)(() => {
     const onDown = (event) => {
@@ -16785,11 +16788,14 @@ function ContextMenu({ menu, roster, actions, leaving = false }) {
   const ref = (0, import_react50.useRef)(null);
   const [place, setPlace] = (0, import_react50.useState)({ left: menu.x, top: menu.y });
   const tick = useViewport();
+  const waits = useWork((work) => work.waiting?.[menu.id]?.waits ?? noWaits);
   (0, import_react50.useLayoutEffect)(() => {
     const box = scopedRect(ref.current);
     if (!box) return;
-    setPlace({ left: Math.max(8, Math.min(menu.x, scopedWindow.innerWidth - box.width - 8)), top: Math.max(8, Math.min(menu.y, viewBottom() - box.height - 8)) });
-  }, [menu.x, menu.y, tick]);
+    const width = viewport || scopedWindow.innerWidth;
+    const bottom = viewBottom();
+    setPlace({ left: Math.max(8, Math.min(menu.x, width - box.width - 8)), top: Math.max(8, Math.min(menu.y, bottom - box.height - 8)), maxHeight: Math.max(0, bottom - 16), overflowY: "auto" });
+  }, [menu.x, menu.y, tick, viewport, waits]);
   if (menu.kind === "agent" || menu.kind === "agent-session") return (0, import_react50.createElement)(AgentMenu, { menu, roster, actions, leaving });
   const bot = roster.byId[menu.id];
   const room2 = roster.roomsById[menu.id];
@@ -16816,20 +16822,22 @@ function ContextMenu({ menu, roster, actions, leaving = false }) {
       bot && isMainBot && mainCount > 1 ? [t("Remove Main Bot role"), StarLineIcon, () => actions.setMain(bot.id, false)] : null
     ],
     [[t("Copy conversation ID"), CopyIcon, () => navigator.clipboard?.writeText(bot ? currentPart(bot) : menu.id)]],
+    bot && !roster.readOnly ? waits.map((item) => [t("Give up waiting for {name}", { name: item.name ?? t("a Bot") }), SignOutIcon, () => actions.abandonWork(item.id), false, item.id]) : [],
     [
       isMainBot ? null : [t("Hide from the Bot list"), HideIcon, () => actions.setFlags(menu.id, { hidden: true })],
       isMainBot ? null : [room2 ? t("Delete group") : t("Delete"), TrashIcon, () => bot ? actions.deleteBot(bot.id) : actions.deleteRoom(menu.id), true]
     ]
   ].map((group) => group.filter(Boolean)).filter((group) => group.length > 0);
+  const limit = viewport > 16 ? { minWidth: Math.min(200, viewport - 16), maxWidth: viewport - 16 } : {};
   return (0, import_react50.createElement)(
     "div",
-    { ref, className: "bt-menu", role: "menu", "aria-label": t("{name} actions", { name: bot?.name ?? room2.name }), style: place, "data-leaving": leaving || void 0 },
+    { ref, className: "bt-menu", role: "menu", "aria-label": t("{name} actions", { name: bot?.name ?? room2.name }), style: { ...place, ...limit }, "data-leaving": leaving || void 0 },
     groups.map((group, index) => (0, import_react50.createElement)(
       import_react50.Fragment,
       { key: index },
       index > 0 ? (0, import_react50.createElement)("div", { className: "bt-menu-sep", role: "separator" }) : null,
-      group.map(([label3, Icon, run2, danger]) => (0, import_react50.createElement)("button", {
-        key: label3,
+      group.map(([label3, Icon, run2, danger, key]) => (0, import_react50.createElement)("button", {
+        key: key ?? label3,
         type: "button",
         role: "menuitem",
         className: danger ? "bt-danger" : void 0,
@@ -16837,7 +16845,7 @@ function ContextMenu({ menu, roster, actions, leaving = false }) {
           actions.closeMenu();
           void Promise.resolve(run2()).catch((error) => actions.reportError(error, "menu"));
         }
-      }, (0, import_react50.createElement)(Icon), label3))
+      }, (0, import_react50.createElement)(Icon), (0, import_react50.createElement)("span", { style: { minWidth: 0, overflowWrap: "anywhere" } }, label3)))
     ))
   );
 }
@@ -20400,7 +20408,7 @@ function Overlays({ useRoster, useUi, useSessions, useSessionStatus, useActivity
     ui2.palette ? createPortal((0, import_react55.createElement)(CommandPalette, { key: ui2.palette.token, start: ui2.palette.query, token: ui2.palette.token, roster, actions, useSessions }), scopedDocument.body) : null,
     ui2.exchange ? createPortal((0, import_react55.createElement)(ExchangeDialog, { pair: ui2.exchange, roster, actions }), scopedDocument.body) : null,
     ui2.voice ? createPortal((0, import_react55.createElement)(VoiceMode, { key: ui2.voice, sessionId: ui2.voice, roster, actions, useSessions, useSessionStatus }), scopedDocument.body) : null,
-    menu ? createPortal((0, import_react55.createElement)(ContextMenu, { key: `${menu.kind ?? ""}:${menu.id}:${menu.x}:${menu.y}`, menu, roster, actions, leaving: menuLeaving }), scopedDocument.body) : null,
+    menu ? createPortal((0, import_react55.createElement)(ContextMenu, { key: `${menu.kind ?? ""}:${menu.id}:${menu.x}:${menu.y}`, menu, roster, actions, useWork, viewport: frameSnap.viewport, leaving: menuLeaving }), scopedDocument.body) : null,
     settings ? createPortal((0, import_react55.createElement)(SettingsDialog, { page: settings.page, id: settings.id, roster, actions, useUpdate, TeamOverview: TeamOverview2, leaving: settingsLeaving }), scopedDocument.body) : null,
     owner ? createPortal((0, import_react55.createElement)(MemoryDialog, { key: owner.id, owner, actions, leaving: memoryLeaving }), scopedDocument.body) : null
   );
@@ -21987,6 +21995,7 @@ var states = {
   failed: ["Needs attention", "需要处理"],
   blocked: ["Blocked", "遇到阻塞"],
   superseded: ["Revised", "已安排修正"],
+  abandoned: ["Wait given up", "已放弃等待"],
   waiting_browser: ["Waiting for browser control", "等待浏览器交接"]
 };
 var taskStatus = (value) => label(...states[value] ?? [value, value]);
@@ -22022,7 +22031,7 @@ function TaskCard({ task, roster, team, ctx, compact: compact2 = false, onChange
       setBusy(false);
     }
   };
-  return /* @__PURE__ */ import_react59.default.createElement("details", { className: "mek-task", "data-task-state": task.status }, /* @__PURE__ */ import_react59.default.createElement("summary", null, /* @__PURE__ */ import_react59.default.createElement("span", { className: compact2 ? "mek-task-title" : void 0 }, compact2 ? task.title ?? task.summary : label("Team task", "团队任务")), /* @__PURE__ */ import_react59.default.createElement("span", null, taskStatus(task.status)), !compact2 && /* @__PURE__ */ import_react59.default.createElement("span", { className: "mek-task-preview" }, task.title ?? task.summary)), /* @__PURE__ */ import_react59.default.createElement("div", { className: "mek-task-body" }, task.status === "needs_report" && /* @__PURE__ */ import_react59.default.createElement("p", { role: "status" }, label("The result has returned. The owner must request a structured report and verification evidence before accepting it. Missing a report alone does not require cancellation.", "结果已返回，负责人需请求执行者补充结构化报告和验证证据，再进行验收；无需仅因缺报告取消任务。")), task.status === "review" && /* @__PURE__ */ import_react59.default.createElement("p", { role: "status" }, label("The results are ready for the owner to review and accept. The task is not still executing.", "结果已返回，等待负责人检查证据并验收。")), (task.work ?? []).filter((item) => item.status !== "superseded").map((item) => /* @__PURE__ */ import_react59.default.createElement("div", { key: item.id, className: "mek-task-step" }, /* @__PURE__ */ import_react59.default.createElement("strong", null, item.name), /* @__PURE__ */ import_react59.default.createElement("span", null, taskStatus(item.status)), item.report && /* @__PURE__ */ import_react59.default.createElement("p", null, item.report.summary, /* @__PURE__ */ import_react59.default.createElement("br", null), item.report.evidence), !item.report && item.result && /* @__PURE__ */ import_react59.default.createElement("p", null, item.result), item.report?.artifacts?.length > 0 && /* @__PURE__ */ import_react59.default.createElement(Artifacts, { values: item.report.artifacts, sessionId: item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to, ctx }))), (task.decisions ?? []).filter((item) => item.status === "open").map((item) => /* @__PURE__ */ import_react59.default.createElement("p", { key: item.id }, label("Question being handled by the owner: ", "负责人正在处理的问题："), item.question)), task.deliveries?.some((item) => item.status === "uncertain") && /* @__PURE__ */ import_react59.default.createElement("p", { role: "status" }, label("A delivery is being reconciled. The task has not been repeated.", "消息送达情况待核对，未重复执行任务。")), !["completed", "cancelled"].includes(task.status) && /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", disabled: busy, onClick: () => cancel(task.id) }, label("Cancel task", "取消任务"))));
+  return /* @__PURE__ */ import_react59.default.createElement("details", { className: "mek-task", "data-task-state": task.status }, /* @__PURE__ */ import_react59.default.createElement("summary", null, /* @__PURE__ */ import_react59.default.createElement("span", { className: compact2 ? "mek-task-title" : void 0 }, compact2 ? task.title ?? task.summary : label("Team task", "团队任务")), /* @__PURE__ */ import_react59.default.createElement("span", null, taskStatus(task.status)), !compact2 && /* @__PURE__ */ import_react59.default.createElement("span", { className: "mek-task-preview" }, task.title ?? task.summary)), /* @__PURE__ */ import_react59.default.createElement("div", { className: "mek-task-body" }, task.status === "needs_report" && /* @__PURE__ */ import_react59.default.createElement("p", { role: "status" }, label("The result has returned. The owner must request a structured report and verification evidence before accepting it. Missing a report alone does not require cancellation.", "结果已返回，负责人需请求执行者补充结构化报告和验证证据，再进行验收；无需仅因缺报告取消任务。")), task.status === "review" && /* @__PURE__ */ import_react59.default.createElement("p", { role: "status" }, label("The results are ready for the owner to review and accept. The task is not still executing.", "结果已返回，等待负责人检查证据并验收。")), (task.work ?? []).filter((item) => item.status !== "superseded").map((item) => /* @__PURE__ */ import_react59.default.createElement("div", { key: item.id, className: "mek-task-step" }, /* @__PURE__ */ import_react59.default.createElement("strong", null, item.name), /* @__PURE__ */ import_react59.default.createElement("span", null, taskStatus(item.status)), item.status === "abandoned" && item.result && /* @__PURE__ */ import_react59.default.createElement("p", null, item.result), item.lateResultAt && /* @__PURE__ */ import_react59.default.createElement("p", null, /* @__PURE__ */ import_react59.default.createElement("strong", null, label("Late result", "迟到结果")), /* @__PURE__ */ import_react59.default.createElement("br", null), item.lateResult), item.report && (item.status !== "abandoned" || item.lateResultAt) && /* @__PURE__ */ import_react59.default.createElement("p", null, item.report.summary, /* @__PURE__ */ import_react59.default.createElement("br", null), item.report.evidence), item.status !== "abandoned" && !item.report && item.result && /* @__PURE__ */ import_react59.default.createElement("p", null, item.result), item.report?.artifacts?.length > 0 && (item.status !== "abandoned" || item.lateResultAt) && /* @__PURE__ */ import_react59.default.createElement(Artifacts, { values: item.report.artifacts, sessionId: item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to, ctx }))), (task.decisions ?? []).filter((item) => item.status === "open").map((item) => /* @__PURE__ */ import_react59.default.createElement("p", { key: item.id }, label("Question being handled by the owner: ", "负责人正在处理的问题："), item.question)), task.deliveries?.some((item) => item.status === "uncertain") && /* @__PURE__ */ import_react59.default.createElement("p", { role: "status" }, label("A delivery is being reconciled. The task has not been repeated.", "消息送达情况待核对，未重复执行任务。")), !["completed", "cancelled"].includes(task.status) && /* @__PURE__ */ import_react59.default.createElement("button", { type: "button", disabled: busy, onClick: () => cancel(task.id) }, label("Cancel task", "取消任务"))));
 }
 function TaskProgress({ team, sessionId, ctx, all = false }) {
   const roster = team.hooks.useRoster((value) => value);
