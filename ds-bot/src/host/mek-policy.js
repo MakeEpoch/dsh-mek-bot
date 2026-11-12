@@ -5,7 +5,7 @@ import { realpathSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { clone, optionalText, own, refuse, safeText, teamTool, writable } from './mek-safe.js'
 
-const DONE = new Set(['completed', 'cancelled'])
+const DONE = new Set(['completed', 'cancelled', 'archived'])
 const SAFE_TOOLS = new Set(['ask_user', 'show_view', 'list_tasks', 'read_task', 'name_bot_task', 'list_todos', 'control_todo', 'report_bot_task', 'accept_bot_work', 'finish_bot_task', 'cancel_bot_task', 'release_task_resource', 'list_task_resources'])
 const WRITES = new Set(['exec_command', 'run_command', 'shell', 'bash', 'pwsh', 'terminal', 'execute', 'apply_patch', 'write', 'edit', 'write_file', 'edit_file', 'create_file', 'delete_file', 'move_file'])
 const RESOURCE_WAIT_MS = 30_000

@@ -439,6 +439,32 @@ test('structured evidence and explicit criteria are required for acceptance', as
   assert.equal(task(h).checks.length, 1)
 })
 
+test('archiving a quiet task preserves returned work and rejects active or stale requests', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const archive = updatedAt => h.call('task-review', { taskId: root.id, updatedAt, action: 'archive', summary: 'Superseded by the newer plan.' })
+  assert.match((await archive(task(h).updatedAt)).error.message, /outstanding work/)
+  await h.tool('b', 'report_bot_task', { status: 'completed', summary: 'Prior plan prepared', evidence: 'Three proposed checks recorded' })
+  h.end('b', 'Prior plan prepared')
+  await settled(() => h.agentOf('a').calls.length > 0)
+  h.take('a')
+  assert.match((await archive(task(h).updatedAt)).error.message, /still running/)
+  h.end('a')
+  const before = (await h.snapshot()).mekTasks
+  const callCount = h.agentOf('a').calls.length + h.agentOf('b').calls.length
+  assert.match((await archive(0)).error.message, /task changed/i)
+  const result = await archive(task(h).updatedAt)
+  assert.equal(result.ok, true)
+  assert.equal(result.value.status, 'archived')
+  assert.equal(result.value.archiveReason, 'Superseded by the newer plan.')
+  const after = (await h.snapshot()).mekTasks
+  assert.deepEqual(after.works, before.works)
+  assert.deepEqual(after.outbox, before.outbox)
+  assert.deepEqual(after.decisions, before.decisions)
+  assert.equal(h.agentOf('a').calls.length + h.agentOf('b').calls.length, callCount)
+  assert.equal((await h.call('mek-task-list', { search: root.id, status: 'archived' })).value.tasks[0].id, root.id)
+})
+
 test('returned work remains distinct from active execution, failure and malformed reports', async t => {
   const h = await host(t)
   const root = await delegate(h)

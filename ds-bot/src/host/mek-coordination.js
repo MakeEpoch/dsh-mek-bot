@@ -7,7 +7,8 @@ import { output } from './tools.js'
 import { textOf } from './text.js'
 import { SOURCE_KIND, TEXT_KEPT } from './constants.js'
 
-const final = task => ['completed', 'cancelled'].includes(task?.status)
+const final = task => ['completed', 'cancelled', 'archived'].includes(task?.status)
+const archivableWork = work => !work.dispatching && ['review', 'completed', 'blocked', 'failed', 'cancelled', 'abandoned', 'superseded'].includes(work.status)
 const completedReport = work => work.report?.status === 'completed'
   && typeof work.report.summary === 'string' && work.report.summary.trim() !== ''
   && typeof work.report.evidence === 'string' && work.report.evidence.trim() !== ''
@@ -401,7 +402,7 @@ export function install(rt) {
     if (!rt.mekWorkDeliveryAllowed(args)) { rt.forgetDelivery?.(args.exchangeId); return args.exchangeId }
     const associated = workOf(args.work) ?? workOf(args.replyTo) ?? workOf(args.exchangeId)
     if (associated && ['request', 'resume'].includes(args.role) && rt.mekTodoAllowsDelivery?.(associated.id) === false) throw Object.assign(new Error('The to-do is waiting or paused.'), { code: 'bot/todo-waiting' })
-    if (associated && (['cancelled', 'superseded'].includes(associated.status) || rootOf(associated.rootId)?.status === 'cancelled')) return args.exchangeId
+    if (associated && (['cancelled', 'superseded'].includes(associated.status) || ['cancelled', 'archived'].includes(rootOf(associated.rootId)?.status))) return args.exchangeId
     const work = workOf(args.exchangeId)
     if (args.role === 'request' && work) {
       if (final(rootOf(work.rootId)) || work.status === 'cancelled') return args.exchangeId
@@ -933,10 +934,41 @@ export function install(rt) {
     await supplement(root, work, summary, evidence, self)
     return 'Report saved from the retained result. Review it before acceptance.'
   })
+  const canArchive = (root, work, decisions, deliveries) => !final(root) && !root.workflow && work.every(archivableWork)
+    && !decisions.some(item => item.status === 'open') && deliveries.length === 0
+    && !Object.values(state.mekTodos?.tasks ?? {}).some(item => item.executionId === root.id)
+    && !Object.values(state.mekPolicy?.leases ?? {}).some(item => item.rootId === root.id && ['held', 'stale'].includes(item.status))
+    && !Object.values(state.secretRequests ?? {}).some(list => list.some(item => item.taskId === root.id && item.status === 'pending'))
+
+  async function archive(root, reason) {
+    const task = taskView(root)
+    if (!task.canArchive) refuse('Archive only tasks with no outstanding work, decisions, approvals or uncertain deliveries.')
+    const belongs = info => [info?.exchangeId, info?.replyTo, info?.work].some(id =>
+      rootOf(id)?.id === root.id || own(data().outbox, id)?.rootId === root.id || own(data().decisions, id)?.rootId === root.id)
+    const sessions = new Set([root.originSessionId, rt.chatOf(root.owner)])
+    for (const item of task.work) for (const sessionId of [item.sessionId, item.sourceSessionId, item.to && rt.chatOf(item.to), item.from && rt.chatOf(item.from)]) {
+      if (sessionId) sessions.add(sessionId)
+    }
+    for (const [sessionId, entry] of rt.live) {
+      if (entry.turn !== undefined && (entry.mekRoot === root.id || belongs(entry.info))) refuse('The task is still running.')
+      if (entry.mekRoot === root.id || belongs(entry.info)) sessions.add(sessionId)
+    }
+    for (const sessionId of sessions) {
+      const inbox = ctx.get?.('agents')?.get?.(sessionId)?.inbox
+      if ([...(inbox?.nextStep ?? []), ...(inbox?.nextTurn ?? []), ...(rt.unreadOf?.(sessionId) ?? [])].some(item => belongs(item.source ?? item))) refuse('The task still has a queued message.')
+    }
+    if (rt.approvalsView?.().some(item => item.taskOwner === root.owner && sessions.has(item.sessionId))) refuse('The task is waiting for approval.')
+    root.archiveReason = reviewText(reason, 'the reason for archiving')
+    root.status = 'archived'
+    root.updatedAt = Date.now()
+    await save()
+    return taskView(root)
+  }
   rt.mekTaskReviewAction = async ({ taskId, updatedAt, action, workId, resultAt, summary, evidence, checks, feedback }) => {
     const root = rootOf(taskId)
     if (!root || root.id !== taskId || final(root) || !rt.botOf(root.owner)) refuse('This task is no longer open.')
     if (updatedAt !== root.updatedAt) refuse('The task changed. Refresh it and review the current result.')
+    if (action === 'archive') return archive(root, summary)
     if (action === 'accept') {
       if (!Array.isArray(checks) || checks.some(check => !check || typeof check.criterion !== 'string' || check.passed !== true || typeof check.evidence !== 'string')) refuse('Review every acceptance criterion.')
       await commands.get('finish_bot_task')({ task_id: taskId, summary: [reviewText(summary, 'the accepted outcome'), reviewText(evidence, 'evidence you reviewed')].join('\n\n'), checks: checks.map(check => ({ ...check, evidence: reviewText(check.evidence, 'evidence for each criterion') })) }, {}, root.owner)
@@ -1056,7 +1088,8 @@ export function install(rt) {
 
   function taskView(root, self = root.owner) {
     const visible = Object.values(data().works).filter(item => item.rootId === root.id && (root.owner === self || item.from === self || item.to === self))
-    const pending = Object.values(data().decisions).some(item => item.rootId === root.id && item.status === 'open')
+    const decisions = Object.values(data().decisions).filter(item => item.rootId === root.id)
+    const pending = decisions.some(item => item.status === 'open')
     // Derive the display state from durable work, so old open tasks benefit
     // without rewriting their outcome or pretending that a result was accepted.
     const active = currentWorks(root)
@@ -1077,8 +1110,9 @@ export function install(rt) {
       }
     }
     const title = fallbackTitle(root.title, root.goal, root.summary, ...visible.map(work => work.instruction)) ?? 'Task'
-    return { ...root, title, status, work: visible.map(({ resultExchangeId, resultSessionId, reviewNoticeId, dispatchKeys, ...item }) => ({ ...item, ...(!final(root) && needsReport(item) ? { status: 'needs_report' } : {}), name: rt.botOf(item.to)?.name ?? rt.roomOf(item.room)?.name ?? 'Unavailable Bot' })),
-      decisions: Object.values(data().decisions).filter(item => item.rootId === root.id && (root.owner === self || item.worker === self)),
+    const archivable = root.owner === self && canArchive(root, active, decisions, deliveries)
+    return { ...root, title, status, ...(archivable ? { canArchive: true } : {}), work: visible.map(({ resultExchangeId, resultSessionId, reviewNoticeId, dispatchKeys, ...item }) => ({ ...item, ...(!final(root) && needsReport(item) ? { status: 'needs_report' } : {}), name: rt.botOf(item.to)?.name ?? rt.roomOf(item.room)?.name ?? 'Unavailable Bot' })),
+      decisions: decisions.filter(item => root.owner === self || item.worker === self),
       deliveries: deliveries.map(item => ({ id: item.id, status: item.status, error: item.error })) }
   }
   rt.mekTaskView = (id, viewer) => { const root = rootOf(id); return root && canRead(root, viewer ?? root.owner) ? taskView(root, viewer) : undefined }

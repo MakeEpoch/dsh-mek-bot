@@ -1,4 +1,4 @@
-const ended = status => ['completed', 'cancelled', 'ended'].includes(status)
+const ended = status => ['completed', 'cancelled', 'archived', 'ended'].includes(status)
 export const isEnded = record => ended(record.status ?? record.state)
 export function taskBucket({ record, related = [] }) {
   if (isEnded(record)) return 'ended'
