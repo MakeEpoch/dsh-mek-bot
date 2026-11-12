@@ -150,6 +150,7 @@ export const referenceNote = references => (references?.length
 
 const ROOM_REPLY = 'Reply with your message for the group, no name prefix: in a discussion, one or two short messages. When you are asked to do something, call your first tool in the same step as your opening note — if you stop without a tool call, your turn ends and no work runs. The group does not wait for you and sees what you write while you work: say what you will do, write again only when something matters, and end with the result, never a promise to do it later. Reply [PASS] to stay silent when you have nothing new to add or the message is for someone else.'
 const ROOM_CALLS = 'Writing "@Name" calls that member at once, to answer or to do what you ask, as soon as your message is posted: call members before you start on your own part. Members called in one message start together and do not see each other\'s replies until they post, so when one needs another\'s result, call the first and ask it to call the next. When a member finishes work you gave it, you answer its result. To only mention a member, write its name without "@".'
+const ROOM_TASK_CALLS = 'A user can call a member with @Name. A Bot’s @mentions in its replies are references. To assign work, use message_bot or the task tools. If the user must decide or authorize the work first, ask in your reply and end the turn. Wait for their answer before assigning that work.'
 
 const slotLabel = (slot, self) => {
   if (slot.status === 'speaking') return slot === self ? `${slot.name} (you, now)` : `${slot.name} (answering now)`
@@ -163,10 +164,13 @@ const slotLabel = (slot, self) => {
   return slot.name
 }
 
-const adminNote = room => [
+const adminNote = (room, implicitCalls) => [
   'You are this group\'s admin.',
-  room.mode === 'admin' ? 'Plain messages come to you first: answer them, or call the members who should answer with @Name.' : '',
-  '"@all" calls every member. When the user asks, change the group with update_group.',
+  room.mode === 'admin' ? (implicitCalls
+    ? 'Plain messages come to you first: answer them, or call the members who should answer with @Name.'
+    : 'Plain messages come to you first. Answer them or explicitly assign work to the right member.') : '',
+  implicitCalls ? '"@all" calls every member.' : '',
+  'When the user asks, change the group with update_group.',
 
 ].filter(Boolean).join(' ')
 
@@ -182,6 +186,11 @@ const fileLine = file => `[File "${file.name}" (${file.bytes} bytes) attached]`
 
 export function install(rt) {
   const { ctx } = rt
+  const implicitMemberCalls = () => rt.mekDelegateGroup === undefined
+  const isMemberReply = post => post.progress === true || post.late === true
+  const postMentions = (post, everyone) => !implicitMemberCalls() && isMemberReply(post)
+    ? { all: false, found: [] }
+    : mentionsOf(post, everyone) ?? mentionsIn(post.text ?? '', everyone, post.references)
 
   // A long line keeps its start in state.json, which is written whole on every save,
   // and what a member reads of it (GROUP_LINE_READ) in a file of its own: written once,
@@ -318,9 +327,10 @@ export function install(rt) {
     const earlier = lines.filter(line => line.seq < round.startSeq).slice(-ROOM_EARLIER_MAX)
     const current = lines.filter(line => line.seq >= round.startSeq)
     const spokeThisRound = (room.seen[member.id] ?? 0) >= round.startSeq
-    const members = `Members: the user${peers.length ? `, ${peers.join(', ')}` : ''} and you${leads ? ' (admin)' : ''}. ${ROOM_CALLS}`
+    const implicitCalls = implicitMemberCalls()
+    const members = `Members: the user${peers.length ? `, ${peers.join(', ')}` : ''} and you${leads ? ' (admin)' : ''}. ${implicitCalls ? ROOM_CALLS : ROOM_TASK_CALLS}`
     const notice = room.notice ? `Group notice (shared instructions for every member):\n${room.notice}` : ''
-    if (round.kickoff) return { text: [members, notice, leads ? adminNote(room) : '', roomKickoff(rt.uiLanguage?.())].filter(Boolean).join('\n\n'), images: [], files: [] }
+    if (round.kickoff) return { text: [members, notice, leads ? adminNote(room, implicitCalls) : '', roomKickoff(rt.uiLanguage?.())].filter(Boolean).join('\n\n'), images: [], files: [] }
     const goal = rt.goalBlock?.(room, member, { nudge: round.goalNudge === true, resume: round.goalResume === true }) ?? ''
     // Members answering in this round are named with the round below.
     const answering = new Set(round.slots.filter(other => other.status === 'speaking').map(other => other.id))
@@ -330,7 +340,7 @@ export function install(rt) {
       members,
       notice,
       goal,
-      leads ? adminNote(room) : '',
+      leads ? adminNote(room, implicitCalls) : '',
       earlier.length ? `Earlier in the group, before this round (context only):\n${transcript(earlier, memberText(room))}` : '',
       current.length
         ? `This round so far${spokeThisRound ? ', since your last message' : ', starting with the new message'} (oldest first):\n${transcript(current, memberText(room))}`
@@ -683,6 +693,7 @@ export function install(rt) {
   // ROOM_IDLE_RELAY_LIMIT consecutive turns, the next call is parked in `room.paused`
   // with a notice until the user writes.
   function callFrom(room, round, member, text, called, { worked = false, byBot = false } = {}) {
+    if (!implicitMemberCalls()) return
     const everyone = room.members.map(rt.botOf).filter(Boolean)
     const others = everyone.filter(other => other.id !== member.id)
     const { all, found: named } = mentionsIn(text, everyone)
@@ -928,14 +939,14 @@ export function install(rt) {
       // An event post, and a member post that calls nobody, never pick the speakers
       // over a message queued with them. A post whose members an earlier round already
       // called (`called`) picks none.
-      const callsNobody = post => post.member === true && openingSpeakers(room, post).length === 0
+      const callsNobody = post => (post.member === true || (!implicitMemberCalls() && isMemberReply(post))) && openingSpeakers(room, post).length === 0
       const open = posts.filter(post => post.called !== true)
       const opener = open.findLast(post => !event(post) && !callsNobody(post)) ?? open.findLast(post => !event(post)) ?? open.at(-1) ?? { text: '', quiet: true }
       const references = posts.flatMap(post => post.references ?? [])
       // A member a Bot's post calls by name works for that Bot. The saved list is the
       // whole message; the text may be only its opening.
       const everyone = room.members.map(rt.botOf).filter(Boolean)
-      const named = opener.botId === undefined ? [] : (mentionsOf(opener, everyone) ?? mentionsIn(opener.text ?? '', everyone)).found
+      const named = opener.botId === undefined ? [] : postMentions(opener, everyone).found
       const { speakers, ordered } = openingCall(room, opener)
       const calledByOpener = speakers.filter(member => named.includes(member))
       const openingBatchKey = opener.botId !== undefined && calledByOpener.length > 0 ? registerBatch(room.id, opener.botId, calledByOpener) : undefined
@@ -1140,7 +1151,7 @@ export function install(rt) {
     if (opener.done) return at(members.filter(bot => bot.id === opener.askedBy))
     // A goal post — the user's draft ask, an idle goal check, a resume — is the admin's alone.
     if (opener.goal !== undefined) return at(admin ? [admin] : [])
-    const { all, found: named } = mentionsOf(opener, everyone) ?? mentionsIn(opener.text, everyone, opener.references)
+    const { all, found: named } = postMentions(opener, everyone)
     const found = named.filter(bot => bot.id !== opener.botId)
     if (opener.progress) return at(found)
     if (opener.late) return at(found.length > 0 ? found : members.filter(bot => bot.id === opener.askedBy))
@@ -1163,7 +1174,7 @@ export function install(rt) {
     const { speakers, ordered } = openingCall(room, post)
     if (speakers.length === 0) return false
     const everyone = room.members.map(rt.botOf).filter(Boolean)
-    const named = (mentionsOf(post, everyone) ?? mentionsIn(text, everyone)).found
+    const named = postMentions(post, everyone).found
     const by = speakers.filter(peer => named.includes(peer))
     const rest = speakers.filter(peer => !named.includes(peer))
     const note = extra.done ? `${sender.name} finished the work you asked for` : undefined
@@ -1258,7 +1269,7 @@ export function install(rt) {
     // finished yet: post any non-empty text as a progress line and keep its batch open.
     if (rt.hasSubagents?.(sessionId) === true) {
       if (!isPass(text)) {
-        const calls = callsIn(room, member, text)
+        const calls = implicitMemberCalls() && callsIn(room, member, text)
         await postToRoom(room, member, text, { progress: true, ...(!calls ? { quiet: true } : {}) })
           .catch(error => rt.warn('ds-bot: subagent progress from %s failed: %s', member.name, error))
       }
@@ -1270,7 +1281,7 @@ export function install(rt) {
     // The admin asked for this result: its goal task is reported at once, even
     // while the other members of the batch still work.
     if (askedBy === room.admin && (!isPass(text) || shown)) rt.goalTaskReported?.(room.id, member.id)
-    const named = mentionsIn(text, room.members.map(rt.botOf).filter(Boolean)).found.filter(bot => bot.id !== member.id)
+    const named = postMentions({ late: true, text }, room.members.map(rt.botOf).filter(Boolean)).found.filter(bot => bot.id !== member.id)
     let waitingPeers = false
     let batchDoneBefore = false
     if (batch !== undefined) {
@@ -1301,7 +1312,7 @@ export function install(rt) {
     return room !== undefined && member !== undefined && room.members.includes(member.id) ? { room, member } : undefined
   }
   const callsIn = (room, member, text) => mentionsIn(text, room.members.map(rt.botOf).filter(Boolean)).found.some(bot => bot.id !== member.id)
-  rt.callsRoomMember = (sessionId, info, raw) => {
+  rt.mentionsRoomMember = (sessionId, info, raw) => {
     const { room, member } = memberIn(sessionId, info) ?? {}
     return room !== undefined && member !== undefined && callsIn(room, member, stripOwnName(member.name, raw ?? ''))
   }
@@ -1320,7 +1331,7 @@ export function install(rt) {
     const { room, member } = memberIn(sessionId, info) ?? {}
     if (room === undefined) return
     ensureRoomLog(room)
-    const calls = callsIn(room, member, text)
+    const calls = implicitMemberCalls() && callsIn(room, member, text)
     const running = [...rt.roomProgress.values()].find(round => round.roomId === room.id)
     if (!calls && running !== undefined) {
       postInRound(room, running, member, text)

@@ -1027,7 +1027,7 @@ export function install(rt) {
         const wroteCall = failure === undefined && reason?.kind === 'completed' && lastCalled !== true && writesToolCall(lastText)
         const promisedOnly = !wroteCall && failure === undefined && reason?.kind === 'completed'
           && toolCount === 0 && lastCalled !== true && info?.role === 'room'
-          && promisesWork(lastText) && !rt.callsRoomMember?.(id, info, lastText)
+          && promisesWork(lastText) && !rt.mentionsRoomMember?.(id, info, lastText)
         const retry = (wroteCall || promisedOnly) && info?.retried !== true && !(info?.role === 'room' && stoppedRoomTurns.has(info.exchangeId))
         if (retry) {
           if (promisedOnly) {

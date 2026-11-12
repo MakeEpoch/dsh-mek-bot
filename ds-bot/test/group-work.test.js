@@ -7,6 +7,7 @@ import { createRuntime } from '../index.js'
 import { fakeAttachments, fakeContext } from './fake-ctx.js'
 import { LONG_HEAD, MESSAGE_INLINE_MAX, ROOM_STEP_GAP_MS, ROOM_WORK_GRACE_MS } from '../src/host/constants.js'
 import { promisesWork } from '../src/host/turns.js'
+import { install as installCoordination } from '../src/host/mek-coordination.js'
 
 let rt
 
@@ -28,7 +29,7 @@ const seed = (room = {}, extraRooms = {}, bots = {}) => ({
   revision: 0,
 })
 
-async function start(t, room, services, extraRooms, bots, llm, config = {}) {
+async function start(t, room, services, extraRooms, bots, llm, config = {}, extend) {
   const home = mkdtempSync(join(tmpdir(), 'ds-bot-work-'))
   writeFileSync(join(home, 'state.json'), JSON.stringify(seed(room, extraRooms, bots)))
   const selected = []
@@ -66,7 +67,7 @@ async function start(t, room, services, extraRooms, bots, llm, config = {}) {
   let route
   const register = ctx.connection.fetch.register
   ctx.connection.fetch.register = (options) => { route = options; return register(options) }
-  rt = createRuntime(ctx, { home, ...config })
+  rt = createRuntime(ctx, { home, ...config }, extend)
   t.after(async () => {
     await ctx.dispose()
     rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 })
@@ -122,6 +123,50 @@ const settle = async (check) => {
 }
 const text = message => message.content.map(block => block.text ?? '').join('\n')
 const kinds = result => result.replies.map(reply => [reply.kind ?? 'message', reply.name])
+
+test('native group replies can mention a member while awaiting confirmation without dispatching it', async (t) => {
+  const host = await start(t, undefined, undefined, undefined, undefined, undefined, { coordinateTasks: true }, installCoordination)
+  const first = host.round('clarify', host.say('请先确认改动方案'))
+  await settle(() => host.agentOf('ga').calls.length === 1)
+  const request = host.begin('ga')
+  assert.match(text(request), /Wait for their answer before assigning that work/)
+  host.emit('ga', 'assistant/message', { message: { content: [{ type: 'text', text: '方案会涉及 @Writer，先核对一下。' }] } })
+  host.emit('ga', 'tool/call', { callId: 'read', name: 'read_file', arguments: '{}' })
+  host.emit('ga', 'tool/result', { callId: 'read' })
+  host.finish('ga', '需要保留原入口吗？确认后再由 @Tester 处理。')
+  await settle(() => first() !== undefined)
+  assert.deepEqual(kinds(first()), [['message', 'Chief'], ['message', 'Chief']])
+  assert.match(first().replies[0].text, /@Writer/)
+  assert.match(first().replies[1].text, /@Tester/)
+  assert.deepEqual([host.agentOf('gb').calls, host.agentOf('gc').calls], [[], []])
+
+  const userCall = host.round('user-call', host.say('@Writer 先回复一个问题'))
+  await settle(() => host.agentOf('gb').calls.length === 1)
+  host.begin('gb')
+  host.finish('gb', '我在。')
+  await settle(() => userCall() !== undefined)
+  assert.deepEqual(kinds(userCall()), [['message', 'Writer']])
+})
+
+test('native late member replies keep their mentions in the group without starting another member', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const host = await start(t, undefined, undefined, undefined, undefined, undefined, { coordinateTasks: true }, installCoordination)
+  const first = host.round('late-mention', host.say('请核对方案'))
+  await settle(() => host.agentOf('ga').calls.length === 1)
+  host.begin('ga')
+  host.emit('ga', 'tool/call', { callId: 'inspect', name: 'read_file', arguments: '{}' })
+  t.mock.timers.tick(ROOM_WORK_GRACE_MS)
+  await settle(() => first() !== undefined)
+  host.emit('ga', 'tool/result', { callId: 'inspect' })
+  host.finish('ga', '确认方案后由 @Writer 处理。')
+  await settle(() => host.agentOf('r1').calls.length === 1)
+  const post = host.takePost()
+  assert.equal(post.source.late, true)
+  assert.match(text(post), /@Writer/)
+  const later = host.round('show-late-mention', post)
+  await settle(() => later() !== undefined)
+  assert.deepEqual(host.agentOf('gb').calls, [])
+})
 
 test('work past the grace lets the round go on, and the member that asked answers the result', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })

@@ -22,6 +22,16 @@ await api('send', { sessionId: room.id, text: 'MEK_COORDINATOR_START: adjust the
 const design = find(await until(s => find(s)?.status === 'review', 'design review before approval'))
 assert.equal(design.work.length, 1)
 assert.equal(design.work[0].to, tester.id)
+const readRoom = () => JSON.parse(readFileSync(join(home, 'mek-bot/state.json'))).rooms[room.id]
+let waitingReply
+for (let n = 0; n < 180; n++) {
+  waitingReply = readRoom().log.find(line => line.botId === chief.id && line.text?.includes('@Coder would implement it after you approve'))
+  if (waitingReply && (await api('room-progress', { roomId: room.id })).length === 0) break
+  await delay(250)
+}
+assert.ok(waitingReply, 'the administrator’s confirmation request with @Coder is visible')
+assert.equal((await api('room-progress', { roomId: room.id })).length, 0, 'the group settles while waiting for approval')
+assert.equal(readRoom().sessions[coder.id], undefined, '@Coder did not start a group session before approval')
 await api('send', { sessionId: room.id, text: `可以接受的 MEK_COORDINATOR_APPROVE ${design.id}` })
 const final = find(await until(s => find(s)?.status === 'completed', 'implementation and final acceptance'))
 assert.equal(final.id, design.id); assert.equal(final.work.length, 2); assert.ok(final.work.every(x => x.status === 'completed'))
@@ -34,4 +44,4 @@ const reread = await api('room-chat', { roomId: room.id }); assert.deepEqual(rer
 const calls = readFileSync(join(home, 'coordinator-mock.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(x => JSON.parse(x))
 assert.ok(calls.some(x => x.watchHit === true), 'real model requests receive the administrator section')
 writeFileSync(join(home, 'coordinator-result.json'), JSON.stringify({ room: room.id, root: final, memberPosts: chat.items.filter(x => x.kind === 'post').map(x => ({ botId: x.botId, key: x.key })), source: 'isolated scripted model' }, null, 2))
-console.log('PASS: one titled main task → design → user approval → accepted design step → implementation → final acceptance; both members remain in durable group history.')
+console.log('PASS: the administrator can mention Coder while waiting for approval; explicit dispatch after approval implements and returns the result in the same task.')

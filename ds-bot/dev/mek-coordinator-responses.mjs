@@ -15,7 +15,7 @@ export function coordinatorResponse({ messages, tools, me, isMain, text, tool, t
       const task = JSON.parse(typeof result.content === 'string' ? result.content : textOf(result.content))
       const review = task.work.find(w => w.status === 'review')
       if (review?.to && (task.work.length > 1 || messages.some(m => textOf(m.content).includes('MEK_COORDINATOR_APPROVE')))) return [tool('accept_bot_work', { work_id: review.id, summary: 'Checked and accepted this step.', evidence: 'Read the returned mock report and the required user approval; no external operation.' })]
-      return [text('Design reviewed; waiting for your approval before implementation.')]
+      return [text('Design reviewed. @Coder would implement it after you approve. Please confirm the design.')]
     }
     if (used?.name === 'accept_bot_work') {
       const task = reads()
