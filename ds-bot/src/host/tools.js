@@ -16,13 +16,14 @@ export const GROUP_REF = { type: 'string', required: true, description: 'Exact g
 const BLOCKING_QUESTION_TOOL = 'ask_user_question'
 // DS Bot has its own group goals; DSH's session goal still does not survive conversation parts.
 const GOAL_TOOLS = ['create_goal', 'update_goal', 'get_goal']
+const CODEX_TOOL = 'subagent_codex'
 // DSH's delegation tools start child agents the user cannot watch or stop, and they
 // end with the conversation part that started them; Bots hand work to other Bots.
-const DELEGATION_TOOLS = ['subagent', 'subagent_fork', 'subagent_codex', 'subagent_claude_code', 'list_subagent_models', 'send_message', 'interrupt_agent', 'list_agents', 'workflow', 'ralph']
+const DELEGATION_TOOLS = ['subagent', 'subagent_fork', 'subagent_claude_code', 'list_subagent_models', 'send_message', 'interrupt_agent', 'list_agents', 'workflow', 'ralph']
 // restrict() refuses a whole list when one name is registered in the Agent's own
 // scope, so each group is masked on its own.
 const HIDDEN_TOOL_GROUPS = [[BLOCKING_QUESTION_TOOL, ...GOAL_TOOLS], DELEGATION_TOOLS]
-const HIDDEN_TOOLS = HIDDEN_TOOL_GROUPS.flat()
+const HIDDEN_TOOLS = [...HIDDEN_TOOL_GROUPS.flat(), CODEX_TOOL]
 // The guidance DSH writes into the prompt for the hidden tools.
 const HIDDEN_SECTIONS = new Set([...HIDDEN_TOOLS.map(name => `tool:${name}`), 'tool:goal'])
 const GOAL_REFUSAL = 'Bot chats do not run /goal. To give a group a goal, use Set a goal in its + menu.'
@@ -782,13 +783,14 @@ export function install(rt) {
   // the live Agents back: a reload lifts their scope while they are still
   // live, and agent/created does not fire for them again, so without the walk
   // their next request would come without the team tools.
-  /** @type {Map<string, {agent: any, relay: boolean, restricted: boolean, filtered: boolean, disposers: Array<() => void>, unlisted: Set<string>, added?: Set<string>, missed?: Set<string>}>} */
+  /** @type {Map<string, {agent: any, relay: boolean, restricted: boolean, filtered: boolean, disposers: Array<() => void>, unlisted: Set<string>, added?: Set<string>, missed?: Set<string>, liftCodexMask?: () => void}>} */
   const scoped = new Map()
+  const allowsCodex = id => rt.config.coordinateTasks === true && rt.isMain(rt.chatOwners.get(id))
   const unscope = (id) => {
     const held = scoped.get(id)
     if (held === undefined) return
     scoped.delete(id)
-    for (const dispose of held.disposers) {
+    for (const dispose of [...held.disposers, ...(held.liftCodexMask ? [held.liftCodexMask] : [])]) {
       try {
         dispose()
       } catch (error) {
@@ -869,14 +871,18 @@ export function install(rt) {
     if (held.filtered === true || typeof agent.ctx?.on !== 'function') return
     const dispose = agent.ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
       const assembled = await next()
+      const codexAllowed = allowsCodex(agent.session.id)
       // DSH 0.2.2 adds the tool list after this waterfall (#814), so only an
       // older assembly still carries tools to drop here.
       return {
         ...assembled,
         // DSH 0.2.2's presentation waterfall owns sections, while tools stay in
         // the provider's admitted tool set. Older hosts supplied tools here too.
-        ...(Array.isArray(assembled.tools) ? { tools: assembled.tools.filter(tool => !HIDDEN_TOOLS.includes(tool.name)) } : {}),
-        sections: assembled.sections.filter(section => !HIDDEN_SECTIONS.has(section.name)),
+        ...(Array.isArray(assembled.tools) ? { tools: assembled.tools.filter(tool => (codexAllowed && tool.name === CODEX_TOOL) || !HIDDEN_TOOLS.includes(tool.name)) } : {}),
+        sections: assembled.sections.filter(({ name }) => {
+          if (name === `tool:${CODEX_TOOL}` || name?.startsWith(`tool:${CODEX_TOOL}:`)) return codexAllowed
+          return !HIDDEN_SECTIONS.has(name)
+        }),
       }
     })
     held.filtered = true
@@ -932,15 +938,29 @@ export function install(rt) {
     held.agent = agent
     scoped.set(id, held)
     filterBotAssembly(agent, held)
-    if (held.restricted === true || typeof agent.ctx?.tools?.restrict !== 'function') return
-    maskHiddenTools(agent, held, new Set(ctx.tools.schemas(agent).map(schema => schema.name)))
+    if (typeof agent.ctx?.tools?.restrict !== 'function') return
+    const codexAllowed = allowsCodex(id)
+    if (codexAllowed && held.liftCodexMask) {
+      held.liftCodexMask()
+      held.liftCodexMask = undefined
+    }
+    const needCodexMask = !codexAllowed && !held.liftCodexMask
+    if (held.restricted === true && !needCodexMask) return
+    const served = new Set(ctx.tools.schemas(agent).map(schema => schema.name))
+    // The optional DSH provider can be enabled after this Agent was created.
+    if (needCodexMask && served.has(CODEX_TOOL)) {
+      try { held.liftCodexMask = agent.ctx.tools.restrict({ deny: [CODEX_TOOL] }) } catch { /* the assembly and guard still apply */ }
+    }
+    if (held.restricted !== true) maskHiddenTools(agent, held, served)
   }
   // A new Bot, part, or group Session gets its Agent before ds-bot records it, so the
   // recording path resolves it again once the session is known as a Bot's; meanwhile
   // the guard refuses the question and delegation tools in any Bot Session, and a
   // goal made there is blocked.
   ctx.tools.guard((exec) => {
-    if (!rt.isBotSession(exec.agent?.id)) return undefined
+    const id = exec.agent?.id
+    if (exec.name === CODEX_TOOL && (rt.isBotSession(id) || rt.roomOf(id) !== undefined)) return allowsCodex(id) ? undefined : DELEGATION_REFUSAL
+    if (!rt.isBotSession(id)) return undefined
     if (exec.name === BLOCKING_QUESTION_TOOL) return `Bots cannot use ${BLOCKING_QUESTION_TOOL}. Ask with ask_user in your own chat, or ask in your reply.`
     const target = exec.arguments?.target
     if (SCHEDULE_TARGET_TOOLS.includes(exec.name) && target !== undefined && !['this_session', 'new_once', 'new'].includes(target)) return SCHEDULE_TARGET_REFUSAL

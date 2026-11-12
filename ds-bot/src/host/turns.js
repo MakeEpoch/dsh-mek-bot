@@ -112,7 +112,9 @@ export const stripWrittenCalls = text => text
 // are the tools it really runs.
 const PROGRAM_TOOL = 'run_code'
 // DSH's delegation tools, named by the tool instance: a spawn child and a fork.
-const SUBAGENT_TOOLS = new Set(['subagent', 'subagent_fork'])
+const SUBAGENT_TOOLS = new Set(['subagent', 'subagent_fork', 'subagent_codex'])
+// The DSH Agent and its native children survive disabling and re-enabling this plugin.
+const codexByAgent = new WeakMap()
 // A settled child's closing text, or why it ended without one. A child that did
 // not finish says so: output it left behind can be partial, so the reason it
 // ended is part of its result.
@@ -177,7 +179,7 @@ export function install(rt) {
   // Member turns of a group round the user stopped: what they end with stays out of the group.
   const stoppedRoomTurns = new Set()
   // Running DSH subagents spawned by each Bot Session: parentSessionId → Map<childId, {childId, label?, since}>.
-  /** @type {Map<string, Map<string, {childId:string, label?:string, since:number}>>} */
+  /** @type {Map<string, Map<string, {childId:string, label?:string, since:number, codexParent?:any, stopping?:boolean}>>} */
   const subagentsByParent = new Map()
   /** @type {Map<string, string>} childId → parentSessionId */
   const subagentParent = new Map()
@@ -196,7 +198,7 @@ export function install(rt) {
   }
 
   const subagentLabelFromCall = (entry) => {
-    const call = [...(entry?.calls?.values() ?? [])].findLast(item => item.name === 'subagent')
+    const call = [...(entry?.calls?.values() ?? [])].findLast(item => SUBAGENT_TOOLS.has(item.name))
     if (call === undefined) return undefined
     try {
       const args = JSON.parse(call.args || '{}')
@@ -207,18 +209,31 @@ export function install(rt) {
     }
   }
 
-  const noteSubagentStart = (parentId, childId, label, since = Date.now()) => {
-    if (typeof parentId !== 'string' || parentId === '' || typeof childId !== 'string' || childId === '') return
-    if (stoppedSubagents.has(childId) || (!rt.isBotSession(parentId) && !rt.roomOf(parentId))) return
-    subagentParent.set(childId, parentId)
+  const trackSubagent = (parentId, child) => {
+    subagentParent.set(child.childId, parentId)
     let map = subagentsByParent.get(parentId)
     if (map === undefined) subagentsByParent.set(parentId, map = new Map())
-    const existing = map.get(childId)
-    map.set(childId, {
+    map.set(child.childId, child)
+  }
+
+  const noteSubagentStart = (parentId, childId, label, since = Date.now(), codexParent) => {
+    if (typeof parentId !== 'string' || parentId === '' || typeof childId !== 'string' || childId === '') return
+    if (stoppedSubagents.has(childId) || (!rt.isBotSession(parentId) && !rt.roomOf(parentId))) return
+    const existing = subagentsByParent.get(parentId)?.get(childId)
+    const child = {
       childId,
       label: label || existing?.label || subagentLabelFromCall(live.get(parentId)),
       since: existing?.since ?? since,
-    })
+      codexParent: codexParent ?? existing?.codexParent,
+      stopping: existing?.stopping,
+    }
+    trackSubagent(parentId, child)
+    if (child.codexParent) {
+      let runs = codexByAgent.get(child.codexParent)
+      if (!runs) codexByAgent.set(child.codexParent, runs = new Map())
+      runs.set(childId, child)
+      rt.notifyWorkChanged?.()
+    }
     if (rt.groupOwners.has(parentId)) rt.workRoomTurn?.(parentId, 'subagent')
   }
 
@@ -227,16 +242,38 @@ export function install(rt) {
     const parentId = subagentParent.get(childId)
     if (parentId === undefined) return
     const map = subagentsByParent.get(parentId)
+    const codexParent = map?.get(childId)?.codexParent
+    if (codexParent) {
+      codexByAgent.get(codexParent)?.delete(childId)
+      subagentParent.delete(childId)
+      rt.notifyWorkChanged?.()
+    }
     map?.delete(childId)
     if (map !== undefined && map.size === 0) subagentsByParent.delete(parentId)
   }
 
   const hasSubagents = id => (subagentsByParent.get(id)?.size ?? 0) > 0
+  const activeCodex = id => [...(subagentsByParent.get(id)?.values() ?? [])].findLast(child => child.codexParent)
+  rt.hasRunningCodex = id => activeCodex(id) !== undefined
+
+  rt.stopCodex = (botId, childId) => {
+    const parentSessionId = rt.chatOf(botId)
+    if (rt.chatOwners.get(parentSessionId) !== botId) return false
+    const child = subagentsByParent.get(parentSessionId)?.get(childId)
+    if (!child?.codexParent) return false
+    if (child.stopping) return true
+    const service = ctx.get?.('subagents')
+    if (typeof service?.interrupt !== 'function') throw new Error('DSH cannot stop this Codex subagent right now.')
+    service.interrupt(childId, { kind: 'user', parentSessionId })
+    child.stopping = true
+    rt.notifyWorkChanged?.()
+    return true
+  }
 
   const subagentDoingOf = (id) => {
     const active = [...(subagentsByParent.get(id)?.values() ?? [])].at(-1)
     if (active === undefined) return undefined
-    return { since: active.since, tool: 'subagent', ...(active.label ? { note: active.label.slice(0, 120) } : {}) }
+    return { since: active.since, tool: active.codexParent ? 'subagent_codex' : 'subagent', ...(active.label ? { note: active.label.slice(0, 120) } : {}) }
   }
 
   async function stopSubagents(sessionId) {
@@ -251,8 +288,11 @@ export function install(rt) {
     }
     if (childIds.length === 0) return false
     subagentsByParent.delete(sessionId)
+    rt.notifyWorkChanged?.()
     stoppedSubagentParents.add(sessionId)
     for (const childId of childIds) {
+      const parent = map?.get(childId)?.codexParent
+      if (parent) codexByAgent.get(parent)?.delete(childId)
       rememberStopped(stoppedSubagents, childId)
       // Not in the plugin's inject list, where ctx.subagents throws; interrupt can throw too.
       try { await ctx.get?.('subagents')?.interrupt?.(childId, { kind: 'user', parentSessionId: sessionId }) } catch {}
@@ -319,6 +359,18 @@ export function install(rt) {
     const known = id => rt.isBotSession(id) || rt.roomOf(id) !== undefined
     for (const agent of agents.list()) {
       const sessionId = agent?.session?.id ?? agent?.id
+      const adopted = [...(codexByAgent.get(agent)?.values() ?? [])]
+      if (adopted.length > 0 && rt.chatOwners.has(sessionId)) {
+        for (const child of adopted) trackSubagent(sessionId, child)
+        rt.notifyWorkChanged?.()
+        // A run could have finished while this plugin's lifecycle listeners were absent.
+        const service = ctx.get?.('subagents')
+        if (typeof service?.waitForChildren === 'function') {
+          void service.waitForChildren(agent).then(() => {
+            for (const child of adopted) noteSubagentEnd(child.childId)
+          }).catch(error => rt.warn('ds-bot: checking restored Codex work failed: %s', error))
+        }
+      }
       if (agent?.status !== 'running' || typeof sessionId !== 'string') continue
       const header = agent.session?.header
       const parentId = header?.parentSession
@@ -498,15 +550,20 @@ export function install(rt) {
       const owner = rt.groupOwners.get(id)
       const botId = owner?.botId ?? rt.chatOwners.get(id)
       if (botId === undefined || (owner !== undefined && bots[botId] !== undefined)) continue
-      bots[botId] = { since: entry.since, ...doingOf(entry), ...(owner ? { roomId: owner.roomId } : {}) }
+      const resourceWait = rt.mekResourceWait?.(id)
+      bots[botId] = { since: resourceWait?.since ?? entry.since, ...doingOf(entry), ...(resourceWait ? { resourceWait } : {}), ...(owner ? { roomId: owner.roomId } : {}) }
     }
     for (const [id] of subagentsByParent) {
       const sub = subagentDoingOf(id)
       if (sub === undefined) continue
       const owner = rt.groupOwners.get(id)
       const botId = owner?.botId ?? rt.chatOwners.get(id)
-      if (botId === undefined || bots[botId] !== undefined) continue
-      bots[botId] = { ...sub, ...(owner ? { roomId: owner.roomId } : {}) }
+      if (botId === undefined) continue
+      const codex = owner === undefined ? activeCodex(id) : undefined
+      if (codex) {
+        const local = bots[botId]?.roomId === undefined ? bots[botId] : undefined
+        bots[botId] = { ...(local ?? sub), codex: { childId: codex.childId, since: codex.since, stopping: codex.stopping === true } }
+      } else if (bots[botId] === undefined) bots[botId] = { ...sub, ...(owner ? { roomId: owner.roomId } : {}) }
     }
     for (const job of rt.switchJobs()) {
       // `folder` marks the switch the chat must name: the working folder changed. A
@@ -542,7 +599,10 @@ export function install(rt) {
     }
     for (const [id, entry] of live) {
       const owner = rt.groupOwners.get(id)
-      if (entry.turn !== undefined && owner !== undefined) add(owner.roomId, owner.botId, { since: entry.since, ...doingOf(entry) })
+      if (entry.turn !== undefined && owner !== undefined) {
+        const resourceWait = rt.mekResourceWait?.(id)
+        add(owner.roomId, owner.botId, { since: resourceWait?.since ?? entry.since, ...doingOf(entry), ...(resourceWait ? { resourceWait } : {}) })
+      }
     }
     for (const [id] of subagentsByParent) {
       const owner = rt.groupOwners.get(id)
@@ -656,13 +716,17 @@ export function install(rt) {
       text: `Your last turn failed${code ? ` (${code})` : ''} and the user has fixed it. Answer the user's last unanswered message.`,
     })
   }
-  ctx.on?.('subagent/start', (info) => {
+  ctx.on?.('subagent/start', function (info) {
     const childId = info?.id
     if (typeof childId !== 'string' || childId === '' || stoppedSubagents.has(childId)) return
-    const parentId = subagentParent.get(childId)
+    const parent = carrierKeyOf(this)
+    const parentId = parent?.session?.id ?? subagentParent.get(childId)
       ?? ctx.get?.('agents')?.get?.(childId)?.session?.header?.parentSession
       ?? [...live.entries()].find(([, entry]) => [...(entry.calls?.values() ?? [])].some(call => call.name === 'subagent'))?.[0]
-    if (parentId !== undefined) noteSubagentStart(parentId, childId, undefined)
+    if (parentId !== undefined) {
+      const codexParent = info.local === false && info.provider === 'codex' && rt.chatOwners.has(parentId) ? parent : undefined
+      noteSubagentStart(parentId, childId, undefined, Date.now(), codexParent)
+    }
   })
   ctx.on?.('subagent/end', (info) => {
     noteSubagentEnd(info?.id)
@@ -1164,7 +1228,7 @@ export function install(rt) {
   ctx.on('tools/result', (exec, result) => {
     if (!SUBAGENT_TOOLS.has(exec?.name) || result?.isError || typeof result?.value?.subagentId !== 'string') return
     const description = exec.arguments?.description
-    rt.nameSubWork?.(result.value.subagentId, `subagent${typeof description === 'string' && description.trim() !== '' ? ` ${description.trim()}` : ''}`)
+    rt.nameSubWork?.(result.value.subagentId, `${exec.name === 'subagent_codex' ? 'Codex' : 'subagent'}${typeof description === 'string' && description.trim() !== '' ? ` ${description.trim()}` : ''}`)
   })
 
   const markSteerCut = (id) => {

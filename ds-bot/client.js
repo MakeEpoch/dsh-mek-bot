@@ -856,6 +856,11 @@ var ZH = {
   "Making headway": "有进展了",
   "Moving to a fresh conversation": "整理记忆，换到新对话",
   "Switching working folder": "正在切换工作文件夹",
+  "Waiting for {holder} to release {directory}": "等待 {holder} 释放 {directory}",
+  "Codex is running": "Codex 正在运行",
+  "Stopping Codex": "正在停止 Codex",
+  "Stop Codex": "停止 Codex",
+  "Could not stop Codex": "未能停止 Codex",
   "Searching online": "上网搜索",
   "Reading a page": "阅读网页",
   "Running shell commands": "运行命令",
@@ -8754,7 +8759,9 @@ function toolActivity(name, arg, findBot, self) {
   }
 }
 function workPhrase(doing) {
-  const { tool, said, note, target, switching, folder } = typeof doing === "string" ? { tool: doing } : doing ?? {};
+  const { tool, said, note, target, switching, folder, resourceWait, codex } = typeof doing === "string" ? { tool: doing } : doing ?? {};
+  if (resourceWait) return t("Waiting for {holder} to release {directory}", resourceWait);
+  if (codex) return t(codex.stopping ? "Stopping Codex" : "Codex is running");
   if (switching) return folder === true ? t("Switching working folder") : t("Moving to a fresh conversation");
   const own = (said || note)?.replace(/[\s.。…]+$/u, "");
   if (own) return own;
@@ -9290,6 +9297,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     dismissView: (sessionId) => after(call2("dismiss-view", { sessionId: partFor(sessionId) })),
     deleteBtw: (sessionId, cardId) => after(call2("btw-delete", { sessionId, cardId })),
     answerApproval: (id, choice) => after(call2("approval-answer", { id, choice })),
+    stopCodex: (botId, childId) => after(call2("stop-codex", { botId, childId })),
     stopMemberWork: (roomId, botId) => after(call2("stop-member-work", { roomId, botId })),
     stopRoomWork: (roomId) => after(call2("stop-room-work", { roomId })),
     goalDraft: (roomId, text4) => after(call2("goal-draft", { roomId, text: text4 })),
@@ -10788,6 +10796,30 @@ function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useLive, us
   const pendingInput = useSession((snapshot) => freshInputAt(snapshot?.pendingSubmissions, steeredAt));
   const bot = roster.byId[sessionId];
   const room2 = roster.roomsById[sessionId];
+  const resourceWaitKey = useWork?.((work) => {
+    const entry = bot && work.bots?.[bot.id];
+    return entry?.roomId === void 0 && entry?.resourceWait ? JSON.stringify(entry.resourceWait) : "";
+  });
+  const resourceWait = resourceWaitKey ? JSON.parse(resourceWaitKey) : null;
+  const resourceWaitLabel = resourceWait && t("Waiting for {holder} to release {directory}", resourceWait);
+  const codexKey = useWork?.((work) => {
+    const child = bot && work.bots?.[bot.id]?.codex;
+    return child ? JSON.stringify(child) : "";
+  });
+  const codex = codexKey ? JSON.parse(codexKey) : null;
+  const [stopRequest, setStopRequest] = (0, import_react27.useState)(null);
+  const stopError = stopRequest?.id === codex?.childId && stopRequest?.failed === true;
+  const stopPending = stopRequest?.id === codex?.childId && stopRequest?.pending === true;
+  async function stopCodex() {
+    const id = codex.childId;
+    setStopRequest({ id, pending: true });
+    try {
+      await actions.stopCodex(bot.id, id);
+      setStopRequest((current) => current?.id === id ? null : current);
+    } catch {
+      setStopRequest((current) => current?.id === id ? { id, failed: true } : current);
+    }
+  }
   const moveAt = useWork?.((work) => {
     const entry = bot !== void 0 ? work.bots?.[bot.id] : room2 !== void 0 ? work.rooms?.[room2.id]?.find((item) => item.self === true) : void 0;
     return entry?.switching === true && entry.folder === true && entry.roomId === void 0 ? entry.since : 0;
@@ -10796,12 +10828,13 @@ function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useLive, us
   const streaming = entries2.some((entry) => entry.text);
   const tools = entries2.filter((entry) => !entry.text).sort((a, b) => a.at - b.at);
   const relaying = tools.some((entry) => entry.relay);
-  const visible = moveAt !== 0 || rowVisible({ running, streaming, tools, relaying, bot, room: room2 });
+  const visible = resourceWait !== null || codex !== null || moveAt !== 0 || rowVisible({ running, streaming, tools, relaying, bot, room: room2 });
   const tool = tools.at(-1);
   const inputRef = (0, import_react27.useRef)(0);
   const inputAt = Math.max(inputRef.current, pendingInput);
   inputRef.current = inputAt;
-  const want = !visible ? null : moveAt !== 0 ? { key: "move", label: t("Switching working folder"), state: "thinking" } : inputAt > (tool?.at ?? 0) ? { key: `input:${inputAt}`, pool: PHRASES.thinking, state: "thinking" } : tool ? { key: tool.label ? `tool:${tool.label}` : "working", label: tool.label, pool: PHRASES.working, state: tool.state ?? "working" } : { key: "thinking", pool: PHRASES.thinking, state: "thinking" };
+  const explicit = resourceWait ? { key: `resource:${resourceWaitKey}`, label: resourceWaitLabel, state: "waiting" } : codex ? { key: `codex:${codexKey}:${stopError}`, label: t(stopError ? "Could not stop Codex" : codex.stopping ? "Stopping Codex" : "Codex is running"), state: "working" } : null;
+  const want = !visible ? null : explicit ?? (moveAt !== 0 ? { key: "move", label: t("Switching working folder"), state: "thinking" } : inputAt > (tool?.at ?? 0) ? { key: `input:${inputAt}`, pool: PHRASES.thinking, state: "thinking" } : tool ? { key: tool.label ? `tool:${tool.label}` : "working", label: tool.label, pool: PHRASES.working, state: tool.state ?? "working" } : { key: "thinking", pool: PHRASES.thinking, state: "thinking" });
   const [shown, setShown] = (0, import_react27.useState)(null);
   const wantKey = want?.key ?? null;
   const markState = (0, import_react27.useRef)("thinking");
@@ -10809,7 +10842,7 @@ function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useLive, us
   (0, import_react27.useEffect)(() => {
     if (wantKey === null || shown?.key === wantKey) return void 0;
     const make = () => setShown({ key: wantKey, text: want.label ?? drawPhrase(want.pool), at: Date.now() });
-    const wait = shown ? shown.at + PHRASE_HOLD_MS - Date.now() : 0;
+    const wait = shown && explicit === null ? shown.at + PHRASE_HOLD_MS - Date.now() : 0;
     if (wait <= 0) {
       make();
       return void 0;
@@ -10849,18 +10882,19 @@ function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useLive, us
     if (!running) actions.clearLive(sessionId);
   }, [running, sessionId]);
   useRowEntrances(() => leaving.current || Date.now() - endedAt.current < 300);
-  const host = useRunningHost(running || moveAt !== 0);
+  const host = useRunningHost(running || explicit !== null || moveAt !== 0);
   if (!host || phase === null || !shown) return null;
   return createPortal((0, import_react27.createElement)(
     "div",
-    { className: "bt-typing", "data-exiting": phase === "out" ? "" : void 0, "aria-hidden": true },
+    { className: "bt-typing", "data-exiting": phase === "out" ? "" : void 0, "data-resource-wait": resourceWait ? "" : void 0, "aria-hidden": explicit === null ? true : void 0 },
     bot ? (0, import_react27.createElement)(BotMark, { bot, size: 28, state: markState.current, live: true, pokeable: true }) : (0, import_react27.createElement)(RoomAvatar, { room: room2, roster, size: 28 }),
     (0, import_react27.createElement)(
       "span",
       { className: "bt-typing-text" },
-      (0, import_react27.createElement)("span", { key: `${shown.key}:${shown.at}`, className: "bt-typing-label" }, (0, import_react27.createElement)(Shimmer, null, `${shown.text}…`)),
-      (0, import_react27.createElement)(Elapsed, { at: moveAt !== 0 ? moveAt : Math.max(turnAt ?? runAt.current, inputAt), className: "bt-typing-time" })
-    )
+      (0, import_react27.createElement)("span", { key: `${shown.key}:${shown.at}`, className: "bt-typing-label", title: resourceWaitLabel || void 0, role: explicit ? "status" : void 0 }, (0, import_react27.createElement)(Shimmer, null, resourceWait ? shown.text : `${shown.text}…`)),
+      (0, import_react27.createElement)(Elapsed, { at: resourceWait?.since ?? codex?.since ?? (moveAt !== 0 ? moveAt : Math.max(turnAt ?? runAt.current, inputAt)), className: "bt-typing-time" })
+    ),
+    codex && actions.stopCodex ? (0, import_react27.createElement)("button", { type: "button", className: "bt-member-stop", disabled: codex.stopping || stopPending, onClick: stopCodex }, t("Stop Codex")) : null
   ), host);
 }
 
@@ -18022,6 +18056,8 @@ body[data-bt-goal] [class*="_scroll"]:has(> [class*="_column"]){padding-top:calc
 .bt-typing-text{display:flex;align-items:center;flex:1 1 auto;min-width:0;animation:bt-typing-label .22s ease-out .2s backwards}
 .bt-typing-label{display:inline-flex;align-items:center;gap:6px;min-width:0;animation:bt-typing-label .22s ease-out backwards}
 .bt-typing-label>.bt-shimmer{font-size:14px;line-height:22px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt-typing[data-resource-wait]{height:auto;min-height:36px}
+.bt-typing[data-resource-wait] .bt-typing-label>.bt-shimmer{white-space:normal;overflow-wrap:anywhere}
 .bt-typing-time{flex-shrink:0;margin-left:6px;font-size:12px;line-height:22px;color:var(--bt-ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
 @keyframes bt-typing-in{from{opacity:0;transform:scale(.9)}}
 @keyframes bt-typing-out{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.92);filter:blur(3px)}}
@@ -22588,7 +22624,7 @@ function GroupChat({ sessionId, team }) {
   } }, /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-column" }, /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-flow", role: "feed", "aria-label": room2?.name, "aria-busy": view.loading }, view.cursor !== null && /* @__PURE__ */ import_react63.default.createElement("button", { className: "bt-soft", onClick: () => refresh.current?.(view.cursor) }, t("Load earlier")), view.items.map((item) => item.kind === "group" ? /* @__PURE__ */ import_react63.default.createElement(GroupReplies, { key: item.key, sessionId, callId: item.callId, done: true, content: item.content, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork, showActivity: false }) : item.kind === "post" ? /* @__PURE__ */ import_react63.default.createElement(GroupMessage, { key: item.key, bot: roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: "gray" }, text: stripHeader(contentText(item.content)), room: room2, roster, actions, time: item.time }) : /* @__PURE__ */ import_react63.default.createElement(ChatRows, { key: item.key, items: [item], sessionId: item.sessionId, roster, actions, useUi: hooks.useUi, clock: true })), view.progress.filter((id) => !view.items.some((item) => item.callId === id)).map((id) => /* @__PURE__ */ import_react63.default.createElement(GroupReplies, { key: id, sessionId, callId: id, done: false, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork, showActivity: false })), error && /* @__PURE__ */ import_react63.default.createElement("button", { className: "bt-soft", role: "alert", onClick: () => refresh.current?.() }, error, " · ", t("Try again")), /* @__PURE__ */ import_react63.default.createElement("div", { "data-group-running": "", hidden: active.length === 0 }, active.map((entry) => {
     const bot = roster.byId[entry.id];
     const label3 = entry.state === "ask" ? t("Waiting for your approval") : workPhrase(entry.doing);
-    return /* @__PURE__ */ import_react63.default.createElement("div", { key: entry.id, className: "bt-typing", "data-running-bot": entry.id, role: "status" }, /* @__PURE__ */ import_react63.default.createElement(BotMark, { bot, size: 22, state: entry.state === "ask" ? "alert" : workState(entry.doing) }), /* @__PURE__ */ import_react63.default.createElement("span", { className: "bt-typing-text" }, /* @__PURE__ */ import_react63.default.createElement("span", { className: "bt-typing-label" }, /* @__PURE__ */ import_react63.default.createElement(Shimmer, null, bot.name, " · ", label3, "…")), /* @__PURE__ */ import_react63.default.createElement(Elapsed, { at: entry.doing.since, className: "bt-typing-time" })));
+    return /* @__PURE__ */ import_react63.default.createElement("div", { key: entry.id, className: "bt-typing", "data-running-bot": entry.id, "data-resource-wait": entry.doing.resourceWait ? "" : void 0, role: "status" }, /* @__PURE__ */ import_react63.default.createElement(BotMark, { bot, size: 22, state: entry.state === "ask" ? "alert" : workState(entry.doing) }), /* @__PURE__ */ import_react63.default.createElement("span", { className: "bt-typing-text" }, /* @__PURE__ */ import_react63.default.createElement("span", { className: "bt-typing-label", title: entry.doing.resourceWait ? label3 : void 0 }, /* @__PURE__ */ import_react63.default.createElement(Shimmer, null, bot.name, " · ", label3, entry.doing.resourceWait ? "" : "…")), /* @__PURE__ */ import_react63.default.createElement(Elapsed, { at: entry.doing.since, className: "bt-typing-time" })));
   }))))), /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-composer-root" }, actions.Queue && /* @__PURE__ */ import_react63.default.createElement(actions.Queue, { sessionId }), /* @__PURE__ */ import_react63.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text4, images, id) => {
     await actions.send(sessionId, text4, images, id);
     await refresh.current?.();

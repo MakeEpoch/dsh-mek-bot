@@ -82,9 +82,9 @@ export function GroupChat({ sessionId, team }) {
           {active.map(entry => {
             const bot = roster.byId[entry.id]
             const label = entry.state === 'ask' ? t('Waiting for your approval') : workPhrase(entry.doing)
-            return <div key={entry.id} className="bt-typing" data-running-bot={entry.id} role="status">
+            return <div key={entry.id} className="bt-typing" data-running-bot={entry.id} data-resource-wait={entry.doing.resourceWait ? '' : undefined} role="status">
               <BotMark bot={bot} size={22} state={entry.state === 'ask' ? 'alert' : workState(entry.doing)} />
-              <span className="bt-typing-text"><span className="bt-typing-label"><Shimmer>{bot.name} · {label}…</Shimmer></span><Elapsed at={entry.doing.since} className="bt-typing-time" /></span>
+              <span className="bt-typing-text"><span className="bt-typing-label" title={entry.doing.resourceWait ? label : undefined}><Shimmer>{bot.name} · {label}{entry.doing.resourceWait ? '' : '…'}</Shimmer></span><Elapsed at={entry.doing.since} className="bt-typing-time" /></span>
             </div>
           })}
         </div>

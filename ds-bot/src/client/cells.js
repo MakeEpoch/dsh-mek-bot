@@ -908,7 +908,9 @@ function toolActivity(name, arg, findBot, self) {
 // call's own description, else the kind of tool and what it works on. `doing` is a work
 // entry, or just a tool name.
 export function workPhrase(doing) {
-  const { tool, said, note, target, switching, folder } = typeof doing === 'string' ? { tool: doing } : doing ?? {}
+  const { tool, said, note, target, switching, folder, resourceWait, codex } = typeof doing === 'string' ? { tool: doing } : doing ?? {}
+  if (resourceWait) return t('Waiting for {holder} to release {directory}', resourceWait)
+  if (codex) return t(codex.stopping ? 'Stopping Codex' : 'Codex is running')
   if (switching) return folder === true ? t('Switching working folder') : t('Moving to a fresh conversation')
   const own = (said || note)?.replace(/[\s.。…]+$/u, '')
   if (own) return own

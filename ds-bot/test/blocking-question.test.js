@@ -29,7 +29,7 @@ const team = () => ({
 // the first time a Session resolves one. restrict() calls are recorded per Session and
 // throw when deny holds throwOn (a name in the Agent's own scope fails the whole list);
 // ctx.on() listeners are recorded per Session too, with their disposal.
-async function setup({ served = ['read', 'ask_user', QUESTION], goals, throwOn } = {}) {
+async function setup({ served = ['read', 'ask_user', QUESTION], goals, throwOn, coordinateTasks = false } = {}) {
   const home = mkdtempSync(join(tmpdir(), 'ds-bot-blocking-question-'))
   writeFileSync(join(home, 'state.json'), JSON.stringify(team()))
   const ctx = fakeContext({ services: goals === undefined ? {} : { goals } })
@@ -87,7 +87,7 @@ async function setup({ served = ['read', 'ask_user', QUESTION], goals, throwOn }
     sessionTitle: { rename: async () => {} },
     sessions: { flush: async () => {} },
   })
-  const rt = createRuntime(ctx, { home, github: false, diagnosticsFile: false })
+  const rt = createRuntime(ctx, { home, github: false, diagnosticsFile: false, coordinateTasks })
   await rt.load()
   const guard = (name, sessionId) => ctx.guards.map(check => check({ name, agent: sessionId === undefined ? undefined : { id: sessionId } })).find(reason => reason !== undefined)
   const hiddenIn = id => hidden.filter(([sessionId, deny]) => sessionId === id && deny.includes(QUESTION))
@@ -247,6 +247,31 @@ test('the guard refuses the delegation tools in Bot Sessions only', async (t) =>
   }
   assert.equal(guard('read', 'writer'), undefined)
   assert.equal(guard('message_bot', 'writer'), undefined)
+})
+
+test('MEK exposes the optional DSH Codex tool only in the current private chat of a Main Bot', async t => {
+  const name = 'subagent_codex'
+  const served = ['read', QUESTION]
+  const { rt, agentFor, hidden, guard, scopedListeners, stop } = await setup({ served, coordinateTasks: true })
+  t.after(stop)
+  for (const id of ['chief', 'writer', 'room-writer', 'plain']) await agentFor(id)
+  served.push(name)
+  rt.syncScopedTools()
+  for (const id of ['chief', 'writer', 'room-writer']) {
+    // A provider installed after the Session's creation still picks up the right scope.
+    rt.hideBotUnusedTools(await agentFor(id))
+    const allowed = id === 'chief'
+    assert.equal(guard(name, id), allowed ? undefined : DELEGATION_REFUSAL)
+    assert.equal(hidden.some(([session, tools]) => session === id && tools.includes(name)), !allowed)
+    const filter = scopedListeners.find(record => record.sessionId === id).listener
+    const sections = [{ name: `tool:${name}` }, { name: `tool:${name}:depth` }]
+    const result = await filter({}, {}, async () => ({ tools: [{ name }], sections }))
+    assert.equal(result.tools.length, allowed ? 1 : 0)
+    assert.equal(result.sections.length, allowed ? 2 : 0)
+  }
+  assert.equal(guard(name, 'room'), DELEGATION_REFUSAL)
+  assert.equal(guard(name, 'plain'), undefined)
+  assert.equal(guard('subagent', 'chief'), DELEGATION_REFUSAL)
 })
 
 // restrict() throws away the whole list when one name sits in the Agent's own scope,

@@ -407,6 +407,9 @@ export function install(rt) {
         case 'approval-answer':
           rt.answerApproval(body.id, body.choice)
           return ok(true)
+        case 'stop-codex':
+          await rt.load()
+          return ok(rt.stopCodex(String(body.botId ?? ''), String(body.childId ?? '')))
         case 'stop-member-work':
           try {
             return ok(await rt.stopMemberWork(String(body.roomId ?? ''), String(body.botId ?? '')))

@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { createRuntime } from '../index.js'
 import { fakeAttachments, fakeContext } from './fake-ctx.js'
 import { LONG_HEAD, MESSAGE_INLINE_MAX, ROOM_STEP_GAP_MS, ROOM_WORK_GRACE_MS } from '../src/host/constants.js'
@@ -1666,6 +1667,26 @@ test('a group member with a running DSH subagent stays working and stop-room-wor
   host.emit('gb', 'turn/end', { turn: 2, reason: { kind: 'completed' } })
   await settle(() => true)
   assert.deepEqual(host.agentOf('r1').calls, [], 'suppressed settlement notice does not post to the group')
+})
+
+test('private Codex work uses the DSH parent carrier without a local child Session', async t => {
+  const calls = []
+  const host = await start(t, {}, { subagents: { interrupt: (...args) => calls.push(args) } })
+  const parent = scopeTarget(host.ctx, host.agentOf('a'))
+  const run = { id: 'native-codex-child', runId: 'codex-run', provider: 'codex', local: false }
+  for (const listener of host.ctx.listeners.get('subagent/start')) listener.call(parent, run)
+  assert.equal(rt.hasRunningCodex('a'), true)
+  assert.equal(rt.hasRunningCodex('b'), false)
+  const running = (await host.call('state', {})).value.work.bots.a.codex
+  assert.equal(running.childId, run.id)
+  assert.equal(running.stopping, false)
+  assert.equal((await host.call('stop-codex', { botId: 'b', childId: run.id })).value, false)
+  for (let i = 0; i < 2; i++) assert.equal((await host.call('stop-codex', { botId: 'a', childId: run.id })).value, true)
+  assert.deepEqual(calls, [[run.id, { kind: 'user', parentSessionId: 'a' }]])
+  assert.equal((await host.call('state', {})).value.work.bots.a.codex.stopping, true)
+  for (const listener of host.ctx.listeners.get('subagent/end')) listener.call(parent, { ...run, stopReason: 'aborted' })
+  assert.equal(rt.hasRunningCodex('a'), false)
+  assert.equal((await host.call('stop-codex', { botId: 'a', childId: run.id })).value, false)
 })
 
 

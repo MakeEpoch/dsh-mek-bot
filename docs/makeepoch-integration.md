@@ -54,6 +54,10 @@ Execution restrictions use public tool guards, tool dispatch and LLM stream hook
 
 Native views remain under `src/client/mek/`; the existing controller exposes optional `mekTeam` state. Artifact previews use public workspace-file APIs and the producing session. The optional browser adapter exposes observation/control of existing sessions through the authenticated Bot channel and serializes human actions with Bot actions. No browser is launched by observation, and screenshot masking does not grant access to credentials. See [team operations design](plans/2026-10-30-mek-team-operations.md).
 
+DSH file queries (`read`, `grep`, `glob` and the editor's `view`) do not acquire an automatic workspace lease. Known writes and shell commands use the Session's workspace lease. Explicit resource bindings remain applicable. Waiting for a live conflict has one 30-second budget across all wakeups and exposes the holder and directory through live work state. Expiry returns the waiting call before dispatch and leaves the active lease with its holder.
+
+The MEK adapter admits the DSH-registered `subagent_codex` in a Main Bot's current private Session. DSH owns the tool, its permissions, and delivery of the completion notice to the exact parent. MEK reads the parent from the scoped lifecycle event, exposes live activity and sends a parent-scoped stop for the selected child. Conversation rollover waits while Codex is running so DSH can deliver the result to the originating Session. A plugin reload can recover activity for the same live DSH Agent. A host restart does not resume a native Codex run. File operations inside the external Codex process use the provider's permission mode and run outside the MEK tool-call lease hooks.
+
 ## Merge and verify upstream
 
 Keep `upstream` pointing to `https://github.com/Fei2411/DS-Bot.git` and `origin` to MakeEpoch. Fetch upstream, create an update branch from downstream main, merge the desired commit and resolve metadata, the small API/export seams and native build bindings. Update the pinned commit. Preserve upstream ancestry and source locations; do not replace them with a copied client implementation.

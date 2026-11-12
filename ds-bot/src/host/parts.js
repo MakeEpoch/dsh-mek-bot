@@ -844,7 +844,7 @@ export function install(rt) {
   // from the model. `folder`: the part moves on because its working folder changed.
   function startSwitch(agent, { resume = false, carry = [], info, joined, overflow = false, failed, bare = false, folder = false, cutoff = false, hard = overflow || folder || cutoff } = {}) {
     const place = placeOf(agent.id)
-    if (place === undefined || switches.has(agent.id) || readOnly()) return
+    if (place === undefined || switches.has(agent.id) || rt.hasRunningCodex?.(agent.id) || readOnly()) return
     const job = { ...place, carry: [...carry], info, joined, resume, overflow, failed, bare, folder, cutoff, hard, since: Date.now() }
     switches.set(agent.id, job)
     void runSwitch(agent, job)
@@ -1107,7 +1107,9 @@ export function install(rt) {
       freshParts.delete(agent.id)
       partBase.set(agent.id, (tokensOf(agent.session) ?? 0) + fresh)
     }
-    if (!readOnly() && await folderMove(agent, { midTurn: payload.step > 1 }) !== undefined) return switchBeforeStep(agent, payload, { folder: true })
+    // DSH delivers Codex's completion to the exact parent that started it.
+    if (rt.hasRunningCodex?.(agent.id) || payload.messages.some(message => message.source?.kind === 'subagent-settled')) return next()
+    if (!readOnly() && await folderMove(agent, { midTurn: payload.step > 1 }) !== undefined) return switchBeforeStep(agent, payload, next, { folder: true })
     // The group's own Session moves only for its folder, never for its size: its turns
     // are synthesized relay calls, so the steward's lines do not apply to it.
     if (place.botId === undefined) return next()
@@ -1116,11 +1118,12 @@ export function install(rt) {
     if (lines === undefined || tokens === undefined || tokens < lines.hard || !grown(agent.id, tokens, lines) || readOnly()) return next()
     if (await decide(agent, { midTurn: payload.step > 1 }) === 'compact' && await condense(agent, lines, { inTurn: true, signal: payload.signal })) return next()
     if (!await canMakeRoom(agent, payload.messages)) return next()
-    return switchBeforeStep(agent, payload, { hard: true })
+    return switchBeforeStep(agent, payload, next, { hard: true })
   }, { prepend: true })
 
   // `messages` left the inbox for this step, so the switch carries them along.
-  function switchBeforeStep(agent, payload, options) {
+  function switchBeforeStep(agent, payload, next, options) {
+    if (rt.hasRunningCodex?.(agent.id)) return next()
     // A switch may have started while the checks above awaited.
     const running = switches.get(agent.id)
     if (running !== undefined) {
@@ -1220,7 +1223,7 @@ export function install(rt) {
     if (decided !== undefined || payload.signal?.aborted) return decided
     await rt.load()
     const { agent } = payload
-    if (!rt.isBotSession(agent.id) || switches.has(agent.id) || readOnly() || rescued.get(agent.id) === 'bare') return decided
+    if (!rt.isBotSession(agent.id) || switches.has(agent.id) || rt.hasRunningCodex?.(agent.id) || readOnly() || rescued.get(agent.id) === 'bare') return decided
     const entry = rt.liveOf(agent.id)
     entry.switched = true
     // The latest messages carried into a rescued part may be what breaks the request.
@@ -1232,7 +1235,7 @@ export function install(rt) {
     if (payload.failure?.code !== OVERFLOW || payload.signal?.aborted) return next()
     await rt.load()
     const { agent } = payload
-    if (!rt.isBotSession(agent.id) || switches.has(agent.id) || readOnly() || !await canMakeRoom(agent)) return next()
+    if (!rt.isBotSession(agent.id) || switches.has(agent.id) || readOnly() || !await canMakeRoom(agent) || rt.hasRunningCodex?.(agent.id)) return next()
     const entry = rt.liveOf(agent.id)
     entry.switched = true
     startSwitch(agent, { resume: true, info: entry.info, joined: [...(entry.joined ?? [])], overflow: true })
@@ -1243,13 +1246,13 @@ export function install(rt) {
   // the part ends up below the line, and nothing is decided again until it grows
   // past it.
   async function checkContext(agent) {
-    if (switches.has(agent.id) || freshParts.has(agent.id) || checking.has(agent.id) || readOnly()) return
+    if (switches.has(agent.id) || freshParts.has(agent.id) || checking.has(agent.id) || rt.hasRunningCodex?.(agent.id) || readOnly()) return
     if (lastTurnEnd(agent)?.data?.reason?.kind === 'error') return
     // Two empty cut-offs suggest the effective window is smaller than configured.
     if ((cutOffs.get(agent.id) ?? 0) >= 2) {
       checking.add(agent.id)
       try {
-        if (await canMakeRoom(agent) && agent.status === 'idle' && (cutOffs.get(agent.id) ?? 0) >= 2) {
+        if (await canMakeRoom(agent) && agent.status === 'idle' && !rt.hasRunningCodex?.(agent.id) && (cutOffs.get(agent.id) ?? 0) >= 2) {
           cutOffs.delete(agent.id)
           startSwitch(agent, { cutoff: true })
         }

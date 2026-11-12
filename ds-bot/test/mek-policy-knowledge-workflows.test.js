@@ -307,6 +307,45 @@ test('automatic direct-call leases release after settlement and resume an alread
   assert.deepEqual(h.rt.mekPolicyView().resources, [])
 })
 
+test('native file queries bypass the workspace write lease and a writer times out without interrupting its holder', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 })
+  const h = host(t)
+  let updates = 0
+  h.rt.notifyWorkChanged = () => { updates++ }
+  policy(h.rt)
+  const dispatch = h.ctx.listeners.get('tools/execute').at(-1)
+  const ownerStarted = Promise.withResolvers()
+  const finishOwner = Promise.withResolvers()
+  const owner = dispatch(h.exec('a', 'write'), () => {
+    ownerStarted.resolve()
+    return finishOwner.promise
+  })
+  await ownerStarted.promise
+  try {
+    for (const [name, args] of [['read'], ['grep'], ['glob'], ['str_replace_editor', { command: 'view' }]]) {
+      assert.equal(await dispatch(h.exec('b', name, args), async () => 'read'), 'read')
+    }
+    const waiting = dispatch(h.exec('b', 'edit'), async () => assert.fail('timed-out write ran'))
+    const rejection = assert.rejects(waiting, /Waited 30 seconds.*held by Bot a.*did not run/)
+    await new Promise(resolve => setImmediate(resolve))
+    assert.deepEqual(h.rt.mekResourceWait('b'), { since: 1000, directory: '/tmp/mek-test-workspace', holder: 'a' })
+    assert.equal(updates, 1)
+    t.mock.timers.tick(29_000)
+    for (const listener of h.ctx.listeners.get('session/event')) listener({ id: 'c' }, { type: 'job/settled', data: { jobId: 'unrelated' } })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(h.rt.mekResourceWait('b').since, 1000)
+    t.mock.timers.tick(1000)
+    await rejection
+    assert.equal(updates, 2)
+    assert.equal(h.rt.mekResourceWait('b'), undefined)
+    assert.equal(h.rt.mekPolicyView().resources[0].botId, 'a')
+  } finally {
+    finishOwner.resolve('done')
+    await owner
+  }
+  assert.equal(await dispatch(h.exec('b', 'edit'), async () => 'written'), 'written')
+})
+
 test('background jobs retain automatic leases until their settlement event', async t => {
   const h = host(t)
   const jobs = new Map()
