@@ -524,7 +524,7 @@ export function install(rt) {
     try {
       await rt.deliver({ fromId: undefined, toId: member.id, sessionId, role: 'room', roomId: room.id, exchangeId, note, text, images, files, steer: busy, ...(by ? { askedBy: by } : {}) })
       // The prompt reached the member: its read position moves on.
-      room.seen[member.id] = seenAt
+      rt.markGroupContextDelivered(sessionId, { sessionId, seq: seenAt })
       // Still held by an earlier request: this turn cannot start until the user answers.
       if (rt.waitsForApproval?.(sessionId)) rt.roomWaiters.get(exchangeId)?.approval()
       // Still at earlier work: the call steers it at its next step; the round goes on.
@@ -1204,7 +1204,19 @@ export function install(rt) {
     await loadGroupLines(room)
     const slot = { id: member.id, name: member.name, status: 'speaking', ordered: false }
     const prompt = roomPrompt(room, member, { roomId: room.id, members: room.members, startSeq: room.seq, slots: [slot], replies: [] }, slot)
-    return { sessionId: session.id, context: [session.brief, prompt.text].filter(Boolean).join('\n\n'), images: prompt.images, files: prompt.files }
+    return {
+      sessionId: session.id, context: [session.brief, prompt.text].filter(Boolean).join('\n\n'),
+      images: prompt.images, files: prompt.files, groupRead: { sessionId: session.id, seq: room.seq },
+    }
+  }
+  rt.markGroupContextDelivered = (sessionId, groupRead) => {
+    // A delayed receipt may belong to a replaced Session or arrive out of order.
+    if (!groupRead || groupRead.sessionId !== sessionId) return
+    const owner = rt.groupOwners.get(sessionId)
+    const room = rt.roomOf(owner?.roomId)
+    if (!room || room.sessions?.[owner.botId] !== sessionId) return
+    room.seen ??= {}
+    room.seen[owner.botId] = Math.max(room.seen[owner.botId] ?? 0, groupRead.seq)
   }
   rt.appendGroupTaskResult = async (roomId, botId, text) => {
     const room = rt.roomOf(roomId)

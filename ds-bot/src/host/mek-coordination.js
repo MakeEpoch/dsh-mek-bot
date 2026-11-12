@@ -311,13 +311,12 @@ export function install(rt) {
     await save(); await send(item)
   }
   rt.mekDispatchTodo = async ({ rootId, owner, goal, criteria, roomId, worker, instruction, validate, prepared }) => {
-    let sessionId, files = []
+    let target
     if (roomId) {
       const room = rt.roomOf(roomId)
       if (!room || room.admin !== owner || !room.members.includes(worker)) refuse('The group administrator or member changed. Review the plan.')
       await rt.prepareGroupMemberTask(room, rt.botOf(owner))
-      const target = await rt.prepareGroupMemberTask(room, rt.botOf(worker))
-      sessionId = target.sessionId; files = target.files
+      target = await rt.prepareGroupMemberTask(room, rt.botOf(worker))
       instruction = `${instruction}\n\nGroup context:\n${target.context}`
     }
     if (roomId && rt.roomOf(roomId)?.admin !== owner) refuse('The group administrator changed before dispatch.')
@@ -326,9 +325,9 @@ export function install(rt) {
     if (!root || final(root) || root.owner !== owner) refuse('The task is no longer available to its coordinator.')
     prepared({ rootId: root.id })
     const id = randomUUID()
-    rt.openWork(id, { from: owner, to: worker, rootId: root.id, instruction, ...(sessionId ? { sessionId } : {}), ...(roomId ? { fromRoom: roomId } : {}) })
-    const item = prepare(root.id, { fromId: owner, toId: worker, role: 'request', exchangeId: id, text: instruction, files,
-      ...(sessionId ? { sessionId, fromRoomId: roomId } : {}) })
+    rt.openWork(id, { from: owner, to: worker, rootId: root.id, instruction, ...(target ? { sessionId: target.sessionId, fromRoom: roomId } : {}) })
+    const item = prepare(root.id, { fromId: owner, toId: worker, role: 'request', exchangeId: id, text: instruction, files: target?.files ?? [],
+      ...(target ? { sessionId: target.sessionId, fromRoomId: roomId, groupRead: target.groupRead } : {}) })
     prepared({ rootId: root.id, workId: id })
     await save()
     await send(item)
@@ -485,14 +484,14 @@ export function install(rt) {
     const member = rt.botOf(memberId)
     if (!member || !room.members.includes(memberId)) refuse('Choose a member still in this group.')
     if (rt.upstreamOf([parent]).has(memberId)) refuse('A selected group member is waiting for this task. Ask the owner a question instead of delegating back to an ancestor.')
-    const { sessionId, context, images, files } = prepared ?? await rt.prepareGroupMemberTask(room, member)
+    const { sessionId, context, images, files, groupRead } = prepared ?? await rt.prepareGroupMemberTask(room, member)
     const id = randomUUID()
     const fromSession = room.sessions?.[from]
     const returnInGroup = fromSession && (!groupRoot || parent !== groupRoot)
     rt.openWork(id, { from, to: memberId, parent, groupRoot, ...(rootId ? { rootId } : {}), room: room.id, sessionId,
       ...(returnInGroup ? { fromRoom: room.id } : {}), instruction })
     const args = { fromId: from, toId: memberId, sessionId, role: 'request', exchangeId: id,
-      ...(returnInGroup ? { fromRoomId: room.id } : {}), text: groupInstruction(instruction, context), images, files }
+      ...(returnInGroup ? { fromRoomId: room.id } : {}), text: groupInstruction(instruction, context), images, files, groupRead }
     return { id, item: prepare(rootOf(id).id, args) }
   }
   // `delegated` says the post is a dispatch that must reach members: message_bot's
@@ -1153,7 +1152,10 @@ export function install(rt) {
       if (goal) entry.mekGoal = goal
     }
     const out = own(data().outbox, source.exchangeId)
-    if (out) { out.status = 'taken'; delete out.args; changed() }
+    if (out) {
+      rt.markGroupContextDelivered(session.id, out.args?.groupRead)
+      out.status = 'taken'; delete out.args; changed()
+    }
     const work = workOf(source.role === 'request' ? source.exchangeId : source.work)
     if (work && work.status === 'queued') { work.status = 'running'; changed() }
   })
@@ -1219,11 +1221,21 @@ export function install(rt) {
       for (const item of Object.values(data().outbox)) {
         if (!['pending', 'sending', 'uncertain'].includes(item.status) || sending.has(item.id) || final(rootOf(item.rootId))) continue
         if (item.status === 'pending') { await send(item); continue }
-        const sessionId = item.args.sessionId ?? rt.chatOf(item.args.toId)
+        const args = item.args
+        if (!args) continue
+        const sessionId = args.sessionId ?? rt.chatOf(args.toId)
         const agent = await rt.resolveAgent(sessionId).catch(() => undefined)
-        if (!agent) continue
+        if (!agent || item.args !== args) continue
         const queued = [...(agent.inbox?.nextStep ?? []), ...(agent.inbox?.nextTurn ?? [])].some(message => message.source?.exchangeId === item.id)
-        if (queued || (rt.unreadOf?.(sessionId) ?? []).some(args => args.exchangeId === item.id)) { item.status = 'sent'; const work = workOf(item.args.exchangeId); if (work?.status === 'unknown' && !work.outcome) work.status = 'queued'; changed(); continue }
+        if (queued || (rt.unreadOf?.(sessionId) ?? []).some(args => args.exchangeId === item.id)) {
+          // The inflight note can be written before the message reaches the inbox.
+          if (queued) rt.markGroupContextDelivered(sessionId, args.groupRead)
+          item.status = 'sent'
+          const work = workOf(args.exchangeId)
+          if (work?.status === 'unknown' && !work.outcome) work.status = 'queued'
+          changed()
+          continue
+        }
         if (!rt.eventsBackwards) continue
         let seen = false; let count = 0; let complete = true
         try {
@@ -1231,8 +1243,13 @@ export function install(rt) {
             if (event.type === 'user/message' && event.data?.source?.exchangeId === item.id) { seen = true; break }
             if (++count >= 2000) { complete = false; break }
           }
-          if (seen) { const work = workOf(item.args.exchangeId); if (work?.status === 'unknown' && !work.outcome) work.status = 'running'; item.status = 'taken'; delete item.args; changed() }
-          else if (complete) { item.status = 'pending'; await send(item) }
+          if (item.args !== args) continue
+          if (seen) {
+            rt.markGroupContextDelivered(sessionId, args.groupRead)
+            const work = workOf(args.exchangeId)
+            if (work?.status === 'unknown' && !work.outcome) work.status = 'running'
+            item.status = 'taken'; delete item.args; changed()
+          } else if (complete) { item.status = 'pending'; await send(item) }
         } catch { /* Keep the uncertain receipt: no blind retry. */ }
       }
     } finally { recovering = false }

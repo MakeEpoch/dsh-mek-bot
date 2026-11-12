@@ -58,7 +58,7 @@ export function install(rt) {
   // length when it went as a file (attachLong). `work`: the work (handoffs.js) a
   // result that came back goes on with. `merged`: a request that takes in an earlier
   // one its recipient had not read, under that one's exchange.
-  async function deliver({ fromId, fromName: senderName, toId, sessionId, text, role, replyTo, roomId, audience, note, exchangeId = randomUUID(), steer = false, deferred = false, resumed = false, retried = false, resent = false, merged = false, abandoned = false, recordExchange = true, askedBy, fromRoomId, images = [], files = [], length, work }) {
+  async function deliver({ fromId, fromName: senderName, toId, sessionId, text, role, replyTo, roomId, audience, note, exchangeId = randomUUID(), steer = false, deferred = false, resumed = false, retried = false, resent = false, merged = false, abandoned = false, recordExchange = true, askedBy, fromRoomId, images = [], files = [], length, work, groupRead }) {
     const from = rt.botOf(fromId)
     const to = rt.botOf(toId)
     if (to === undefined) throw new Error(`Unknown Bot ${toId}`)
@@ -105,6 +105,7 @@ export function install(rt) {
     if (steer) agent.steer(message)
     else agent.followup(message)
     await ctx.sessions.flush(agent.session)
+    if (groupRead) rt.markGroupContextDelivered(targetSessionId, groupRead)
     if (recordExchange && EXCHANGE_ROLES.has(role) && !deferred && !resumed && !retried) {
       // Recorded once the message is in the Session: an earlier record would show
       // a failed delivery as delivered. The whole text is in its file, or in the

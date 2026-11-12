@@ -551,6 +551,56 @@ const groupTeam = () => {
   return team
 }
 
+test('formal group dispatches deliver only new group history to the same member', async t => {
+  const h = await host(t, undefined, groupTeam())
+  const room = h.rt.roomOf('r')
+  const previous = 'The first group message contains the original test evidence.'
+  const next = 'The next group message contains the updated test evidence.'
+  h.rt.logRoom(room, { who: 'User', text: previous })
+  h.begin('gb')
+  await h.tool('gb', 'message_bot', { to: 'Tester', message: 'Review the original test evidence.' })
+  assert.ok(contentOf(h.agentOf('gc').calls[0]).includes(previous))
+  assert.equal((await h.snapshot()).rooms.r.seen.c, 1)
+
+  h.rt.logRoom(room, { who: 'User', text: next })
+  await h.tool('gb', 'message_bot', { to: 'Tester', task_id: task(h).id, message: 'Review the updated test evidence.' })
+  const second = contentOf(h.agentOf('gc').calls[1])
+  assert.ok(second.includes(next))
+  assert.ok(!second.includes(previous))
+  assert.deepEqual(room.log.map(line => line.text), [previous, next])
+  assert.equal(room.seen.c, 2)
+})
+
+test('a failed group dispatch keeps its context snapshot for recovery', async t => {
+  const h = await host(t, undefined, groupTeam())
+  const room = h.rt.roomOf('r')
+  const previous = 'Original group context before delivery'
+  const next = 'A new group message while delivery is pending'
+  h.rt.logRoom(room, { who: 'User', text: previous })
+  h.begin('gb')
+  h.agentOf('gc').followup = () => { throw new Error('inbox unavailable') }
+  await h.tool('gb', 'message_bot', { to: 'Tester', message: 'Check the current result.' })
+  assert.equal(room.seen.c, undefined)
+  h.rt.logRoom(room, { who: 'User', text: next })
+  const state = await h.snapshot()
+  const receipt = Object.values(state.mekTasks.outbox).find(item => item.args?.sessionId === 'gc')
+  assert.equal(receipt.status, 'uncertain')
+  assert.deepEqual(receipt.args.groupRead, { sessionId: 'gc', seq: 1 })
+  await h.stop()
+
+  const restored = await host(t, undefined, state)
+  restored.rt.eventsBackwards = async function* () {}
+  await restored.rt.mekRecoverTasks()
+  const delivered = restored.agentOf('gc').calls
+  assert.equal(delivered.length, 1)
+  assert.equal(delivered[0].source.exchangeId, receipt.id)
+  assert.ok(contentOf(delivered[0]).includes(previous))
+  assert.ok(!contentOf(delivered[0]).includes(next))
+  assert.equal((await restored.snapshot()).rooms.r.seen.c, 1)
+  await restored.rt.mekRecoverTasks()
+  assert.equal(delivered.length, 1)
+})
+
 test('an administrator group dispatch retains the user goal and nested return chain through revision', async t => {
   const team = groupTeam()
   const goal = 'Review, repair defects, verify again, then prepare the final delivery.'
