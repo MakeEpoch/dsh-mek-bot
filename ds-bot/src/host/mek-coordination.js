@@ -1,6 +1,6 @@
 // MakeEpoch task ownership. Upstream still executes and aggregates the handoff tree;
 // this adapter keeps questions open and gives the original contact the review.
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { registerTeamTool } from './team-registration.js'
 import { output } from './tools.js'
@@ -13,19 +13,28 @@ const completedReport = work => work.report?.status === 'completed'
   && typeof work.report.evidence === 'string' && work.report.evidence.trim() !== ''
 const needsReport = work => work.to && work.status === 'review' && !completedReport(work)
 const refuse = message => { throw Object.assign(new Error(message), { code: 'bot/refused' }) }
+const groupContext = value => /^\s*Members: the user\b/i.test(value ?? '')
+const normalizeInstruction = value => String(value ?? '').replace(/\r\n?/g, '\n').trim()
+const dispatchKey = (instruction, mentions) => createHash('sha256').update(JSON.stringify([
+  normalizeInstruction(instruction), mentions ? [mentions.all === true, [...(mentions.ids ?? [])].sort()] : null,
+])).digest('hex')
 const taskTitle = value => {
-  if (typeof value !== 'string' || !value.trim() || value.trim().length > 120) refuse('Give a concise task title of 1 to 120 characters describing the intended outcome.')
+  if (typeof value !== 'string' || !value.trim() || value.trim().length > 120 || groupContext(value)) refuse('Give a concise task title of 1 to 120 characters describing the intended outcome.')
   return value.trim().replace(/\s+/g, ' ')
 }
+const fallbackTitle = (...values) => values
+  .map(value => typeof value === 'string' ? value.trim().split(/\r?\n|\s+Current runtime context\./i, 1)[0] : '')
+  .find(line => line && !groupContext(line) && !/^Current runtime context\./i.test(line))
+  ?.trim().replace(/\s+/g, ' ').slice(0, 120)
 const groupResult = (text, report) => [text, report?.summary && !text?.includes(report.summary) ? report.summary : ''].filter(Boolean).join('\n\n')
 const rules = `## Task ownership (takes precedence over the ordinary team messaging rules)
 - The Bot the user contacted owns the task, even when it delegates. Keep the entire conversation, questions, decisions, and final delivery in that Bot's chat. Never tell the user to visit a worker's chat. Direct user conversations with other Bots remain independent.
-- message_bot always returns the work to its sender here. Give a self-contained goal, relevant context, constraints, and acceptance criteria. Delegate each task once. End your turn while workers run; results wake you up automatically. For group work use post_to_group; its report comes back here too.
+- message_bot always returns the work to its sender here. Give a self-contained goal, relevant context, constraints, and acceptance criteria. Delegate each task once. End your turn while workers run; results wake you up automatically. Use post_to_group with report_back: true for formal group assignments. Ordinary posts are announcements.
 - A worker needing information or a decision calls ask_user: for delegated work it asks the task owner, not the user. This suspends that work rather than completing it. Never send a new message_bot request to an ancestor to ask a question.
 - When a task decision arrives, inspect its task and evidence with list_tasks/read_task. Decide routine implementation details using the user's instructions, existing conventions and available evidence. Answer with answer_bot_question. Do not forward routine choices to the user. Ask the user in your own chat only for essential missing information, unresolved intent, or authorization that only the user can give. After their answer, answer_bot_question to resume the same worker task.
 - A worker's result is evidence to review, not automatic success. Check the goal and acceptance criteria; request concrete corrections or missing checks with revise_bot_task. This continues the same task. Do not thank a worker or echo status messages. You may send follow-up work when it is necessary to finish the goal.
 - Record a checked formal step with accept_bot_work before starting its successor; this accepts only that assignment, not the whole main task. For to-do children use control_todo accept instead. When the entire goal is satisfied, finish_bot_task records final acceptance. Saying "accepted" in chat alone does not change the task state. A user approval continues the intended task; do not create a task titled with their approval text.
-- A needs_report result has returned but lacks a structured completed report. Use revise_bot_task with its work id to request the missing report and evidence from the retained result; do not repeat completed external actions. Missing documentation alone is not a reason to cancel. A review task awaits your acceptance, not further worker execution. Cancel only work the user has abandoned or superseded.
+- A needs_report result has returned but lacks a structured completed report. Use read_task and supplement_bot_report with the exact returned work id to record a summary and verified evidence from the retained result without dispatching work. If the result lacks evidence, leave it pending until the evidence can be checked. Missing documentation alone is not a reason to cancel. A review task awaits your acceptance, not further worker execution. Cancel only work the user has abandoned or superseded.
 - Workers should call report_bot_task with a concrete outcome, verification evidence and artifacts before ending delegated work. Use blocked or failed when the task cannot be completed. Ask a question with ask_user when a decision could unblock it.
 - In a group, message_bot is a formal delegation, including the administrator's first dispatch. It keeps a persistent main task and returns to the delegator in this group. Use message_bot for nested implementation/review work; plain @mentions only display text in a tracked turn. Report back to an ancestor instead of delegating back to it. The ancestor reviews your returned result and can revise the same assignment for another pass.
 - Use list_tasks to recover pending work and decisions after another user message or a restart. Use read_task for a full result when its preview is cut. Do not copy unrelated private conversations into a task.
@@ -66,7 +75,7 @@ export function install(rt) {
     const root = rootOf(work.id)
     const missing = currentWorks(root).filter(needsReport)
     return `\n\n[Task review required]\nTask ${root.id}; returned work ${work.id}. Read the retained result with read_task. ${missing.length
-      ? `Structured completed reports are missing for: ${missing.map(item => item.id).join(', ')}. Use read_task to identify the affected returned assignment and its original delegator. That delegator should use revise_bot_task with the affected work id (for returned groups, their group aggregate id) to request the missing report, verification evidence and artifacts from the existing result. Do not revise an unrelated worker that already supplied evidence. Do not repeat completed external actions or cancel solely because a report is missing.`
+      ? `Structured completed reports are missing for: ${missing.map(item => item.id).join(', ')}. Use read_task to identify the affected returned assignment and its original delegator. The owner or original delegator can use supplement_bot_report with the exact returned worker id and verified evidence from its retained result. This does not dispatch work. Leave it pending if evidence is missing.`
       : 'Review the result and verification evidence. Use finish_bot_task when all assignments, decisions and acceptance criteria are settled; use revise_bot_task for concrete corrections. A returned result does not accept the user task automatically.'}`
   }
   rt.mekTaskRoot = id => { const root = rootOf(id); return root ? structuredClone(root) : undefined }
@@ -104,7 +113,7 @@ export function install(rt) {
     if (!root || final(root) || (inherited ? root.id !== inherited.id : root.owner !== from || conversation(root.originSessionId) !== conversation(sessionId))) refuse('Choose an open task owned in this conversation, or keep the current delegated task. Read list_tasks for its exact id.')
     return root
   }
-  const rootFor = (from, parent, sessionId) => {
+  const rootFor = (from, parent, sessionId, title, goal) => {
     const existing = rootOf(parent)
     if (existing) return existing
     const entry = rt.live.get(sessionId ?? rt.chatOf(from))
@@ -112,7 +121,16 @@ export function install(rt) {
     const decision = own(data().decisions, info?.exchangeId)
     const continuing = rootOf(info?.replyTo) ?? rootOf(decision?.workId) ?? rootOf(entry?.mekRoot)
     if (continuing && !final(continuing) && continuing.owner === from) return continuing
-    const root = { id: randomUUID(), owner: from, originSessionId: rt.chatOf(from), status: 'running', ...(entry?.mekGoal ? { goal: entry.mekGoal, summary: entry.mekGoal.slice(0, 180) } : {}), createdAt: Date.now(), updatedAt: Date.now() }
+    const originSessionId = sessionId ?? rt.chatOf(from)
+    const originalGoal = goal ?? entry?.mekGoal
+    if (title && originalGoal && !groupContext(originalGoal)) {
+      const matches = Object.values(data().roots).filter(root => !final(root) && root.owner === from
+        && conversation(root.originSessionId) === conversation(originSessionId) && root.title === title
+        && normalizeInstruction(root.goal) === normalizeInstruction(originalGoal))
+      if (matches.length > 1) refuse('More than one open task matches this goal. Read list_tasks and use its exact task_id.')
+      if (matches.length === 1) return matches[0]
+    }
+    const root = { id: randomUUID(), owner: from, originSessionId, status: 'running', ...(originalGoal && !groupContext(originalGoal) ? { goal: originalGoal, summary: originalGoal.slice(0, 180) } : {}), createdAt: Date.now(), updatedAt: Date.now() }
     data().roots[root.id] = root
     if (entry) entry.mekRoot = root.id
     return root
@@ -120,12 +138,22 @@ export function install(rt) {
 
   rt.mekRootForDelegation = (from, parent, sessionId, { taskId, title, instruction } = {}) => {
     const selected = selectedRoot(taskId, from, sessionId, parent)
-    if (title !== undefined) taskTitle(title)
-    const root = selected ?? rootFor(from, parent, sessionId)
-    if (root.owner === from && (title !== undefined || !root.title)) root.title = taskTitle(title ?? String(instruction ?? root.goal ?? 'Task').slice(0, 120))
+    const explicit = title === undefined ? undefined : taskTitle(title)
+    const root = selected ?? rootFor(from, parent, sessionId, explicit)
+    if (root.owner === from && !root.title) root.title = explicit ?? fallbackTitle(instruction, root.goal) ?? 'Task'
     const entry = rt.live.get(sessionId)
-    if (entry && selected) entry.mekRoot = root.id
+    if (entry && root.owner === from) entry.mekRoot = root.id
     return root.id
+  }
+  rt.mekDuplicateDispatch = ({ rootId, from, to, room, parent, instruction, mentions }) => {
+    const key = dispatchKey(instruction, mentions)
+    return currentWorks({ id: rootId }).find(work => work.from === from && work.to === to && work.room === room && work.parent === parent
+      && !['cancelled', 'abandoned'].includes(work.status)
+      && (work.dispatchKeys?.includes(key) || dispatchKey(work.instruction, work.groupMentions) === key))?.id
+  }
+  rt.mekRememberDispatch = (id, instruction) => {
+    const work = workOf(id)
+    if (work) work.dispatchKeys = [...new Set([...(work.dispatchKeys ?? []), dispatchKey(instruction)])]
   }
   rt.mekSameTask = (id, rootId) => workOf(id)?.rootId === rootId
   const upstreamOpen = rt.openWork
@@ -380,7 +408,7 @@ export function install(rt) {
       if (args.merged || work.instruction === undefined) work.instruction = args.text
       work.sourceSessionId = args.sessionId ?? rt.chatOf(args.toId)
       const root = rootOf(work.rootId)
-      root.summary ??= args.text.slice(0, 180)
+      root.summary ??= fallbackTitle(root.goal, work.instruction, root.title) ?? 'Task'
       const item = prepare(root.id, args)
       // An unread request can absorb more instructions within this same task.
       // Reconciliation must retain that merged payload, not its earlier version.
@@ -528,7 +556,7 @@ export function install(rt) {
   rt.mekDelegateGroup = async (sessionId, room, sender, target, instruction, { taskId, title } = {}) => {
     const parent = activeWork(sessionId)
     const selected = selectedRoot(taskId, sender.id, sessionId, parent)
-    if (title !== undefined) taskTitle(title)
+    const explicit = title === undefined ? undefined : taskTitle(title)
     if (!parent && room.admin !== sender.id) refuse('Only the group administrator can start a formal task. Ask the administrator to arrange this work; members delegate within their existing assignment.')
     if (parent && parent.room !== room.id && parent.fromRoom !== room.id) refuse('Delegate only within the current task’s group.')
     if (parent && rt.upstreamOf([parent.id]).has(target.id)) refuse('That Bot waits for this work. Return your result with report_bot_task, or use ask_user for an owner decision instead of creating a cycle.')
@@ -539,14 +567,15 @@ export function install(rt) {
       await rt.prepareGroupMemberTask(room, sender)
       prepared = await rt.prepareGroupMemberTask(room, target)
       if (room.admin !== sender.id) refuse('The group administrator changed before dispatch.')
-      const continuing = rt.mekTaskForSession(sessionId)
-      root = continuing && !final(continuing) ? continuing : createRoot({ owner: sender.id, sessionId,
-        title: title ?? instruction.slice(0, 120),
-        goal: rt.live.get(sessionId)?.mekGoal ?? room.log?.findLast(line => line.who === 'User')?.text ?? instruction })
+      const goal = rt.live.get(sessionId)?.mekGoal ?? room.log?.findLast(line => line.who === 'User')?.text ?? instruction
+      root = rootFor(sender.id, undefined, sessionId, explicit, goal)
     }
-    if (root.owner === sender.id && title !== undefined) root.title = taskTitle(title)
+    if (root.owner === sender.id && !root.title) root.title = explicit ?? fallbackTitle(instruction, root.goal) ?? 'Task'
     const entry = rt.live.get(sessionId)
     if (entry && !parent) entry.mekRoot = root.id
+    prepared ??= await rt.prepareGroupMemberTask(room, target)
+    const duplicate = rt.mekDuplicateDispatch({ rootId: root.id, from: sender.id, to: target.id, room: room.id, parent: parent?.id, instruction })
+    if (duplicate) return `Already assigned as ${duplicate} under task ${root.id}. Read its status or revise that assignment if more work is needed.`
     const { id, item } = await groupMember(room, sender.id, target.id, instruction, parent?.id, parent?.groupRoot, { rootId: root.id, prepared })
     await save(); await send(item)
     announce('created', root, workOf(id))
@@ -864,7 +893,7 @@ export function install(rt) {
     if (Object.values(data().outbox).some(item => item.rootId === root.id && ['pending', 'sending', 'uncertain'].includes(item.status))) refuse('A task delivery is not yet confirmed.')
     if (!String(summary ?? '').trim()) refuse('Record the accepted outcome and evidence.')
     const missing = work.filter(needsReport)
-    if (missing.length) refuse(`A worker has not returned a structured completed result with verification evidence. Use read_task, then revise_bot_task to request the missing report for work ${missing.map(item => item.id).join(', ')} (for returned groups, revise their group aggregate). Preserve existing results; do not cancel solely for a missing report.`)
+    if (missing.length) refuse(`A worker has not returned a structured completed result with verification evidence. Use read_task and supplement_bot_report to record evidence from the retained result for work ${missing.map(item => item.id).join(', ')}.`)
     for (const criterion of root.criteria ?? []) if (!checks.some(check => check.criterion === criterion && check.passed === true && String(check.evidence ?? '').trim())) refuse('Every task criterion needs a passed check and concrete evidence.')
     rt.mekPolicyGuard?.({ root, action: 'finish' })
     root.checks = checks
@@ -876,6 +905,54 @@ export function install(rt) {
     announce('completed', root)
     return 'Task accepted. Deliver the result and supporting evidence in your conversation with the user.'
   })
+
+  const reviewText = (value, field) => {
+    if (typeof value !== 'string' || !value.trim() || value.length > TEXT_KEPT) refuse(`Enter ${field} using at most ${TEXT_KEPT} characters.`)
+    return value.trim()
+  }
+  const supplement = async (root, work, summary, evidence, recordedBy) => {
+    if (!needsReport(work) || !work.resultAt || !work.result?.trim()) refuse('Choose a returned assignment with a retained result and a missing report.')
+    work.report = { ...work.report, status: 'completed', summary: reviewText(summary, 'the outcome from the retained result'),
+      evidence: reviewText(evidence, 'evidence you reviewed'), sourceSessionId: work.sourceSessionId, recordedBy }
+    const aggregate = workOf(work.groupRoot)
+    if (aggregate?.report?.status === 'needs_report') {
+      const members = currentWorks(root).filter(child => child.parent === aggregate.id && child.to)
+      if (members.length && members.every(completedReport)) aggregate.report = { ...aggregate.report, status: 'completed',
+        evidence: members.map(child => child.report.evidence).join('\n'), artifacts: members.flatMap(child => child.report.artifacts ?? []) }
+    }
+    touch(root)
+    await save(); announce('result', root, work)
+  }
+  register('supplement_bot_report', 'Record a missing report from an exact returned assignment and its verified evidence. Retains the result and does not run or contact the worker.', {
+    work_id: { ...idParam, description: 'Exact returned worker id from read_task' },
+    summary: { type: 'string', required: true, description: 'Outcome from the retained result' },
+    evidence: { type: 'string', required: true, description: 'Concrete evidence already verified; never invent missing evidence' },
+  }, async ({ work_id, summary, evidence }, _exec, self) => {
+    const work = workOf(work_id), root = rootOf(work_id)
+    if (!work || !root || final(root) || (root.owner !== self && work.from !== self)) refuse('Choose a returned assignment you own or delegated.')
+    await supplement(root, work, summary, evidence, self)
+    return 'Report saved from the retained result. Review it before acceptance.'
+  })
+  rt.mekTaskReviewAction = async ({ taskId, updatedAt, action, workId, resultAt, summary, evidence, checks, feedback }) => {
+    const root = rootOf(taskId)
+    if (!root || root.id !== taskId || final(root) || !rt.botOf(root.owner)) refuse('This task is no longer open.')
+    if (updatedAt !== root.updatedAt) refuse('The task changed. Refresh it and review the current result.')
+    if (action === 'accept') {
+      if (!Array.isArray(checks) || checks.some(check => !check || typeof check.criterion !== 'string' || check.passed !== true || typeof check.evidence !== 'string')) refuse('Review every acceptance criterion.')
+      await commands.get('finish_bot_task')({ task_id: taskId, summary: [reviewText(summary, 'the accepted outcome'), reviewText(evidence, 'evidence you reviewed')].join('\n\n'), checks: checks.map(check => ({ ...check, evidence: reviewText(check.evidence, 'evidence for each criterion') })) }, {}, root.owner)
+      return taskView(root)
+    }
+    const work = workOf(workId)
+    if (!work || work.rootId !== root.id || work.resultAt !== resultAt) refuse('The assignment changed. Refresh it and review its current result.')
+    if (action === 'retry') {
+      if (!['blocked', 'failed'].includes(work.status)) refuse('Choose a blocked or failed assignment.')
+      await commands.get('revise_bot_task')({ task_id: work.id, feedback: reviewText(feedback, 'what changed and what still needs checking') }, {}, work.from)
+      return taskView(root)
+    }
+    if (action !== 'report') refuse('Choose a task review action.')
+    await supplement(root, work, summary, evidence, 'user')
+    return taskView(root)
+  }
 
   async function abandonTracked(work, text) {
     const root = rootOf(work.id)
@@ -995,10 +1072,12 @@ export function install(rt) {
         const waiting = ['waiting_approval', 'waiting_secret', 'waiting_browser', 'waiting_decision'].find(value => active.some(item => item.status === value))
         if (waiting) status = waiting
         else if (active.some(needsReport)) status = 'needs_report'
-        else if (active.some(item => item.status === 'review')) status = 'review'
+        else if (active.some(item => item.status === 'review' || item.status === 'completed')) status = 'review'
+        else if (!active.length) status = 'needs_start'
       }
     }
-    return { ...root, status, work: visible.map(({ resultExchangeId, resultSessionId, reviewNoticeId, ...item }) => ({ ...item, ...(!final(root) && needsReport(item) ? { status: 'needs_report' } : {}), name: rt.botOf(item.to)?.name ?? rt.roomOf(item.room)?.name ?? 'Unavailable Bot' })),
+    const title = fallbackTitle(root.title, root.goal, root.summary, ...visible.map(work => work.instruction)) ?? 'Task'
+    return { ...root, title, status, work: visible.map(({ resultExchangeId, resultSessionId, reviewNoticeId, dispatchKeys, ...item }) => ({ ...item, ...(!final(root) && needsReport(item) ? { status: 'needs_report' } : {}), name: rt.botOf(item.to)?.name ?? rt.roomOf(item.room)?.name ?? 'Unavailable Bot' })),
       decisions: Object.values(data().decisions).filter(item => item.rootId === root.id && (root.owner === self || item.worker === self)),
       deliveries: deliveries.map(item => ({ id: item.id, status: item.status, error: item.error })) }
   }

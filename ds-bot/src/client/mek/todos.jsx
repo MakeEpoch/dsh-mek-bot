@@ -1,7 +1,7 @@
 import React from 'react'
 import { language } from '../i18n.js'
 import { taskProgress } from './task-progress.js'
-import { taskStatus } from './tasks.jsx'
+import { reviewLabel, TaskReviewForm, taskStatus } from './tasks.jsx'
 
 const text = (en, zh) => language().startsWith('zh') ? zh : en
 const ended = task => ['completed', 'cancelled'].includes(task.status)
@@ -18,10 +18,15 @@ function StageProgress({ task, children, roster }) {
 }
 
 export function TodoCard({ task, tasks, roster, busy, operation, child = false }) {
+  const [review, setReview] = React.useState(null)
   const children = tasks.filter(item => item.parentId === task.id).sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0))
   const attention = !ended(task) && children.find(item => ['blocked', 'failed', 'unknown', 'needs_report', 'review'].includes(item.status))
+  const finalReview = !task.paused && task.startRequested && children.length > 0 && children.every(item => item.status === 'completed')
+  const action = task.status === 'needs_report' && task.assignment?.resultAt && task.assignment.result?.trim() ? 'report'
+    : task.status === 'review' || finalReview ? 'accept'
+      : ['blocked', 'failed'].includes(task.status) && ['blocked', 'failed', 'completed'].includes(task.assignment?.status) ? 'retry' : undefined
   return <details className={`mek-todo${child ? ' mek-todo-child' : ''}`} data-todo-id={task.id} data-task-state={task.status}>
-    <summary><span className="mek-todo-title">{task.title}</span><span>{label(attention ?? task)}</span></summary>
+    <summary><span className="mek-todo-title">{task.title}</span><span>{label(attention ?? (finalReview && !ended(task) ? { status: 'review' } : task))}</span></summary>
     <div className="mek-todo-content">
       {children.length > 0 && <StageProgress task={task} children={children} roster={roster} />}
       {task.criteria?.length > 0 && <details className="mek-task-criteria"><summary>{text('Goal and acceptance', '目标与验收')}</summary><p>{task.instruction}</p><ul>{task.criteria.map((criterion, index) => <li key={index}>{criterion}</li>)}</ul></details>}
@@ -31,9 +36,12 @@ export function TodoCard({ task, tasks, roster, busy, operation, child = false }
       {task.predecessors?.length > 0 && <p>{text('After: ', '前置：')}{task.predecessors.map(item => `${item.title} · ${label(item)}`).join(' / ')}</p>}
       {task.instruction !== task.title && <p>{task.instruction}</p>}
       {task.assignment?.report && <p><strong>{text('Member report', '成员回报')}</strong><br />{task.assignment.report.summary}<br />{task.assignment.report.evidence}</p>}
+      {!task.assignment?.report && task.assignment?.result && <p>{task.assignment.result}</p>}
       {task.acceptance && <p><strong>{text('Accepted with evidence', '已检查并验收')}</strong><br />{task.acceptance.summary}<br />{task.acceptance.evidence}</p>}
       {children.map(item => <TodoCard key={item.id} task={item} tasks={tasks} roster={roster} busy={busy} operation={operation} child />)}
+      {review && !ended(task) && <TaskReviewForm action={review.action} initialSummary={review.action === 'report' ? review.task.assignment.result : ''} criteria={review.action === 'accept' ? review.task.criteria : undefined} submit={values => operation(review.task, review.action, values, true)} close={() => setReview(null)} />}
       {!ended(task) && <div className="mek-todo-actions">
+        {action && !review && <button type="button" disabled={busy} onClick={() => setReview({ action, task })}>{reviewLabel(action)}</button>}
         {!task.startRequested && <button type="button" disabled={busy} onClick={() => operation(task, 'start')}>{text('Start', '开始')}</button>}
         {task.startRequested && <button type="button" disabled={busy} onClick={() => operation(task, task.paused ? 'resume' : 'pause')}>{task.paused ? text('Resume', '继续') : text('Pause', '暂停')}</button>}
         {!child && <button type="button" disabled={busy} onClick={() => operation(task, 'cancel')}>{text('Cancel', '取消')}</button>}

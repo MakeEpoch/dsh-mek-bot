@@ -245,9 +245,13 @@ export function install(rt) {
       const send = async () => {
         const toUser = args.reply_to === 'user'
         const work = toUser ? undefined : works[0]
-        const rootId = rt.mekRootForDelegation?.(sender.id, work, exec.agent?.id, { taskId: args.task_id, title: args.task_title, instruction: text.trim() })
         const chat = rt.chatOf(target.id)
         const agent = await rt.resolveAgent(chat)
+        const rootId = rt.mekRootForDelegation?.(sender.id, work, exec.agent?.id, { taskId: args.task_id, title: args.task_title, instruction: text.trim() })
+        const duplicate = () => rootId && rt.mekDuplicateDispatch?.({ rootId, from: sender.id, to: target.id, parent: work, instruction: text })
+        const already = id => `Already assigned as ${id} under task ${rootId}. Read its status or revise that assignment if more work is needed.`
+        const seen = duplicate()
+        if (seen) return already(seen)
         const status = rt.statusOf(target.id)
         // A request it has not read yet, sent for the same work, takes this one in, so
         // messages to a Bot that cannot read them do not pile up.
@@ -258,13 +262,20 @@ export function install(rt) {
         // Nothing went out, so a named request must not take this as a delivered
         // receipt: admitRequest drops the pending record instead, and a retry can send.
         if (long === undefined) { if (request !== undefined) request.unsent = true; return tooLong(text) }
+        const sentMeanwhile = duplicate()
+        if (sentMeanwhile) return already(sentMeanwhile)
         const joins = before !== undefined && agent.inbox?.remove?.(earlier.message.id) === true
-        if (before !== undefined && !joins) long = await rt.attachLong(text, `Message from ${sender.name}.txt`) ?? long
+        if (before !== undefined && !joins) {
+          long = await rt.attachLong(text, `Message from ${sender.name}.txt`) ?? long
+          const prior = duplicate()
+          if (prior) return already(prior)
+        }
         const working = rt.live.get(chat)?.turn !== undefined
         const steer = (args.when !== 'queue' && !toUser) || (joins && earlier.steered)
         const exchangeId = joins ? earlier.message.source.exchangeId : randomUUID()
         if (joins) rt.forgetDelivery?.(exchangeId)
         else if (!toUser) rt.openWork(exchangeId, { from: sender.id, to: target.id, parent: work, ...(rootId ? { rootId } : {}) })
+        if (rootId) rt.mekRememberDispatch?.(exchangeId, text)
         try {
           await rt.deliver({ fromId: sender.id, toId: target.id, text: long.text, files: [...long.files, ...(joins ? before.files : [])], length: long.length, role: 'request', steer, exchangeId, ...(joins ? { merged: true } : {}), ...(toUser ? { audience: 'user' } : {}) })
         } catch (error) {
@@ -602,11 +613,15 @@ export function install(rt) {
 
   rt.teamTools.push(defineTool({
     name: 'post_to_group',
-    description: 'Post a message into a group chat as yourself. A Main Bot may post into any group, any other Bot into a group it is in. A Main Bot\'s or the group admin\'s post starts a round: members reply in the group, where the user reads them. Another member\'s post calls only the members it names with "@Name"; without one it is only written into the group.',
+    description: rt.config.coordinateTasks ? 'Post an announcement in a group. Set report_back: true only to explicitly assign work and collect its report. A Main Bot may post into any group, and other Bots may post into groups they belong to.' : 'Post a message into a group chat as yourself. A Main Bot may post into any group, any other Bot into a group it is in. A Main Bot\'s or the group admin\'s post starts a round: members reply in the group, where the user reads them. Another member\'s post calls only the members it names with "@Name"; without one it is only written into the group.',
     parameters: {
       group: GROUP_REF,
-      message: { type: 'string', required: true, description: 'What to say; write "@Name" to choose who answers, and a name without "@" to only mention a member' },
-      report_back: { type: 'boolean', description: rt.config.coordinateTasks ? 'Reports always come back to the task owner in this integration.' : 'Also send the members\' replies back to you as a new message when the round ends' },
+      message: { type: 'string', required: true, description: rt.config.coordinateTasks ? 'Announcement or assignment text. With report_back: true, use "@Name" to choose who should receive the assignment.' : 'What to say; write "@Name" to choose who answers, and a name without "@" to only mention a member'  },
+      report_back: { type: 'boolean', description: rt.config.coordinateTasks ? 'True to assign work and return reports. Omit or set false for a group announcement.' : 'Also send the members\' replies back to you as a new message when the round ends' },
+      ...(rt.config.coordinateTasks ? {
+        task_id: { type: 'string', description: 'Exact existing task id when continuing work' },
+        task_title: { type: 'string', description: 'Concise outcome title for a new task' },
+      } : {}),
     },
     output,
     async execute(args, exec) {
@@ -636,21 +651,24 @@ export function install(rt) {
       }
       const long = await rt.attachLong(text, `Post from ${sender.name}.txt`)
       if (long === undefined) return tooLong(text)
+      if (rt.config.coordinateTasks && !reportBack) {
+        await rt.postToRoom(room, sender, long.text, { quiet: true, ...(long.length ? { length: long.length } : {}) }, long.files)
+        return `Posted in "${room.name}" as an announcement. Nobody answers it unless called by the user.`
+      }
       if (member && named.length === 0) {
         await rt.postToRoom(room, sender, long.text, { member: true, quiet: true, mentions, ...(long.length ? { length: long.length } : {}) }, long.files)
         return `Posted in "${room.name}", where the user and its members read it. Nobody answers it: your post only calls the members you name with @Name.`
       }
       // Replies the poster waits for, while it works on what a Bot asked it for, are
       // work handed on for that request (handoffs.js).
-      // Work a Bot posts from inside a tracked task belongs to that task, whether or
-      // not it asked for the replies: its result rises to the original owner.
       const work = worksOf(exec).find(id => rt.ownsWork(self, id))
       const sub = work === undefined && !rt.config.coordinateTasks ? undefined : randomUUID()
       const fromRoom = rt.mekPostGroup ? rt.groupOwners.get(exec.agent?.id)?.roomId : undefined
-      if (sub !== undefined) rt.openWork(sub, { from: self, room: room.id, parent: work, ...(fromRoom ? { fromRoom } : {}) })
+      const rootId = rt.mekRootForDelegation?.(self, work, exec.agent?.id, { taskId: args.task_id, title: args.task_title, instruction: text })
+      const prior = rootId && rt.mekDuplicateDispatch?.({ rootId, from: self, room: room.id, parent: work, instruction: text, mentions })
+      if (prior) return `Already assigned as ${prior} under task ${rootId}. Read its status or revise that assignment if more work is needed.`
+      if (sub !== undefined) rt.openWork(sub, { from: self, room: room.id, parent: work, ...(rootId ? { rootId } : {}), ...(fromRoom ? { fromRoom } : {}) })
       try {
-        // A post is a dispatch only when the poster asked for the replies or is handing
-        // work on inside a task; an ordinary announcement wakes only the members it names.
         // The "@" resolved above travels with it, so a dispatch keeps its named targets.
         if (rt.mekPostGroup && sub) await rt.mekPostGroup(room, sender, text, sub, long.files, { delegated: reportBack || work !== undefined, mentions })
         else await rt.postToRoom(room, sender, long.text, { mentions, ...(reportBack ? { reportBack: true, ...callerRoom(exec) } : {}), ...(member ? { member: true } : {}), ...(sub ? { sub } : {}), ...(long.length ? { length: long.length } : {}) }, long.files)

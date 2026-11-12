@@ -1,5 +1,12 @@
 const ended = status => ['completed', 'cancelled', 'ended'].includes(status)
 export const isEnded = record => ended(record.status ?? record.state)
+export function taskBucket({ record, related = [] }) {
+  if (isEnded(record)) return 'ended'
+  if (record.status === 'running' && related.length) {
+    if (related.every(isEnded) || related.some(item => !isEnded(item) && !['running', 'queued'].includes(item.status))) return 'attention'
+  }
+  return ['running', 'queued'].includes(record.status) ? 'running' : 'attention'
+}
 export function conversationTasks(roster, sessionId) {
   const room = roster.roomsById[sessionId], botId = roster.byId[sessionId]?.id ?? sessionId
   const target = room?.id ?? botId

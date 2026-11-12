@@ -16,6 +16,7 @@ const states = {
   blocked: ['Blocked', '遇到阻塞'], superseded: ['Revised', '已安排修正'],
   abandoned: ['Wait given up', '已放弃等待'],
   waiting_browser: ['Waiting for browser control', '等待浏览器交接'],
+  needs_start: ['Needs an assignment', '未安排执行'],
 }
 export const taskStatus = value => label(...(states[value] ?? [value, value]))
 const foldsKey = 'mek-bot:task-list-folds'
@@ -39,8 +40,51 @@ export function TaskAttention({ team, sessionId }) {
   </section>
 }
 
+export const reviewLabel = action => ({
+  report: label('Add report', '补报告'), accept: label('Accept', '验收'), retry: label('Resolve blocker', '处理阻塞'),
+}[action])
+
+export function TaskReviewForm({ action, initialSummary = '', initialEvidence = '', criteria = [], submit, close }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const save = async event => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    setBusy(true); setError('')
+    try {
+      await submit(action === 'retry' ? { feedback: data.get('feedback') } : {
+        summary: data.get('summary'), evidence: data.get('evidence'),
+        checks: criteria.map((criterion, i) => ({ criterion, evidence: data.get(`criterion-${i}`), passed: true })),
+      })
+      close()
+    } catch (failure) { setError(failure.message) }
+    finally { setBusy(false) }
+  }
+  return <form className="mek-task-review" onSubmit={save} aria-label={reviewLabel(action)}>
+    {action === 'retry' ? <>
+      <p>{label('Retry this assignment after the blocker has been addressed.', '解决阻塞后，只重试这一项。')}</p>
+      <label>{label('What changed and what still needs checking', '解阻情况和剩余验证')}<textarea name="feedback" required rows={3} /></label>
+    </> : <>
+      <label>{label('Outcome', '结果摘要')}<textarea name="summary" required rows={3} defaultValue={initialSummary} /></label>
+      <label>{label('Reviewed evidence', '已核对的证据')}<textarea name="evidence" required rows={2} defaultValue={initialEvidence} /></label>
+      {criteria.map((criterion, i) => <label key={i}>{criterion}<textarea name={`criterion-${i}`} required rows={2} /></label>)}
+      <label className="mek-task-review-check"><input type="checkbox" required />{label('I checked the outcome and evidence', '我已核对结果和证据')}</label>
+    </>}
+    {error && <p role="alert">{error}</p>}
+    <div className="mek-todo-actions"><button type="submit" disabled={busy}>{action === 'retry' ? label('Retry assignment', '重试此项') : reviewLabel(action)}</button><button type="button" disabled={busy} onClick={close}>{label('Back', '返回')}</button></div>
+  </form>
+}
+
 export function TaskCard({ task, roster, team, ctx, compact = false, onChanged }) {
   const [busy, setBusy] = useState(false)
+  const [review, setReview] = useState(null)
+  const closed = ['completed', 'cancelled'].includes(task.status)
+  const openReview = (action, work) => setReview({ action, work, updatedAt: task.updatedAt })
+  const submit = async values => {
+    const { action, work, updatedAt } = review
+    await call('task-review', { ...values, action, taskId: task.id, updatedAt, workId: work?.id, resultAt: work?.resultAt })
+    await team.refresh(); onChanged?.(task.id)
+  }
   const cancel = async taskId => {
     setBusy(true)
     try { await call('task-cancel', { taskId }); await team.refresh(); onChanged?.(taskId) }
@@ -50,7 +94,7 @@ export function TaskCard({ task, roster, team, ctx, compact = false, onChanged }
   return <details className="mek-task" data-task-state={task.status}>
       <summary><span className={compact ? "mek-task-title" : undefined}>{compact ? task.title ?? task.summary : label('Team task', '团队任务')}</span><span>{taskStatus(task.status)}</span>{!compact && <span className="mek-task-preview">{task.title ?? task.summary}</span>}</summary>
       <div className="mek-task-body">
-        {task.status === 'needs_report' && <p role="status">{label('The result has returned. The owner must request a structured report and verification evidence before accepting it. Missing a report alone does not require cancellation.', '结果已返回，负责人需请求执行者补充结构化报告和验证证据，再进行验收；无需仅因缺报告取消任务。')}</p>}
+        {task.status === 'needs_report' && <p role="status">{label('Use the returned result and evidence to add a report.', '根据已返回的结果和证据补报告。')}</p>}
         {task.status === 'review' && <p role="status">{label('The results are ready for the owner to review and accept. The task is not still executing.', '结果已返回，等待负责人检查证据并验收。')}</p>}
         {(task.work ?? []).filter(item => item.status !== 'superseded').map(item => <div key={item.id} className="mek-task-step">
           <strong>{item.name}</strong><span>{taskStatus(item.status)}</span>
@@ -59,10 +103,16 @@ export function TaskCard({ task, roster, team, ctx, compact = false, onChanged }
           {item.report && (item.status !== 'abandoned' || item.lateResultAt) && <p>{item.report.summary}<br />{item.report.evidence}</p>}
           {item.status !== 'abandoned' && !item.report && item.result && <p>{item.result}</p>}
           {item.report?.artifacts?.length > 0 && (item.status !== 'abandoned' || item.lateResultAt) && <Artifacts values={item.report.artifacts} sessionId={item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to} ctx={ctx} />}
+          {!closed && !review && item.status === 'needs_report' && item.resultAt && item.result?.trim() && <button type="button" onClick={() => openReview('report', item)}>{reviewLabel('report')}</button>}
+          {!closed && !review && ['blocked', 'failed'].includes(item.status) && !task.work?.some(parent => parent.id === item.groupRoot && parent.id !== item.id && parent.resultAt) && <button type="button" onClick={() => openReview('retry', item)}>{reviewLabel('retry')}</button>}
         </div>)}
         {(task.decisions ?? []).filter(item => item.status === 'open').map(item => <p key={item.id}>{label('Question being handled by the owner: ', '负责人正在处理的问题：')}{item.question}</p>)}
         {task.deliveries?.some(item => item.status === 'uncertain') && <p role="status">{label('A delivery is being reconciled. The task has not been repeated.', '消息送达情况待核对，未重复执行任务。')}</p>}
-        {!['completed', 'cancelled'].includes(task.status) && <button type="button" disabled={busy} onClick={() => cancel(task.id)}>{label('Cancel task', '取消任务')}</button>}
+        {review && !closed && <TaskReviewForm key={`${review.action}:${review.work?.id ?? task.id}`} action={review.action} initialSummary={review.action === 'report' ? review.work.report?.summary ?? review.work.result : ''} initialEvidence={review.action === 'report' ? review.work.report?.evidence : ''} criteria={review.action === 'accept' ? task.criteria : undefined} submit={submit} close={() => setReview(null)} />}
+        {!closed && !review && <div className="mek-todo-actions">
+          {task.status === 'review' && <button type="button" onClick={() => openReview('accept')}>{reviewLabel('accept')}</button>}
+          <button type="button" disabled={busy} onClick={() => cancel(task.id)}>{label('Cancel task', '取消任务')}</button>
+        </div>}
       </div>
     </details>
 }

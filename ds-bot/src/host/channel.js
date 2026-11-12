@@ -219,6 +219,10 @@ export function install(rt) {
           await rt.load()
           if (!rt.mekCancelTask) return fail('Task coordination is not enabled', 'bot/invalid')
           return ok(await rt.mekCancelTask(body.taskId))
+        case 'task-review':
+          await rt.load()
+          if (!rt.mekTaskReviewAction) return fail('Task coordination is not enabled', 'bot/invalid')
+          return ok(await rt.mekTaskReviewAction(body))
         case 'abandon-work':
           await rt.load()
           return await rt.abandonWork(String(body.id ?? '')) ? ok(true) : fail('That wait is no longer open', 'bot/stale')
