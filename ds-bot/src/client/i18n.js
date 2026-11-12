@@ -1160,6 +1160,11 @@ const ZH = {
   // New group chats
   'Choose the group admin': '选择群管理员',
   'Group admin': '群管理员',
+  'The admin also joins the group.': '管理员也会加入群聊。',
+  'Add group members': '添加群成员',
+  'Choose at least one more Bot to create the group.': '再选至少 1 位 Bot 即可创建群聊。',
+  '{count} selected, including the admin': '已选 {count} 位，含管理员',
+  'Group name (optional)': '群名（选填）',
   'Who to chat with…': '想和谁聊…',
   'Add at least one more Bot': '再至少添加一个 Bot',
   Members: '成员',

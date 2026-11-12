@@ -1313,6 +1313,11 @@ var ZH = {
   // New group chats
   "Choose the group admin": "选择群管理员",
   "Group admin": "群管理员",
+  "The admin also joins the group.": "管理员也会加入群聊。",
+  "Add group members": "添加群成员",
+  "Choose at least one more Bot to create the group.": "再选至少 1 位 Bot 即可创建群聊。",
+  "{count} selected, including the admin": "已选 {count} 位，含管理员",
+  "Group name (optional)": "群名（选填）",
   "Who to chat with…": "想和谁聊…",
   "Add at least one more Bot": "再至少添加一个 Bot",
   Members: "成员",
@@ -14332,13 +14337,14 @@ function NewGroupForm({ roster, actions, run: run2, onCreated, onCancel }) {
   const [members, setMembers] = (0, import_react41.useState)([]);
   const [name, setName] = (0, import_react41.useState)("");
   const [busy, setBusy] = (0, import_react41.useState)(false);
+  const canCreate = admin !== null && members.length > 0 && !busy;
   const toggle = (id) => setMembers((list) => list.includes(id) ? list.filter((item) => item !== id) : [...list, id]);
   const pickAdmin = (id) => {
     setAdmin(id);
     setMembers((list) => list.filter((item) => item !== id));
   };
   const create = async () => {
-    if (busy || admin === null || members.length === 0) return;
+    if (!canCreate) return;
     setBusy(true);
     let room2;
     const done = await run2(actions.createRoom([admin, ...members], { admin, greet: true, ...name.trim() ? { name: name.trim() } : {} }).then((value) => {
@@ -14347,21 +14353,33 @@ function NewGroupForm({ roster, actions, run: run2, onCreated, onCancel }) {
     if (done && room2) onCreated(room2);
     else setBusy(false);
   };
-  const chip = (bot, on, onClick, role) => (0, import_react41.createElement)("button", {
-    key: bot.id,
-    type: "button",
-    role,
-    className: "bt-ng-chip",
-    "aria-checked": on,
-    onClick
-  }, (0, import_react41.createElement)(BotAvatar, { bot, size: 22, badge: false, live: false }), (0, import_react41.createElement)("span", { className: "bt-ng-name" }, bot.name), on && role === "radio" ? (0, import_react41.createElement)(AdminStar) : null);
+  const chip = (bot, on, onClick, role) => (0, import_react41.createElement)(
+    "button",
+    {
+      key: bot.id,
+      type: "button",
+      role,
+      className: "bt-ng-chip",
+      "aria-checked": on,
+      onClick
+    },
+    (0, import_react41.createElement)(BotAvatar, { bot, size: 22, badge: false, live: false }),
+    (0, import_react41.createElement)("span", { className: "bt-ng-name" }, bot.name),
+    role === "checkbox" && (0, import_react41.createElement)("span", { className: "bt-ng-check", "aria-hidden": true }, on && (0, import_react41.createElement)(CheckIcon)),
+    role === "radio" && on && (0, import_react41.createElement)(AdminStar)
+  );
   return (0, import_react41.createElement)(
     "div",
     { className: "bt-set-card bt-ng" },
     (0, import_react41.createElement)(
       "div",
       { className: "bt-set-row bt-bs-row bt-bs-stack" },
-      (0, import_react41.createElement)("span", { className: "bt-set-copy" }, (0, import_react41.createElement)("span", { className: "bt-bs-label bt-ng-label" }, (0, import_react41.createElement)(AdminStar), t("Choose the group admin"))),
+      (0, import_react41.createElement)(
+        "span",
+        { className: "bt-set-copy" },
+        (0, import_react41.createElement)("span", { className: "bt-bs-label bt-ng-label" }, (0, import_react41.createElement)(AdminStar), t("Choose the group admin")),
+        (0, import_react41.createElement)("span", { className: "bt-set-hint" }, t("The admin also joins the group."))
+      ),
       (0, import_react41.createElement)(
         "div",
         { className: "bt-ng-picks", role: "radiogroup", "aria-label": t("Group admin") },
@@ -14371,24 +14389,29 @@ function NewGroupForm({ roster, actions, run: run2, onCreated, onCancel }) {
     admin === null ? null : (0, import_react41.createElement)(
       "div",
       { className: "bt-set-row bt-bs-row bt-bs-stack bt-ng-step" },
-      (0, import_react41.createElement)("span", { className: "bt-set-copy" }, (0, import_react41.createElement)("span", { className: "bt-bs-label" }, t("Who to chat with…"))),
+      (0, import_react41.createElement)(
+        "span",
+        { className: "bt-set-copy" },
+        (0, import_react41.createElement)("span", { className: "bt-bs-label" }, t("Add group members")),
+        (0, import_react41.createElement)("span", { className: "bt-set-hint", role: "status" }, members.length === 0 ? t("Choose at least one more Bot to create the group.") : t("{count} selected, including the admin", { count: members.length + 1 }))
+      ),
       (0, import_react41.createElement)(
         "div",
-        { className: "bt-ng-picks", role: "group", "aria-label": t("Members") },
+        { className: "bt-ng-picks", role: "group", "aria-label": t("Add group members") },
         roster.bots.filter((bot) => bot.id !== admin).map((bot) => chip(bot, members.includes(bot.id), () => toggle(bot.id), "checkbox"))
       )
     ),
-    admin === null || members.length === 0 ? null : (0, import_react41.createElement)(
+    (0, import_react41.createElement)(
       "label",
-      { className: "bt-set-row bt-bs-row bt-ng-step" },
-      (0, import_react41.createElement)("span", { className: "bt-set-copy" }, (0, import_react41.createElement)("span", { className: "bt-bs-label" }, t("Name"))),
-      (0, import_react41.createElement)("input", { className: "bt-bs-input", value: name, maxLength: 60, placeholder: t("Name after members"), onChange: (event) => setName(event.target.value) })
+      { className: "bt-set-row bt-bs-row bt-bs-stack" },
+      (0, import_react41.createElement)("span", { className: "bt-set-copy" }, (0, import_react41.createElement)("span", { className: "bt-bs-label" }, t("Group name (optional)"))),
+      (0, import_react41.createElement)("input", { className: "bt-bs-input bt-ng-name-input", value: name, maxLength: 60, placeholder: t("Name after members"), onChange: (event) => setName(event.target.value) })
     ),
     (0, import_react41.createElement)(
       "div",
       { className: "bt-set-row bt-task-foot" },
       (0, import_react41.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: onCancel }, t("Cancel")),
-      (0, import_react41.createElement)("button", { type: "button", className: "bt-send bt-soft-sm", disabled: busy || admin === null || members.length === 0, onClick: () => void create() }, t("Create group chat"))
+      (0, import_react41.createElement)("button", { type: "button", className: "bt-send bt-soft-sm", disabled: !canCreate, onClick: () => void create() }, t("Create group chat"))
     )
   );
 }
@@ -14402,6 +14425,10 @@ var GROUP_SETTINGS_CSS = `
 .bt-ng-chip:active{scale:.96}
 .bt-ng-chip[aria-checked=true]{background:var(--bt-active);border-color:var(--bt-line-2);color:var(--bt-ink)}
 .bt-ng-chip .bt-admin-star{animation:bt-check-pop .4s cubic-bezier(.34,1.56,.64,1)}
+.bt-ng-check{display:grid;place-items:center;flex:none;width:14px;height:14px;border:1px solid var(--bt-line-2);border-radius:4px}
+.bt-ng-check svg{width:12px;height:12px}
+.bt-ng .bt-ng-name-input{flex:none;width:min(100%,320px);margin:0;border-color:var(--bt-line);text-align:left}
+.bt-ng .bt-ng-name-input:focus{border-color:var(--bt-line-2)}
 .bt-ng-name{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.bt-ng,.bt-ng-step,.bt-ng-chip .bt-admin-star{animation:none}}
 .bt-gs-member{gap:8px}

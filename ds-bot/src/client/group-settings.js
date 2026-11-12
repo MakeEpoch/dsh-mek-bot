@@ -1,6 +1,6 @@
 import { createElement as h, useEffect, useState } from 'react'
 import { isMainOf } from './sources.js'
-import { PlusIcon, ChevronRightIcon } from './icons.js'
+import { CheckIcon, PlusIcon, ChevronRightIcon } from './icons.js'
 import { AdminStar, BotAvatar, BotMark, RoomAvatar } from './mark.js'
 import { Card, Row, InlineText, SwitchRow } from './bot-settings.js'
 import { Segmented } from './motion.js'
@@ -119,17 +119,16 @@ export function GroupSettingsForm({ room, roster, actions, run, onDeleted }) {
         h('span', { className: 'bt-chevron' }, h(ChevronRightIcon)))))
 }
 
-// A new group chat from Settings: its admin first, then the other members, then a name
-// if the member names will not do.
 export function NewGroupForm({ roster, actions, run, onCreated, onCancel }) {
   const [admin, setAdmin] = useState(null)
   const [members, setMembers] = useState([])
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
+  const canCreate = admin !== null && members.length > 0 && !busy
   const toggle = id => setMembers(list => (list.includes(id) ? list.filter(item => item !== id) : [...list, id]))
   const pickAdmin = (id) => { setAdmin(id); setMembers(list => list.filter(item => item !== id)) }
   const create = async () => {
-    if (busy || admin === null || members.length === 0) return
+    if (!canCreate) return
     setBusy(true)
     let room
     const done = await run(actions.createRoom([admin, ...members], { admin, greet: true, ...(name.trim() ? { name: name.trim() } : {}) }).then((value) => { room = value }))
@@ -138,22 +137,31 @@ export function NewGroupForm({ roster, actions, run, onCreated, onCancel }) {
   }
   const chip = (bot, on, onClick, role) => h('button', {
     key: bot.id, type: 'button', role, className: 'bt-ng-chip', 'aria-checked': on, onClick,
-  }, h(BotAvatar, { bot, size: 22, badge: false, live: false }), h('span', { className: 'bt-ng-name' }, bot.name), on && role === 'radio' ? h(AdminStar) : null)
+  }, h(BotAvatar, { bot, size: 22, badge: false, live: false }),
+  h('span', { className: 'bt-ng-name' }, bot.name),
+  role === 'checkbox' && h('span', { className: 'bt-ng-check', 'aria-hidden': true }, on && h(CheckIcon)),
+  role === 'radio' && on && h(AdminStar))
   return h('div', { className: 'bt-set-card bt-ng' },
     h('div', { className: 'bt-set-row bt-bs-row bt-bs-stack' },
-      h('span', { className: 'bt-set-copy' }, h('span', { className: 'bt-bs-label bt-ng-label' }, h(AdminStar), t('Choose the group admin'))),
+      h('span', { className: 'bt-set-copy' },
+        h('span', { className: 'bt-bs-label bt-ng-label' }, h(AdminStar), t('Choose the group admin')),
+        h('span', { className: 'bt-set-hint' }, t('The admin also joins the group.'))),
       h('div', { className: 'bt-ng-picks', role: 'radiogroup', 'aria-label': t('Group admin') },
         roster.bots.map(bot => chip(bot, admin === bot.id, () => pickAdmin(bot.id), 'radio')))),
     admin === null ? null : h('div', { className: 'bt-set-row bt-bs-row bt-bs-stack bt-ng-step' },
-      h('span', { className: 'bt-set-copy' }, h('span', { className: 'bt-bs-label' }, t('Who to chat with…'))),
-      h('div', { className: 'bt-ng-picks', role: 'group', 'aria-label': t('Members') },
+      h('span', { className: 'bt-set-copy' },
+        h('span', { className: 'bt-bs-label' }, t('Add group members')),
+        h('span', { className: 'bt-set-hint', role: 'status' }, members.length === 0
+          ? t('Choose at least one more Bot to create the group.')
+          : t('{count} selected, including the admin', { count: members.length + 1 }))),
+      h('div', { className: 'bt-ng-picks', role: 'group', 'aria-label': t('Add group members') },
         roster.bots.filter(bot => bot.id !== admin).map(bot => chip(bot, members.includes(bot.id), () => toggle(bot.id), 'checkbox')))),
-    admin === null || members.length === 0 ? null : h('label', { className: 'bt-set-row bt-bs-row bt-ng-step' },
-      h('span', { className: 'bt-set-copy' }, h('span', { className: 'bt-bs-label' }, t('Name'))),
-      h('input', { className: 'bt-bs-input', value: name, maxLength: 60, placeholder: t('Name after members'), onChange: event => setName(event.target.value) })),
+    h('label', { className: 'bt-set-row bt-bs-row bt-bs-stack' },
+      h('span', { className: 'bt-set-copy' }, h('span', { className: 'bt-bs-label' }, t('Group name (optional)'))),
+      h('input', { className: 'bt-bs-input bt-ng-name-input', value: name, maxLength: 60, placeholder: t('Name after members'), onChange: event => setName(event.target.value) })),
     h('div', { className: 'bt-set-row bt-task-foot' },
       h('button', { type: 'button', className: 'bt-soft bt-soft-sm', onClick: onCancel }, t('Cancel')),
-      h('button', { type: 'button', className: 'bt-send bt-soft-sm', disabled: busy || admin === null || members.length === 0, onClick: () => void create() }, t('Create group chat'))))
+      h('button', { type: 'button', className: 'bt-send bt-soft-sm', disabled: !canCreate, onClick: () => void create() }, t('Create group chat'))))
 }
 
 export const GROUP_SETTINGS_CSS = `
@@ -166,6 +174,10 @@ export const GROUP_SETTINGS_CSS = `
 .bt-ng-chip:active{scale:.96}
 .bt-ng-chip[aria-checked=true]{background:var(--bt-active);border-color:var(--bt-line-2);color:var(--bt-ink)}
 .bt-ng-chip .bt-admin-star{animation:bt-check-pop .4s cubic-bezier(.34,1.56,.64,1)}
+.bt-ng-check{display:grid;place-items:center;flex:none;width:14px;height:14px;border:1px solid var(--bt-line-2);border-radius:4px}
+.bt-ng-check svg{width:12px;height:12px}
+.bt-ng .bt-ng-name-input{flex:none;width:min(100%,320px);margin:0;border-color:var(--bt-line);text-align:left}
+.bt-ng .bt-ng-name-input:focus{border-color:var(--bt-line-2)}
 .bt-ng-name{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.bt-ng,.bt-ng-step,.bt-ng-chip .bt-admin-star{animation:none}}
 .bt-gs-member{gap:8px}
