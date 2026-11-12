@@ -91,6 +91,7 @@ export function TeamHeader({ team, views }) {
         <button type="button" role="menuitem" onClick={() => run(() => team.actions.openNewChat('new'))}><PlusIcon />{t('New…')}</button>
         <div className="bt-menu-sep" role="separator" />
         {[[t('Usage'), 'usage'], [t('Connectors'), 'connectors'], [t('Bot settings'), 'general']].map(([label, page]) => <button type="button" role="menuitem" key={page} onClick={() => run(() => team.actions.openSettings(page))}>{label}</button>)}
+        {team.actions.hasPlugins?.() && <button type="button" role="menuitem" onClick={() => run(team.actions.openPlugins)}>{t('DSH plugins')}</button>}
       </div>}
     </div>
   </header>
