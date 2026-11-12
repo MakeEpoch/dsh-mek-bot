@@ -7,6 +7,8 @@ export const NAMESPACE = 'ds-bot'
 const ZH = {
   'Search Bots': '搜索 Bot',
   'Pending messages': '待处理消息',
+  'Queued messages: {count}': '排队中 {count} 条',
+  'Message queue unavailable': '暂时无法读取消息队列',
   'Entering current turn': '正在送入当前轮次',
   'Waiting for next turn': '等待下一轮',
   'Send into current turn': '立即介入',

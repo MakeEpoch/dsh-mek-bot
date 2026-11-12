@@ -65,7 +65,8 @@ function TeamView({ ctx, requests, viewport }) {
   actions.Queue = useMemo(() => function Queue({ sessionId }) {
     const roster = useSyncExternalStore(team.roster.subscribe, team.roster.getSnapshot)
     const owner = roster.byId[sessionId] ?? roster.roomsById[sessionId]
-    return <SessionQueue ctx={ctx} sessionId={owner ? currentPart(owner) : sessionId} editable={!roster.readOnly} />
+    const part = owner ? currentPart(owner) : sessionId
+    return ctx.sessions.retain ? <SessionQueue key={part} ctx={ctx} sessionId={part} editable={!roster.readOnly} /> : null
   }, [team, ctx])
   actions.taskUnread = (id, bucket) => {
     const snapshot = team.roster.getSnapshot()

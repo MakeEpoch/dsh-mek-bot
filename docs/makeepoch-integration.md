@@ -111,6 +111,8 @@ The native entry provides `mekBotBridge` v1 using public Cordis service registra
 The native details settings render an optional WechatPad-owned link editor. `wechatBotLinks` v1 provides credential-free target views and revisioned updates; Bot resolves stable Main Bot/group identity before forwarding. Optional service references are obtained and released in the injected scope. Transport availability, account login and policy states remain distinct from plugin absence/version mismatch. WechatPad owns discovery and persistence; the native client never reads account credentials or reply context tokens. WechatPad enriches existing group candidates with cached group names; the Bot client keeps the chat ID as the binding key and displays it alongside the name to distinguish duplicates.
 
 
+原生 Bot 私聊和群聊的消息队列复用 DSH 收件箱投影。连续有用户消息排队 500ms 后，输入框内显示计数，点击展开浮层；队列清空即隐藏。切换会话或会话段时释放旧订阅。浮层沿用宿主的介入和移除操作。
+
 ## 微信附件与顶部状态展示（2026-11-05）
 
 原生顶部会话标签保持单行，只显示头像、名称及贴头像的未读点，不绘制置顶图标或详情箭头。收藏持久化、列表星标及点击当前项切换详情的行为保留。微信入站附件的固定说明和路径清单仅在展示层转为折叠卡片，语音转写和其他文案直接显示，图片使用已有的真实缩略图；原始持久消息、模型输入及安全提示不改写。旧历史与新消息采用相同规则，解析失败保留原文。

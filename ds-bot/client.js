@@ -150,6 +150,8 @@ var NAMESPACE = "ds-bot";
 var ZH = {
   "Search Bots": "搜索 Bot",
   "Pending messages": "待处理消息",
+  "Queued messages: {count}": "排队中 {count} 条",
+  "Message queue unavailable": "暂时无法读取消息队列",
   "Entering current turn": "正在送入当前轮次",
   "Waiting for next turn": "等待下一轮",
   "Send into current turn": "立即介入",
@@ -10496,6 +10498,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
       (0, import_react26.createElement)(
         "div",
         { className: "dsb-composer-trailing" },
+        actions.Queue ? (0, import_react26.createElement)(actions.Queue, { sessionId }) : null,
         (0, import_react26.createElement)(ComposerVoice, { sessionId, inputActions, actions, useUi, useRoster }),
         (0, import_react26.createElement)("button", { type: "button", className: "dsb-send", disabled: disabled || sending || preparing || text4.trim() === "" && images.length === 0, "aria-label": t("Send message"), title: t("Send message"), onClick: () => {
           void submit();
@@ -10564,7 +10567,6 @@ function Chat({ sessionId, team, children }) {
     (0, import_react26.createElement)(
       "div",
       { className: "dsb-composer-root" },
-      actions.Queue ? (0, import_react26.createElement)(actions.Queue, { sessionId }) : null,
       (0, import_react26.createElement)(ModelChoiceDock, { sessionId, useRoster: hooks.useRoster, actions }),
       (0, import_react26.createElement)(Composer, {
         sessionId,
@@ -22719,7 +22721,7 @@ function GroupChat({ sessionId, team }) {
     const bot = roster.byId[entry.id];
     const label3 = entry.state === "ask" ? t("Waiting for your approval") : workPhrase(entry.doing);
     return /* @__PURE__ */ import_react63.default.createElement("div", { key: entry.id, className: "bt-typing", "data-running-bot": entry.id, "data-resource-wait": entry.doing.resourceWait ? "" : void 0, role: "status" }, /* @__PURE__ */ import_react63.default.createElement(BotMark, { bot, size: 22, state: entry.state === "ask" ? "alert" : workState(entry.doing) }), /* @__PURE__ */ import_react63.default.createElement("span", { className: "bt-typing-text" }, /* @__PURE__ */ import_react63.default.createElement("span", { className: "bt-typing-label", title: entry.doing.resourceWait ? label3 : void 0 }, /* @__PURE__ */ import_react63.default.createElement(Shimmer, null, bot.name, " · ", label3, entry.doing.resourceWait ? "" : "…")), /* @__PURE__ */ import_react63.default.createElement(Elapsed, { at: entry.doing.since, className: "bt-typing-time" })));
-  }))))), /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-composer-root" }, actions.Queue && /* @__PURE__ */ import_react63.default.createElement(actions.Queue, { sessionId }), /* @__PURE__ */ import_react63.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text4, images, id) => {
+  }))))), /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-composer-root" }, /* @__PURE__ */ import_react63.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text4, images, id) => {
     await actions.send(sessionId, text4, images, id);
     await refresh.current?.();
   }, actions, useUi: hooks.useUi, useRoster: hooks.useRoster })));
@@ -23113,12 +23115,58 @@ var WECHAT_LINKS_CSS = `
 
 // src/client/mek/session-queue.jsx
 var import_react70 = __toESM(require("react"), 1);
+var QUEUE_SHOW_DELAY = 500;
 var humanQueue = (value) => ["next-step", "next-turn"].flatMap((placement) => (value?.[placement] ?? []).filter((item) => item.source?.kind === "user").map((item) => ({ id: item.id, placement, text: (item.content ?? []).filter((part) => part.type === "text").map((part) => part.text).join("\n"), attachments: (item.content ?? []).filter((part) => ["image", "file"].includes(part.type)).length })));
+function QueuePopover({ count, unavailable, children }) {
+  const [open, setOpen] = (0, import_react70.useState)(false);
+  const dock = (0, import_react70.useRef)(null), trigger = (0, import_react70.useRef)(null);
+  const id = (0, import_react70.useId)();
+  const label3 = unavailable ? t("Message queue unavailable") : t("Queued messages: {count}", { count });
+  (0, import_react70.useEffect)(() => {
+    if (!open) return void 0;
+    const closeOutside = (event) => {
+      if (!dock.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [open]);
+  return /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-dock", ref: dock, onKeyDown: (event) => {
+    if (event.key !== "Escape" || !open) return;
+    event.stopPropagation();
+    setOpen(false);
+    trigger.current?.focus();
+  } }, /* @__PURE__ */ import_react70.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "mek-queue-trigger",
+      ref: trigger,
+      "aria-label": label3,
+      title: label3,
+      "aria-expanded": open,
+      "aria-controls": open ? id : void 0,
+      onClick: () => setOpen((value) => !value)
+    },
+    /* @__PURE__ */ import_react70.default.createElement(ClockIcon, { size: 14 }),
+    /* @__PURE__ */ import_react70.default.createElement("span", { "aria-hidden": "true" }, unavailable ? "!" : count > 99 ? "99+" : count)
+  ), open && /* @__PURE__ */ import_react70.default.createElement("section", { className: "mek-session-queue", id, "aria-label": t("Pending messages") }, children));
+}
 function QueueRows({ session, editable }) {
   const source = session.projections.faceOf("inbox");
   const snapshot = (0, import_react70.useSyncExternalStore)(source.subscribe, source.getSnapshot);
   const items = humanQueue(snapshot);
+  const hasItems = items.length > 0;
+  const [visible, setVisible] = (0, import_react70.useState)(false);
   const [busy, setBusy] = (0, import_react70.useState)(null), [error, setError] = (0, import_react70.useState)("");
+  (0, import_react70.useEffect)(() => {
+    if (!hasItems) {
+      setVisible(false);
+      setError("");
+      return void 0;
+    }
+    const timer = setTimeout(() => setVisible(true), QUEUE_SHOW_DELAY);
+    return () => clearTimeout(timer);
+  }, [hasItems]);
   const update = async (id, kind) => {
     if (busy) return;
     setBusy(id);
@@ -23132,8 +23180,8 @@ function QueueRows({ session, editable }) {
       setBusy(null);
     }
   };
-  if (!items.length && !error) return null;
-  return /* @__PURE__ */ import_react70.default.createElement("section", { className: "mek-session-queue", "aria-label": t("Pending messages") }, /* @__PURE__ */ import_react70.default.createElement("div", { className: "bt-note" }, t("Pending messages"), " · ", items.length), items.map((item) => /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-row", key: item.id, "data-queue-id": item.id }, /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-text" }, /* @__PURE__ */ import_react70.default.createElement("span", { className: "bt-note" }, t(item.placement === "next-step" ? "Entering current turn" : "Waiting for next turn")), /* @__PURE__ */ import_react70.default.createElement("p", null, item.text || t("Attachment message"), item.attachments ? ` · ${t("{count} attachments", { count: item.attachments })}` : "")), /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-actions" }, item.placement === "next-turn" && /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !editable || !!busy, onClick: () => void update(item.id, "steer") }, t("Send into current turn")), /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !editable || !!busy, onClick: () => void update(item.id, "remove") }, t("Remove"))))), error && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-error", role: "alert" }, error));
+  if (!visible || !hasItems) return null;
+  return /* @__PURE__ */ import_react70.default.createElement(QueuePopover, { count: items.length }, /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-heading" }, t("Pending messages")), items.map((item) => /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-row", key: item.id, "data-queue-id": item.id }, /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-text" }, /* @__PURE__ */ import_react70.default.createElement("span", { className: "bt-note" }, t(item.placement === "next-step" ? "Entering current turn" : "Waiting for next turn")), /* @__PURE__ */ import_react70.default.createElement("p", null, item.text || t("Attachment message"), item.attachments ? ` · ${t("{count} attachments", { count: item.attachments })}` : "")), /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-actions" }, item.placement === "next-turn" && /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !editable || !!busy, onClick: () => void update(item.id, "steer") }, t("Send into current turn")), /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !editable || !!busy, onClick: () => void update(item.id, "remove") }, t("Remove"))))), error && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-error", role: "alert" }, error));
 }
 function SessionQueue({ ctx, sessionId, editable = true }) {
   const [state, setState] = (0, import_react70.useState)(null);
@@ -23141,14 +23189,10 @@ function SessionQueue({ ctx, sessionId, editable = true }) {
   (0, import_react70.useEffect)(() => {
     let active = true, reference, timer;
     setState(null);
-    if (!ctx.sessions.retain) {
-      setState({ unavailable: true });
-      return void 0;
-    }
     const failed = (error) => {
       if (!active) return;
-      setState({ unavailable: true, error });
       if (attempt < 2) timer = setTimeout(() => setAttempt((value) => value + 1), 1e3);
+      else setState({ unavailable: true, error });
     };
     try {
       reference = ctx.sessions.retain(sessionId, { source: "mekBotQueue" });
@@ -23164,10 +23208,25 @@ function SessionQueue({ ctx, sessionId, editable = true }) {
       reference?.release();
     };
   }, [ctx, sessionId, attempt]);
-  if (state?.unavailable) return /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note", role: "status", "data-queue-error": state.error?.code ?? state.error?.name }, t("The pending queue is unavailable. Open this session in DSH to check it."), " ", ctx.sessions.retain && /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: () => setAttempt((value) => value + 1) }, t("Retry")));
-  return state?.session ? /* @__PURE__ */ import_react70.default.createElement(QueueRows, { key: sessionId, session: state.session, editable }) : null;
+  if (state?.unavailable) return /* @__PURE__ */ import_react70.default.createElement(QueuePopover, { unavailable: true }, /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note", role: "status", "data-queue-error": state.error?.code ?? state.error?.name }, t("The pending queue is unavailable. Open this session in DSH to check it.")), /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: () => {
+    setState(null);
+    setAttempt(0);
+  } }, t("Retry")));
+  return state?.session ? /* @__PURE__ */ import_react70.default.createElement(QueueRows, { session: state.session, editable }) : null;
 }
-var SESSION_QUEUE_CSS = `.mek-session-queue{box-sizing:border-box;width:100%;max-height:220px;overflow:auto;padding:8px 12px;background:var(--bt-card);border:1px solid var(--bt-line);border-radius:12px;margin-bottom:8px;font-size:12px}.mek-queue-row{display:flex;align-items:center;gap:8px;padding:8px 0;min-width:0}.mek-queue-text{flex:1;min-width:0}.mek-queue-text p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:72px;overflow:auto}.mek-queue-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;max-width:136px}.mek-session-queue button{min-height:28px}`;
+var SESSION_QUEUE_CSS = `
+.mek-queue-dock{display:flex;flex:none}
+.mek-queue-trigger{display:inline-flex;align-items:center;gap:3px;min-width:28px;height:28px;padding:0 5px;border:0;border-radius:999px;background:transparent;color:var(--bt-ink-2);font:inherit;font-size:11px;font-variant-numeric:tabular-nums;cursor:pointer}
+.mek-queue-trigger:hover,.mek-queue-trigger[aria-expanded=true]{background:var(--bt-hover);color:var(--bt-ink)}
+.mek-queue-trigger:focus-visible{outline:2px solid var(--bt-accent);outline-offset:1px}
+.mek-session-queue{position:absolute;z-index:21;inset-inline-end:0;bottom:calc(100% + 8px);box-sizing:border-box;width:min(340px,100%);max-height:min(240px,40vh);overflow:auto;overscroll-behavior:contain;padding:8px 12px;background:var(--bt-card);border:1px solid var(--bt-line);border-radius:12px;box-shadow:0 3px 14px rgba(0,0,0,.08);font-size:12px}
+.mek-queue-heading{font-weight:500;padding-bottom:4px}
+.mek-queue-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--bt-line);min-width:0}
+.mek-queue-text{flex:1 1 120px;min-width:0}
+.mek-queue-text p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:72px;overflow:auto}
+.mek-queue-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;margin-inline-start:auto}
+.mek-session-queue button{min-height:28px}
+`;
 
 // src/client/mek/view.jsx
 var import_react71 = __toESM(require("react"), 1);
@@ -23205,7 +23264,8 @@ function TeamView({ ctx, requests, viewport }) {
   actions.Queue = (0, import_react71.useMemo)(() => function Queue({ sessionId }) {
     const roster2 = (0, import_react71.useSyncExternalStore)(team.roster.subscribe, team.roster.getSnapshot);
     const owner = roster2.byId[sessionId] ?? roster2.roomsById[sessionId];
-    return /* @__PURE__ */ import_react71.default.createElement(SessionQueue, { ctx, sessionId: owner ? currentPart(owner) : sessionId, editable: !roster2.readOnly });
+    const part = owner ? currentPart(owner) : sessionId;
+    return ctx.sessions.retain ? /* @__PURE__ */ import_react71.default.createElement(SessionQueue, { key: part, ctx, sessionId: part, editable: !roster2.readOnly }) : null;
   }, [team, ctx]);
   actions.taskUnread = (id, bucket) => {
     const snapshot = team.roster.getSnapshot();
