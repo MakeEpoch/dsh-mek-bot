@@ -21,8 +21,7 @@
     {"tag": "v0.3.2", "pullRequest": 1046, "commit": "fcebff5183416a328b8965a8143bb21fee364c0a"},
     {"tag": "v0.3.2", "pullRequest": 1109, "commit": "d19279a9d3ed59bd160b3b9e3d22d1e68d319298"},
     {"tag": "v0.3.2", "pullRequest": 956, "commit": "f892fe95420bcac0db5b4363023ed74daf2f510e"},
-    {"tag": "v0.3.2", "pullRequest": 1198, "commit": "9817b443eb434ca5371ceaf294e994c46ced25ca"},
-    {"tag": "v0.3.5", "pullRequest": 1340, "commit": "ab2e9f0ac32eeb07e3b588b8e9122f371d00197f"}
+    {"tag": "v0.3.2", "pullRequest": 1198, "commit": "9817b443eb434ca5371ceaf294e994c46ced25ca"}
   ],
   "selectedDevFixes": [
     {"pullRequest": 1002, "commit": "ad8b1e3be5a8b1f2a4b3c3964037d21ee638463e"}

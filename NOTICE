@@ -141,4 +141,3 @@ Browser script isolation: Fei2411/DS-Bot PR #1005 (8e823d90), Apache-2.0.
 Plugin reload recovery: adapted from Fei2411/DS-Bot PR #1143 (8c9f6269), Apache-2.0.
 Group stop, cut-off replies, images, and handoff waits: adapted from Fei2411/DS-Bot
 PRs #930, #1046, #1109, #956, #1198, and #1002, Apache-2.0.
-Plugins navigation: adapted from Fei2411/DS-Bot PR #1340 (ab2e9f0a), Apache-2.0.

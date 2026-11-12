@@ -119,7 +119,6 @@ const ZH = {
   'The Bot team could not start. {error}. The engine’s startup output — its console, or the app’s startup error box — has the cause.': 'Bot 团队启动失败。{error}。原因在引擎的启动输出里——它的控制台，或应用的启动错误框。',
   'Automation tasks': '自动化任务',
   Connectors: '连接器',
-  'DSH plugins': 'DSH 插件',
   'Search connectors': '搜索连接器',
   'No connectors': '暂无连接器',
   Capabilities: '能力',

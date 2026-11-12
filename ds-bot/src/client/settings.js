@@ -280,10 +280,6 @@ export function SettingsDialog({ page, id, roster, actions, useUpdate, TeamOverv
         pages.map(([key, text]) => h('button', {
           key, type: 'button', className: 'bt-settings-item', 'aria-current': shown === key ? 'page' : undefined, onClick: () => actions.openSettings(key),
         }, h(PAGE_ICONS[key]), t(text))),
-        actions.hasPlugins?.() ? h('button', {
-          type: 'button', className: 'bt-settings-item bt-settings-shell',
-          onClick: () => { close(); actions.openPlugins() },
-        }, h(PlugIcon), t('DSH plugins')) : null,
         actions.openHarnessSettings ? h('button', {
           type: 'button', className: 'bt-settings-item bt-settings-shell', title: t('Models, providers, and the rest of DeepSeek Harness'),
           onClick: () => { close(); actions.openHarnessSettings() },

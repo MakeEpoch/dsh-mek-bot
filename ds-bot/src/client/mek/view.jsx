@@ -59,8 +59,6 @@ function TeamView({ ctx, requests, viewport }) {
     return () => { stopInbox(); stopWatching(); stopRemembering(); stop() }
   }, [team])
   const { hooks, actions } = team
-  actions.hasPlugins = () => typeof ctx.get('pluginNavigation')?.openList === 'function'
-  actions.openPlugins = () => ctx.get('pluginNavigation')?.openList?.()
   actions.sessionPermission = ctx.sessions.retain ? sessionId => <SessionPermissions key={sessionId} ctx={ctx} sessionId={sessionId} /> : undefined
   actions.TaskPanel = useMemo(() => function TaskPanel({ sessionId, bucket }) { return <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} bucket={bucket} /> }, [team, ctx])
   actions.WechatLinks = useMemo(() => function Links(props) { return <WechatLinks {...props} editable={!team.roster.getSnapshot().readOnly} /> }, [team])
