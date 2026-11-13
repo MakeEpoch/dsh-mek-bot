@@ -13,6 +13,19 @@ const completedReport = work => work.report?.status === 'completed'
   && typeof work.report.summary === 'string' && work.report.summary.trim() !== ''
   && typeof work.report.evidence === 'string' && work.report.evidence.trim() !== ''
 const needsReport = work => work.to && work.status === 'review' && !completedReport(work)
+// Stalled-work thresholds, fixed on purpose. Change them here and record the change
+// in the README and the UI test plan; do not copy them into ad-hoc call sites.
+// No per-turn heartbeat is added: every state below is derived from fields the task
+// store already keeps (status, createdAt, resultAt, updatedAt).
+const WAITING_STALL_MS = 10 * 60 * 1000
+const BROWSER_STALE_MS = 10 * 60 * 1000
+const RUNNING_STALL_MS = 30 * 60 * 1000
+const STALL_ESCALATE_MS = 60 * 60 * 1000
+// The single list of work states that keep finish_bot_task from accepting a task.
+// The board, the reminders and the refusals all read this same list, so a state can
+// never be "closable on the board" but refused at finish.
+const BLOCKING_WORK = ['queued', 'running', 'waiting_decision', 'waiting_secret', 'waiting_approval', 'waiting_browser', 'failed', 'blocked', 'unknown']
+const WAITING_WORK = ['waiting_browser', 'waiting_decision', 'waiting_secret', 'waiting_approval']
 const refuse = message => { throw Object.assign(new Error(message), { code: 'bot/refused' }) }
 const groupContext = value => /^\s*Members: the user\b/i.test(value ?? '')
 const normalizeInstruction = value => String(value ?? '').replace(/\r\n?/g, '\n').trim()
@@ -79,6 +92,49 @@ export function install(rt) {
       ? `Structured completed reports are missing for: ${missing.map(item => item.id).join(', ')}. Use read_task to identify the affected returned assignment and its original delegator. The owner or original delegator can use supplement_bot_report with the exact returned worker id and verified evidence from its retained result. This does not dispatch work. Leave it pending if evidence is missing.`
       : 'Review the result and verification evidence. Use finish_bot_task when all assignments, decisions and acceptance criteria are settled; use revise_bot_task for concrete corrections. A returned result does not accept the user task automatically.'}`
   }
+  // Why a task cannot be closed, derived from durable work rather than discovered
+  // only when someone calls finish. Every entry names the exact record id, so the
+  // board, the reminders and the refusals cannot disagree about what is unsettled.
+  const blockerSince = (work, now) => work.browserHold?.createdAt ?? work.resultAt ?? work.createdAt ?? now
+  const minutesSince = (at, now) => Math.max(0, Math.floor((now - at) / 60000))
+  const blockers = root => {
+    const now = Date.now()
+    const items = []
+    for (const work of currentWorks(root)) {
+      const since = blockerSince(work, now)
+      if (needsReport(work)) items.push({ kind: 'missing_report', id: work.id, since, detail: 'returned without a structured report' })
+      else if (work.status === 'review') items.push({ kind: 'unaccepted', id: work.id, since, detail: 'result awaits acceptance' })
+      else if (work.status === 'waiting_browser') {
+        const waitedMinutes = minutesSince(since, now)
+        const sessionUnconfirmed = work.browserHold?.sessionUnconfirmed === true
+        items.push({ kind: 'waiting_browser', id: work.id, since, waitedMinutes, sessionUnconfirmed, stale: now - since >= BROWSER_STALE_MS,
+          detail: `waiting for browser control for ${waitedMinutes} min; ${sessionUnconfirmed ? 'the worker session is unconfirmed' : 'the target page is unconfirmed'} and nothing is replaying browser actions. The task owner or group administrator can close it with close_browser_wait` })
+      }
+      else if (['waiting_decision', 'waiting_secret', 'waiting_approval'].includes(work.status)) {
+        items.push({ kind: work.status, id: work.id, since, waitedMinutes: minutesSince(since, now), stale: now - since >= WAITING_STALL_MS, detail: `waiting for ${work.status.slice(8)}` })
+      }
+      else if (['failed', 'blocked', 'unknown'].includes(work.status)) items.push({ kind: work.status, id: work.id, since, detail: `work ended ${work.status}` })
+      else if (['running', 'queued'].includes(work.status)) items.push({ kind: work.status, id: work.id, since,
+        stalled: work.status === 'running' && now - Math.max(root.updatedAt ?? 0, since) >= RUNNING_STALL_MS, detail: work.status })
+    }
+    for (const decision of Object.values(data().decisions)) if (decision.rootId === root.id && decision.status === 'open') {
+      items.push({ kind: 'open_decision', id: decision.id, since: decision.createdAt ?? now, detail: 'a worker question is still open' })
+    }
+    for (const delivery of Object.values(data().outbox)) if (delivery.rootId === root.id && ['pending', 'sending', 'uncertain'].includes(delivery.status)) {
+      items.push({ kind: 'uncertain_delivery', id: delivery.id, since: root.updatedAt ?? now, detail: `delivery is ${delivery.status}` })
+    }
+    if (!items.length) {
+      const missing = (root.criteria ?? []).filter(criterion => !(root.checks ?? []).some(check => check.criterion === criterion && check.passed === true && String(check.evidence ?? '').trim()))
+      if (missing.length) items.push({ kind: 'criteria', id: root.id, since: root.updatedAt ?? now, detail: `${missing.length} acceptance criteria have no passed check with evidence` })
+    }
+    return items
+  }
+  const blockerText = items => items.map(item => {
+    if (item.kind === 'waiting_browser') return `work ${item.id} (waiting_browser${item.waitedMinutes === undefined ? '' : ` ${item.waitedMinutes} min`}, close_browser_wait closes it)`
+    if (item.kind === 'open_decision') return `question ${item.id}`
+    if (item.kind === 'uncertain_delivery') return `delivery ${item.id}`
+    return `work ${item.id} (${item.kind})`
+  }).join(', ')
   rt.mekTaskRoot = id => { const root = rootOf(id); return root ? structuredClone(root) : undefined }
   const current = sessionId => {
     const entry = rt.live.get(sessionId)
@@ -792,15 +848,68 @@ export function install(rt) {
     if (work.status !== 'review' || !completedReport(work) || !work.resultAt) refuse('Read a returned completed report with verification evidence before accepting this assignment.')
     if (rt.mekTodoReviewAdvice?.(work)) refuse('This assignment belongs to a to-do. Use control_todo accept with its current revision.')
     const branch = branchOf(work.id)
-    if (Object.values(data().works).some(child => child.id !== work.id && branch.has(child.id) && !['completed', 'abandoned', 'cancelled', 'superseded'].includes(child.status))
-      || Object.values(data().decisions).some(decision => branch.has(decision.workId) && decision.status === 'open')
-      || Object.values(data().outbox).some(item => branch.has(item.id) && ['pending', 'sending', 'uncertain'].includes(item.status))) refuse('Resolve this assignment’s outstanding work, decisions and delivery before accepting it.')
+    const openChildren = Object.values(data().works).filter(child => child.id !== work.id && branch.has(child.id) && !['completed', 'abandoned', 'cancelled', 'superseded'].includes(child.status))
+    const openDecisions = Object.values(data().decisions).filter(decision => branch.has(decision.workId) && decision.status === 'open')
+    const openDeliveries = Object.values(data().outbox).filter(item => branch.has(item.id) && ['pending', 'sending', 'uncertain'].includes(item.status))
+    const unresolved = [
+      ...openChildren.map(child => `work ${child.id} (${child.status}${child.status === 'waiting_browser' ? ', close_browser_wait closes it' : ''})`),
+      ...openDecisions.map(decision => `question ${decision.id}`),
+      ...openDeliveries.map(item => `delivery ${item.id} (${item.status})`),
+    ]
+    if (unresolved.length) refuse(`Cannot accept work ${work.id} yet; resolve ${unresolved.join(', ')} first.`)
     if (!String(summary ?? '').trim() || !String(evidence ?? '').trim()) refuse('Record the accepted result and concrete evidence.')
     work.status = 'completed'
     work.acceptance = { summary: String(summary), evidence: String(evidence), by: self, at: Date.now() }
     touch(root)
     await save(); announce('accepted-work', root, work)
-    return JSON.stringify(work.acceptance)
+    const left = blockers(root).filter(item => item.kind !== 'criteria')
+    return `${JSON.stringify(work.acceptance)}${left.length
+      ? `\n\nTask ${root.id} stays open: ${blockerText(left)}.`
+      : `\n\nEvery assignment of task ${root.id} is accepted. Use finish_bot_task with its evidence to record final acceptance.`}`
+  })
+  // Closing a browser wait is a decision, not a browser action: it records why the
+  // handoff will not return and keeps everything the worker already delivered. It
+  // never releases, resumes, navigates or replays browser control.
+  const closeBrowserWait = async ({ workId, summary, evidence, self }) => {
+    const work = workOf(workId), root = rootOf(workId)
+    if (!work || !root || final(root)) refuse('Choose an open task with the waiting browser handoff.')
+    // A wait that recovery already closed is still the owner's to settle: the
+    // automatic note is a detected absence, not a decision about the work.
+    const automatic = work.status === 'blocked' && work.browserHold?.status === 'unavailable' && work.report?.automaticClosure !== undefined
+    if (work.status !== 'waiting_browser' && !automatic) refuse(`Work ${work.id} is not waiting for browser control (status ${work.status}).`)
+    if (work.to === self) refuse('A worker cannot close its own browser wait; the task owner or the group administrator decides.')
+    const room = work.room ? rt.roomOf(work.room) : undefined
+    const fromRoom = work.fromRoom ? rt.roomOf(work.fromRoom) : undefined
+    if (root.owner !== self && room?.admin !== self && fromRoom?.admin !== self) refuse('Only the task owner or the group administrator can close this browser wait.')
+    // Owner closure also appends: a report that was already delivered stays readable.
+    const prior = work.report
+    work.report = { status: 'blocked', summary: `Browser wait closed by its owner: ${summary}`,
+      evidence: `The target page was never confirmed and no browser action was replayed. ${evidence}`,
+      artifacts: prior?.artifacts ?? [], sourceSessionId: work.browserHold?.sessionId ?? work.sourceSessionId,
+      ...(prior ? { previousReport: prior } : {}) }
+    work.browserHold = { ...(work.browserHold ?? {}), status: 'closed-by-owner', closedAt: Date.now(), closedBy: self }
+    work.status = 'abandoned'
+    work.outcome = 'blocked'
+    work.abandonedAt = Date.now()
+    work.abandonedReason = 'browser'
+    const parent = own(state.works, work.parent)
+    if (parent?.open) parent.open = parent.open.filter(id => id !== work.id)
+    for (const decision of Object.values(data().decisions)) if (decision.workId === work.id && decision.status === 'open') decision.status = 'cancelled'
+    for (const item of Object.values(data().outbox)) if (item.args?.work === work.id || item.args?.exchangeId === work.id || item.args?.replyTo === work.id) { item.status = 'cancelled'; delete item.args }
+    rt.forgetDelivery?.(work.resultExchangeId)
+    touch(root)
+    await save()
+    announce('abandoned', root, work)
+    return `Closed the browser wait of work ${work.id}. It is recorded as abandoned with its existing result kept; the page was not confirmed and no browser action was replayed or released. Finish the task once the remaining evidence is checked.`
+  }
+  rt.mekCloseBrowserWait = closeBrowserWait
+  register('close_browser_wait', 'Close a browser handoff wait that no one will take over, keeping the result already returned. Only the task owner or the group administrator may use it; a worker cannot close its own wait. It changes task state and writes the report only: it never releases, resumes, navigates or replays browser control.', {
+    work_id: { ...idParam, description: 'Exact work id that is waiting for browser control' },
+    summary: { type: 'string', required: true, description: 'Why the handoff will not return, from the current evidence' },
+    evidence: { type: 'string', required: true, description: 'What was checked; state explicitly that the page was unconfirmed and no browser action was replayed' },
+  }, async ({ work_id, summary, evidence }, _exec, self) => {
+    if (!String(summary ?? '').trim() || !String(evidence ?? '').trim()) refuse('Record why the wait is closed and what was checked.')
+    return closeBrowserWait({ workId: work_id, summary: String(summary), evidence: String(evidence), self })
   })
   register('answer_bot_question', 'Decide a pending worker question as the original task owner. This resumes the same work. Never use this to grant tool approval or invent user authorization.', {
     question_id: { type: 'string', required: true, description: 'Exact pending question id from list_tasks or the decision message' },
@@ -889,13 +998,17 @@ export function install(rt) {
     const root = requireOwner(task_id, self)
     rt.mekCanFinishTodo?.(root.id)
     const work = Object.values(data().works).filter(item => item.rootId === root.id)
-    if (work.some(item => ['queued', 'running', 'waiting_decision', 'waiting_secret', 'waiting_approval', 'waiting_browser', 'failed', 'blocked', 'unknown'].includes(item.status))) refuse('Work or a blocking result still needs attention. Resolve or revise it before accepting the task.')
-    if (Object.values(data().decisions).some(item => item.rootId === root.id && item.status === 'open')) refuse('A worker question is still open.')
-    if (Object.values(data().outbox).some(item => item.rootId === root.id && ['pending', 'sending', 'uncertain'].includes(item.status))) refuse('A task delivery is not yet confirmed.')
+    const attention = work.filter(item => BLOCKING_WORK.includes(item.status))
+    if (attention.length) refuse(`Cannot finish task ${root.id} yet; ${blockerText(attention.map(item => ({ kind: item.status, id: item.id })))} still needs attention. Resolve, revise or close each one first.`)
+    const openQuestions = Object.values(data().decisions).filter(item => item.rootId === root.id && item.status === 'open')
+    if (openQuestions.length) refuse(`Cannot finish task ${root.id} yet; question ${openQuestions.map(item => item.id).join(', ')} is still open. Answer it with answer_bot_question.`)
+    const unconfirmed = Object.values(data().outbox).filter(item => item.rootId === root.id && ['pending', 'sending', 'uncertain'].includes(item.status))
+    if (unconfirmed.length) refuse(`Cannot finish task ${root.id} yet; delivery ${unconfirmed.map(item => `${item.id} (${item.status})`).join(', ')} is not confirmed.`)
     if (!String(summary ?? '').trim()) refuse('Record the accepted outcome and evidence.')
     const missing = work.filter(needsReport)
-    if (missing.length) refuse(`A worker has not returned a structured completed result with verification evidence. Use read_task and supplement_bot_report to record evidence from the retained result for work ${missing.map(item => item.id).join(', ')}.`)
-    for (const criterion of root.criteria ?? []) if (!checks.some(check => check.criterion === criterion && check.passed === true && String(check.evidence ?? '').trim())) refuse('Every task criterion needs a passed check and concrete evidence.')
+    if (missing.length) refuse(`Cannot finish task ${root.id} yet; work ${missing.map(item => item.id).join(', ')} did not return a structured completed result. Use supplement_bot_report with that exact work id, or close_browser_wait when a browser wait will not return.`)
+    const unchecked = (root.criteria ?? []).filter(criterion => !checks.some(check => check.criterion === criterion && check.passed === true && String(check.evidence ?? '').trim()))
+    if (unchecked.length) refuse(`Cannot finish task ${root.id} yet; every task criterion needs a passed check with evidence. Missing: ${unchecked.map(item => JSON.stringify(String(item).slice(0, 80))).join(', ')}.`)
     rt.mekPolicyGuard?.({ root, action: 'finish' })
     root.checks = checks
     for (const item of work) if (item.status === 'review') item.status = 'completed'
@@ -1094,24 +1207,28 @@ export function install(rt) {
     // without rewriting their outcome or pretending that a result was accepted.
     const active = currentWorks(root)
     const deliveries = Object.values(data().outbox).filter(item => item.rootId === root.id && ['pending', 'sending', 'uncertain'].includes(item.status))
+    const items = blockers(root)
+    const known = items.filter(item => item.kind !== 'criteria')
     let status = root.status
     if (!final(root)) {
+      // A waiting handoff is its own state, never a stale "running": root.status can
+      // say running right after a save while every remaining work item waits. Only a
+      // work item that is itself queued or running may produce "running".
+      const waiting = WAITING_WORK.find(kind => known.some(item => item.kind === kind))
       if (pending) status = 'needs_decision'
       else if (deliveries.some(item => item.status === 'uncertain')) status = 'unknown'
-      else if (active.some(item => ['failed', 'blocked', 'unknown', 'cancelled'].includes(item.status))) status = 'blocked'
-      else if (active.some(item => ['queued', 'running'].includes(item.status))) {
-        if (!['failed', 'blocked', 'needs_user'].includes(status)) status = 'running'
-      } else if (!['failed', 'blocked', 'needs_user'].includes(status)) {
-        const waiting = ['waiting_approval', 'waiting_secret', 'waiting_browser', 'waiting_decision'].find(value => active.some(item => item.status === value))
-        if (waiting) status = waiting
-        else if (active.some(needsReport)) status = 'needs_report'
-        else if (active.some(item => item.status === 'review' || item.status === 'completed')) status = 'review'
-        else if (!active.length) status = 'needs_start'
-      }
+      else if (known.some(item => ['failed', 'blocked', 'unknown'].includes(item.kind))) status = 'blocked'
+      else if (known.some(item => item.kind === 'running' || item.kind === 'queued')) status = 'running'
+      else if (waiting) status = waiting
+      else if (known.some(item => item.kind === 'missing_report')) status = 'needs_report'
+      else if (known.some(item => item.kind === 'unaccepted')) status = 'review'
+      else if (!known.length) status = active.length ? 'review' : 'needs_start'
     }
     const title = fallbackTitle(root.title, root.goal, root.summary, ...visible.map(work => work.instruction)) ?? 'Task'
     const archivable = root.owner === self && canArchive(root, active, decisions, deliveries)
-    return { ...root, title, status, ...(archivable ? { canArchive: true } : {}), work: visible.map(({ resultExchangeId, resultSessionId, reviewNoticeId, dispatchKeys, ...item }) => ({ ...item, ...(!final(root) && needsReport(item) ? { status: 'needs_report' } : {}), name: rt.botOf(item.to)?.name ?? rt.roomOf(item.room)?.name ?? 'Unavailable Bot' })),
+    return { ...root, title, status, ...(archivable ? { canArchive: true } : {}),
+      blockers: items.map(item => ({ kind: item.kind, id: item.id, detail: item.detail, ...(item.waitedMinutes === undefined ? {} : { waitedMinutes: item.waitedMinutes }), ...(item.stale ? { stale: true } : {}), ...(item.stalled ? { stalled: true } : {}), ...(item.sessionUnconfirmed ? { sessionUnconfirmed: true } : {}) })),
+      work: visible.map(({ resultExchangeId, resultSessionId, reviewNoticeId, dispatchKeys, ...item }) => ({ ...item, ...(!final(root) && needsReport(item) ? { status: 'needs_report' } : {}), name: rt.botOf(item.to)?.name ?? rt.roomOf(item.room)?.name ?? 'Unavailable Bot' })),
       decisions: decisions.filter(item => root.owner === self || item.worker === self),
       deliveries: deliveries.map(item => ({ id: item.id, status: item.status, error: item.error })) }
   }
@@ -1158,6 +1275,48 @@ export function install(rt) {
     if (work && work.status === 'queued') { work.status = 'running'; changed() }
   })
 
+  // A task that cannot move must say so before someone asks. This runs on the existing
+// recovery tick; notices are deduplicated by the set of blockers, so a changed reason
+// is reported again and an unchanged one is not. Waiting browser control never counts
+// as progress here: the state alone decides, not how recently the task row was saved.
+  async function stallScan() {
+    if (stopped || rt.readOnly() !== undefined) return
+    const now = Date.now()
+    for (const root of Object.values(data().roots)) {
+      if (final(root)) continue
+      const items = blockers(root).filter(item => item.kind !== 'criteria')
+      if (!items.length) continue
+      const age = now - Math.min(...items.map(item => item.since ?? now))
+      if (age < WAITING_STALL_MS) continue
+      const key = createHash('sha256').update(items.map(item => `${item.kind}:${item.id}`).sort().join('|')).digest('hex').slice(0, 12)
+      const level = age >= STALL_ESCALATE_MS ? 2 : 1
+      const prior = root.stallNotice
+      if (prior && prior.key === key && prior.level >= level) continue
+      root.stallNotice = { key, level, at: now, rooms: prior?.key === key ? [...(prior.rooms ?? [])] : [] }
+      if (!rt.botOf(root.owner)) continue
+      // Resource leases are identified here and never released: a stale lease is a
+      // fact to report, not a permission this adapter may act on.
+      const leases = (rt.mekPolicyView?.().resources ?? []).filter(lease => lease.status === 'stale'
+        || (lease.status === 'held' && Number.isFinite(lease.expiresAt) && lease.expiresAt <= now))
+      const leaseText = leases.length
+        ? `\nStale resource leases (identified only, never released here): ${leases.map(lease => `${lease.kind} ${lease.key} held by ${rt.botOf(lease.botId)?.name ?? lease.botId} (${lease.status})`).join('; ')}.`
+        : ''
+      const summary = `Task ${root.id} has had no closable state for ${Math.floor(age / 60000)} min: ${blockerText(items)}.${leaseText}`
+      prepare(root.id, { fromId: root.owner, toId: root.owner, role: 'reply', text:
+        `${summary}\nThis is a stall reminder, not new work.${level === 2 ? ' It has stayed unresolved for an hour or more.' : ''} Resolve, revise or close each item: close_browser_wait closes a browser wait, supplement_bot_report records a missing report, revise_bot_task asks for a correction, and cancel_bot_task ends an abandoned scope.` })
+      const rooms = [...new Set(currentWorks(root).map(work => work.room ?? work.fromRoom).filter(id => id && rt.roomOf(id)?.admin === root.owner))]
+      for (const roomId of rooms) {
+        if (root.stallNotice.rooms.includes(roomId)) continue
+        root.stallNotice.rooms.push(roomId)
+        await rt.appendGroupTaskResult?.(roomId, root.owner, `${summary}\nThe group administrator owns this task; this notice does not call any member or start new work.`)
+      }
+      try {
+        await rt.mekRecordActivity?.({ botId: root.owner, taskId: root.id, status: 'blocked', type: 'stall', summary })
+      } catch (error) { rt.warn('mek-bot: could not record a stall summary: %s', error) }
+      announce('attention', root)
+    }
+  }
+
   // Retry only a delivery whose absence is established from both the inbox and
   // durable history. Unknown history never means permission to repeat work.
   async function recover() {
@@ -1173,16 +1332,39 @@ export function install(rt) {
         if (work.status !== 'waiting_browser' || final(rootOf(work.id))) continue
         const live = browser.available === true && browser.openBotIds?.includes(work.to)
           && browser.holds?.[work.to]?.workId === work.id
-        if (live) continue
+        // A live hold only proves the browser process exists. Two absences are
+        // definite enough to close the wait: the control handle no longer matches, or
+        // the Bot itself was deleted. A worker session missing from the live map is
+        // NOT proof: an idle session can be absent there while its task is merely
+        // slow, and calling that "lost" would trade a false running for a false idle.
+        const botGone = !rt.botOf(work.to)
+        if (live && !botGone) {
+          const unconfirmed = work.sessionId !== undefined && !rt.live.has(work.sessionId)
+          if (work.browserHold && work.browserHold.sessionUnconfirmed !== unconfirmed) {
+            work.browserHold.sessionUnconfirmed = unconfirmed
+            if (unconfirmed) void save().catch(() => {})
+          }
+          continue
+        }
         const root = rootOf(work.id)
-        const summary = 'Browser handoff was interrupted: the browser or its human-control handle is no longer available. No browser action was replayed. Review the existing task state and explicitly revise this assignment if it should continue.'
+        const summary = `[System] Browser handoff closed automatically: ${botGone
+          ? 'the Bot that asked for control no longer exists, so the handoff cannot be returned.'
+          : 'the browser or its human-control handle is no longer available.'} No browser action was replayed. The task still needs a human decision: review the existing result and use close_browser_wait or revise_bot_task.`
+        const priorResult = work.result
+        const priorReport = work.report
+        const next = [priorResult, summary].filter(Boolean).join('\n\n')
         work.browserHold ??= { taskId: root.id, workId: work.id, taskOwner: root.owner, sessionId: work.sourceSessionId ?? work.sessionId ?? rt.chatOf(work.to) }
         work.browserHold.status = 'unavailable'; work.browserHold.resolvedAt = Date.now()
         work.outcome = 'blocked'
-        work.report = { status: 'blocked', summary, evidence: 'Recovery found no matching live browser and handoff handle. External effects and page state were not rechecked.', artifacts: [], sourceSessionId: work.browserHold.sessionId }
+        // Automatic detection appends and marks itself; it never overwrites a result
+        // that was already delivered, and it never reads as a human verification.
+        work.report = priorReport
+          ? { ...priorReport, automaticClosure: { detectedBy: 'system', at: Date.now(), summary } }
+          : { status: 'blocked', automatic: true, detectedBy: 'system', summary, artifacts: [],
+            evidence: 'Detected automatically from the live handoff handle and the Bot list. The target page was not observed, external effects were not rechecked, and no browser action was replayed.', sourceSessionId: work.browserHold.sessionId }
         const source = rt.workAsker(work.id)
-        if (source) rt.mekAnswerSender(work.browserHold.sessionId, source, summary)
-        else { work.status = 'blocked'; work.result = summary; await enqueue(root.id, { toId: root.owner, role: 'reply', replyTo: work.id, text: `Task ${root.id}: ${summary}` }) }
+        if (source) rt.mekAnswerSender(work.browserHold.sessionId, source, next)
+        else { work.status = 'blocked'; work.result = next; await enqueue(root.id, { toId: root.owner, role: 'reply', replyTo: work.id, text: `Task ${root.id}: ${next}` }) }
         root.status = 'blocked'; root.updatedAt = Date.now()
         await save(); announce('attention', root, work)
       }
@@ -1211,6 +1393,7 @@ export function install(rt) {
           ...(parent && own(state.works, parent) ? { work: parent } : {}), text: `A previously returned task still needs owner review.${reviewAdvice(work)}` })
         work.reviewNoticeId = notice.id
       }
+      await stallScan()
       await save()
       for (const work of Object.values(data().works)) {
         if (work.dispatching && !final(rootOf(work.id))) await dispatchGroup(work)

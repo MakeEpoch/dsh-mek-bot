@@ -1250,3 +1250,149 @@ test('accepted steps and the final outcome retain their title and require checke
   assert.equal(task(h).goal, root.goal)
   assert.equal(task(h).status, 'completed', 'correcting a title must not reopen accepted work')
 })
+
+// A waiting browser handoff is the shape that stranded PostFaro/chat work: the
+// browser process stayed open, so recovery treated the handoff as live forever.
+const heldBrowser = async (h, workId, minutes = 0) => {
+  assert.equal(h.rt.mekBrowserHeld('b', { callId: 'call_fixture_browser' }), true)
+  const work = h.rt.state.mekTasks.works[workId]
+  work.browserHold.createdAt = Date.now() - minutes * 60 * 1000
+  return work
+}
+
+test('a waiting browser handoff never reads as running and names its wait on the board', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId, 31)
+  // A fresh save may still say running; only a work item that is queued or running
+  // may produce "running" on the board.
+  h.rt.state.mekTasks.roots[root.id].status = 'running'
+  h.rt.state.mekTasks.roots[root.id].updatedAt = Date.now()
+  const view = task(h)
+  assert.equal(view.status, 'waiting_browser')
+  const blocker = view.blockers.find(item => item.kind === 'waiting_browser')
+  assert.ok(blocker, 'the board must state why the task cannot close')
+  assert.equal(blocker.id, workId)
+  assert.equal(blocker.stale, true)
+  assert.ok(blocker.waitedMinutes >= 31)
+  assert.match(blocker.detail, /close_browser_wait/)
+})
+
+test('the owner closes a browser wait, keeps the result, and only then can finish the task', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId, 30)
+  // What the worker had already reported before asking for control must survive.
+  h.rt.state.mekTasks.works[workId].result = 'Partial finding: the login page renders.'
+  h.rt.state.mekTasks.works[workId].resultAt = Date.now() - 30 * 60 * 1000
+  // The stuck worker must not be able to close its own wait.
+  await assert.rejects(h.tool('b', 'close_browser_wait', { work_id: workId, summary: 'Giving up', evidence: 'Page gone' }), /worker cannot close/)
+  // Neither can an unrelated Bot.
+  await assert.rejects(h.tool('c', 'close_browser_wait', { work_id: workId, summary: 'Giving up', evidence: 'Page gone' }), /task owner or the group administrator/)
+  h.take('a')
+  const closed = await h.tool('a', 'close_browser_wait', { work_id: workId, summary: 'The preview server was gone and no one will take over.', evidence: 'The page never loaded; no browser action was replayed.' })
+  assert.match(closed, /abandoned/)
+  const work = h.rt.state.mekTasks.works[workId]
+  assert.equal(work.status, 'abandoned')
+  assert.equal(work.browserHold.status, 'closed-by-owner')
+  assert.match(work.report.evidence, /never confirmed and no browser action was replayed/)
+  assert.ok(work.result, 'the delivered result must be kept')
+  await h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Closed the handoff and accepted the delivered outcome.' })
+  assert.equal(task(h).status, 'completed')
+})
+
+test('recovery closes a browser handoff whose handle is gone, appending an automatic note', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId)
+  const work = h.rt.state.mekTasks.works[workId]
+  work.result = 'Delivered finding before control was lost.'
+  work.resultAt = Date.now() - 60_000
+  work.report = { status: 'completed', summary: 'Partial delivery', evidence: 'Screenshot saved' }
+  h.rt.mekBrowserView = () => ({ available: true, plugin: 'fixture', openBotIds: [], holds: {} })
+  await h.rt.mekRecoverTasks()
+  const after = h.rt.state.mekTasks.works[workId]
+  assert.equal(after.browserHold.status, 'unavailable')
+  assert.equal(after.status, 'blocked')
+  assert.match(after.result, /Delivered finding before control was lost/, 'the delivered result is kept')
+  assert.match(after.result, /\[System\]/, 'the automatic note is marked as such')
+  assert.equal(after.report.summary, 'Partial delivery', 'an existing report is not overwritten')
+  assert.equal(after.report.automaticClosure.detectedBy, 'system')
+  assert.notEqual(task(h).status, 'completed', 'automatic detection never completes the task')
+  // The owner still decides: the detected absence can be closed with its result kept.
+  h.take('a')
+  await h.tool('a', 'close_browser_wait', { work_id: workId, summary: 'No one will take over.', evidence: 'The page was not observed; no browser action was replayed.' })
+  assert.equal(h.rt.state.mekTasks.works[workId].status, 'abandoned')
+})
+
+test('a missing worker session alone never closes a slow browser wait', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId)
+  // The handle still matches. An idle session missing from the live map is not proof
+  // of loss: a merely slow task must not be turned into a false idle.
+  h.rt.mekBrowserView = () => ({ available: true, plugin: 'fixture', openBotIds: ['b'], holds: { b: { workId } } })
+  h.rt.state.mekTasks.works[workId].sessionId = 'session-not-in-the-live-map'
+  await h.rt.mekRecoverTasks()
+  const work = h.rt.state.mekTasks.works[workId]
+  assert.equal(work.status, 'waiting_browser', 'the wait stays open and needs a human decision')
+  assert.equal(work.browserHold.sessionUnconfirmed, true)
+  assert.equal(task(h).status, 'waiting_browser')
+  assert.equal(task(h).blockers.find(item => item.kind === 'waiting_browser').sessionUnconfirmed, true)
+})
+
+test('finish and accept refusals name the exact record that is still unsettled', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId)
+  h.take('a')
+  await assert.rejects(h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Done' }),
+    new RegExp(`work ${workId} \\(waiting_browser, close_browser_wait closes it\\)`))
+
+  // A returned child that is still unaccepted keeps its delegator from accepting.
+  const nested = await host(t)
+  const parent = await delegate(nested)
+  const parentId = parent.work[0].id
+  const child = 'returned-child-work'
+  Object.assign(nested.rt.state.mekTasks.works[parentId], { status: 'review', result: 'Parent result', resultAt: Date.now(),
+    report: { status: 'completed', summary: 'Parent implemented', evidence: 'Build passed' } })
+  nested.rt.state.mekTasks.works[child] = { id: child, rootId: parent.id, from: 'b', to: 'c', parent: parentId, status: 'review',
+    createdAt: Date.now(), result: 'Child result', resultAt: Date.now(), attempt: 1,
+    report: { status: 'completed', summary: 'Child checked', evidence: 'Ran the check' } }
+  nested.take('a')
+  await assert.rejects(nested.tool('a', 'accept_bot_work', { work_id: parentId, summary: 'Ok', evidence: 'Checked' }),
+    new RegExp(`work ${child} \\(review\\)`))
+})
+
+test('a stalled task reports once to its owner, its group and team activity until the blockers change', async t => {
+  const team = seed()
+  team.rooms.r = { id: 'r', name: 'Review group', named: true, members: ['a', 'b'], admin: 'a', mode: 'admin', sessions: { a: 'ga' }, segments: {}, log: [], seq: 0, seen: {} }
+  const h = await host(t, undefined, team)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId, 61)
+  // Keep the handoff live: this test is about the stall notice, not about recovery
+  // deciding the handle is gone.
+  h.rt.mekBrowserView = () => ({ available: true, plugin: 'fixture', openBotIds: ['b'], holds: { b: { workId } } })
+  h.rt.state.mekTasks.works[workId].room = 'r'
+  const activities = []
+  h.rt.mekRecordActivity = async input => { activities.push(input); return input }
+  h.rt.mekPolicyView = () => ({ resources: [{ kind: 'workspace', key: '/data/workspace/make-epoch', botId: 'b', name: 'Writer', status: 'stale' }] })
+  await h.rt.mekRecoverTasks()
+  const ownerNotice = contentOf(h.agentOf('a').calls.at(-1))
+  assert.match(ownerNotice, /no closable state/)
+  assert.match(ownerNotice, /close_browser_wait/)
+  assert.match(ownerNotice, /Stale resource leases/)
+  assert.match(ownerNotice, /never released/)
+  assert.equal(activities.length, 1)
+  assert.equal(activities[0].type, 'stall')
+  assert.equal(h.rt.state.mekTasks.roots[root.id].stallNotice.level, 2)
+  assert.ok(h.rt.state.rooms.r.log.some(line => /no closable state/.test(line.text)), 'the group gets its own notice')
+  await h.rt.mekRecoverTasks()
+  assert.equal(activities.length, 1, 'an unchanged stall is not reported again')
+})
