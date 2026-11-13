@@ -1396,3 +1396,57 @@ test('a stalled task reports once to its owner, its group and team activity unti
   await h.rt.mekRecoverTasks()
   assert.equal(activities.length, 1, 'an unchanged stall is not reported again')
 })
+
+test('stall thresholds follow each unresolved kind, not a shared clock', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  const work = h.rt.state.mekTasks.works[workId]
+  assert.equal(work.status, 'running')
+  work.createdAt = Date.now() - 11 * 60 * 1000
+  h.rt.state.mekTasks.roots[root.id].updatedAt = Date.now() - 11 * 60 * 1000
+  const activities = []
+  h.rt.mekRecordActivity = async input => { activities.push(input); return input }
+  h.rt.mekPolicyView = () => ({ resources: [] })
+  await h.rt.mekRecoverTasks()
+  assert.equal(activities.length, 0, 'a task running under 30 minutes is working, not stalled')
+
+  work.createdAt = Date.now() - 31 * 60 * 1000
+  h.rt.state.mekTasks.roots[root.id].updatedAt = Date.now() - 31 * 60 * 1000
+  await h.rt.mekRecoverTasks()
+  assert.equal(activities.length, 1)
+  assert.ok(contentOf(h.agentOf('a').calls.at(-1)).includes(`work ${workId} (running)`))
+
+  const key = h.rt.state.mekTasks.roots[root.id].stallNotice.key
+  h.rt.state.mekTasks.roots[root.id].updatedAt = Date.now() - 60_000
+  await h.rt.mekRecoverTasks()
+  assert.equal(h.rt.state.mekTasks.roots[root.id].stallNotice.key, key, 'a touched task row is progress, not a new stall')
+  assert.equal(activities.length, 1)
+})
+
+test('waiting and blocked kinds keep their own windows', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  await heldBrowser(h, root.work[0].id, 11)
+  const activities = []
+  h.rt.mekRecordActivity = async input => { activities.push(input); return input }
+  h.rt.mekPolicyView = () => ({ resources: [] })
+  await h.rt.mekRecoverTasks()
+  assert.equal(activities.length, 1, 'a browser wait past 10 minutes is a stall')
+
+  const second = await host(t)
+  const root2 = await delegate(second)
+  second.end('b')
+  await settled(() => second.agentOf('a').calls.length === 1)
+  const blockedId = root2.work[0].id
+  const blocked = []
+  second.rt.mekRecordActivity = async input => { blocked.push(input); return input }
+  second.rt.mekPolicyView = () => ({ resources: [] })
+  second.rt.state.mekTasks.works[blockedId].resultAt = Date.now() - 60_000
+  await second.rt.mekRecoverTasks()
+  assert.equal(blocked.length, 0, 'a one-minute block is not reported at once')
+  second.rt.state.mekTasks.works[blockedId].resultAt = Date.now() - 3 * 60 * 1000
+  await second.rt.mekRecoverTasks()
+  assert.equal(blocked.length, 1)
+  assert.ok(contentOf(second.agentOf('a').calls.at(-1)).includes(`work ${blockedId} (blocked)`))
+})

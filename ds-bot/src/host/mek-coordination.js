@@ -20,6 +20,7 @@ const needsReport = work => work.to && work.status === 'review' && !completedRep
 const WAITING_STALL_MS = 10 * 60 * 1000
 const BROWSER_STALE_MS = 10 * 60 * 1000
 const RUNNING_STALL_MS = 30 * 60 * 1000
+const BLOCKED_STALL_MS = 2 * 60 * 1000
 const STALL_ESCALATE_MS = 60 * 60 * 1000
 // The single list of work states that keep finish_bot_task from accepting a task.
 // The board, the reminders and the refusals all read this same list, so a state can
@@ -1286,9 +1287,18 @@ export function install(rt) {
       if (final(root)) continue
       const items = blockers(root).filter(item => item.kind !== 'criteria')
       if (!items.length) continue
-      const age = now - Math.min(...items.map(item => item.since ?? now))
-      if (age < WAITING_STALL_MS) continue
-      const key = createHash('sha256').update(items.map(item => `${item.kind}:${item.id}`).sort().join('|')).digest('hex').slice(0, 12)
+      // Each unresolved kind has its own threshold: a task that is merely running for
+      // a while is working, not stalled. Only items past their own threshold count,
+      // and the notice reports exactly those, so a healthy long run is not a stall.
+      const crossed = items.filter(item => {
+        if (item.kind === 'running') return item.stalled === true
+        if (item.kind === 'queued') return now - Math.max(root.updatedAt ?? 0, item.since ?? now) >= RUNNING_STALL_MS
+        if (['blocked', 'failed', 'unknown', 'uncertain_delivery'].includes(item.kind)) return now - (item.since ?? now) >= BLOCKED_STALL_MS
+        return now - (item.since ?? now) >= WAITING_STALL_MS
+      })
+      if (!crossed.length) continue
+      const age = now - Math.min(...crossed.map(item => item.since ?? now))
+      const key = createHash('sha256').update(crossed.map(item => `${item.kind}:${item.id}`).sort().join('|')).digest('hex').slice(0, 12)
       const level = age >= STALL_ESCALATE_MS ? 2 : 1
       const prior = root.stallNotice
       if (prior && prior.key === key && prior.level >= level) continue
@@ -1301,7 +1311,7 @@ export function install(rt) {
       const leaseText = leases.length
         ? `\nStale resource leases (identified only, never released here): ${leases.map(lease => `${lease.kind} ${lease.key} held by ${rt.botOf(lease.botId)?.name ?? lease.botId} (${lease.status})`).join('; ')}.`
         : ''
-      const summary = `Task ${root.id} has had no closable state for ${Math.floor(age / 60000)} min: ${blockerText(items)}.${leaseText}`
+      const summary = `Task ${root.id} has had no closable state for ${Math.floor(age / 60000)} min: ${blockerText(crossed)}.${leaseText}`
       prepare(root.id, { fromId: root.owner, toId: root.owner, role: 'reply', text:
         `${summary}\nThis is a stall reminder, not new work.${level === 2 ? ' It has stayed unresolved for an hour or more.' : ''} Resolve, revise or close each item: close_browser_wait closes a browser wait, supplement_bot_report records a missing report, revise_bot_task asks for a correction, and cancel_bot_task ends an abandoned scope.` })
       const rooms = [...new Set(currentWorks(root).map(work => work.room ?? work.fromRoom).filter(id => id && rt.roomOf(id)?.admin === root.owner))]
