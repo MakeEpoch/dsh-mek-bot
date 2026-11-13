@@ -578,7 +578,7 @@ Bot `30545e8`、WechatPad `0259900` 已快进并推送各自 MakeEpoch main。�
 - 浏览器交接：`waiting_browser` 在任何情况下不再显示成执行中（`root.status` 刚被保存为 running 也一样）。`recover()` 只认两种确定性缺失：控制句柄不再匹配、或该 Bot 已被删除；**worker 会话不在 live 表只标记“未确认”，不判失联**（空闲会话可能暂时不在该表，误判会把慢任务变成假空闲）。**没有页面存活探测**：句柄仍匹配时只按时间标 stale，看板显示已等分钟数与“目标页面未确认”，不声称页面已死。
 - 自动判定只**追加**说明并标注 `[System]`，不覆盖已交付的结果或报告；落点是“待人工收口”，不会写成完成或代替负责人验收。人工接管或负责人随后提交结果都走原有路径，不阻塞。
 - 手动出口：新增 `close_browser_wait`，只允许任务负责人或该群管理员；被卡住的执行 Bot 调用会被拒绝。它把该项记为 `abandoned`、保留已交付结果与先前报告（明确写“页面未确认、未重放任何浏览器动作”），之后 `finish_bot_task` 可正常验收；自动判定过的交接也允许用同一工具收口。它不释放、不接管、不导航浏览器。
-- 群内自监控：停滞任务由负责人收到持久提醒，同时以群管理员身份写入该群持久记录（quiet，不选人、不新建任务），并写一条团队动态。stale 或已过期的资源租约只在提醒中列出，**绝不自动释放**。
+- 群内自监控：停滞任务不再向负责人会话投递 durable 文本（负责人私聊即用户对话框）；只写一条团队动态/attention 红点，并以群管理员身份写入该群持久记录（quiet，不选人、不新建任务）。去重按 blockersKey+level 不变。stale 或已过期的资源租约只在群提醒中列出，**绝不自动释放**。
 - 自动检查（本轮实际运行）：`npm run build` 通过；`test/mek-coordination.test.js` **61 项全通过**，新增 6 条回归：等待浏览器交接的看板状态与分钟数（含 `root.status=running` 的新鲜保存）、负责人收口后结果保留并可 finish、worker 不能自关、控制句柄缺失、worker 会话缺失、拒绝信息点名具体 work/问题编号、停滞提醒只发一次并含 stale 租约提示。`npm run lint`：0 错误、47 条既有警告。
 - 全量 `npm test` 当时为 1869 项：1866 通过、2 跳过、1 失败，失败项是 `mek-todo-schedules.test.js` 的 `invalid receipt timestamps never start work or prevent other receipts from being checked`。日志显示失败前 `mek-todos.js:173` 的 `safeText` 以“Stable request id may contain a credential”拒绝了定时回执提示词，属凭据扫描误判路径，与本轮改动文件无交集。**本轮会话在执行该对照前失去 shell 工具，未能隔离复现，故不把它算作已解决或已归因。**
 - 未验证：真实 DSH 安装、真实浏览器交接、真实群内提醒显示、team activity 升级在真实宿主的表现；`5d39aac2` 的真实数据只以同形状夹具（waiting_browser + 句柄仍匹配 + 30/61 分钟）回归，未读取或改写正式任务状态。安装命令与影响见交付报告。
@@ -590,3 +590,12 @@ Bot `30545e8`、WechatPad `0259900` 已快进并推送各自 MakeEpoch main。�
 - 回归：`a running task under 30 minutes is working, not stalled`、运行 31 分钟且任务行未更新会报、任务行刚更新不重报、`waiting_browser` 11 分钟会报、阻塞 1 分钟不报而 3 分钟报。
 - 自动检查：`test/mek-coordination.test.js` **63 项全通过**；全量 `npm test` **1871 项 / 1869 通过 / 0 失败 / 2 跳过**；`build --check` 通过；lint 0 错误、47 条既有警告。
 - 尚未安装到当前 DSH：线上仍是修复前的 0.2.11 构建，误报在重装前仍可能出现；重装与重启需用户再次授权。
+
+
+## 2026-11-13 自动收口标记统一与负责人私聊降噪
+
+- 缺陷（线上 0.2.12 复现）：`recover()` 自动收口浏览器交接时有两条写入分支，一条写 `automaticClosure`，另一条只写 `automatic:true/detectedBy:'system'`；`closeBrowserWait` 只认前者，导致无先前报告的自动收口 work 无法由负责人关闭，而 `blocked` 又会阻止 `finish_bot_task`。
+- 修正：两条分支统一写 `automaticClosure`（同时保留 `automatic/detectedBy` 便于读旧数据）；新增 `autoClosedBySystem(work)` 同时认两种形状，`close_browser_wait` 仍只允许任务负责人或群管理员，worker 不能自关；收口后落 `abandoned`、保留结果与先前报告，不代验收、不重放浏览器动作。
+- 用户要求：停滞提醒不再向负责人私聊投递文本；只留群内 quiet 消息与团队动态/attention。负责人私聊即用户对话框，Echo 明确不要过程噪音。
+- 回归：`test/mek-coordination.test.js` **64 项全通过**，新增：无 priorReport 的自动收口 → `close_browser_wait` 成功 → `finish` 可过；有 priorReport 自动收口仍可用；worker 仍不能自关；触发停滞时 owner 会话不新增消息、群内一条、团队动态一条、重复扫描不再发；原按 kind 阈值回归仍全绿。
+- 本轮只提 PR，未安装：线上仍是 0.2.12（不含此修复），重装会中断所有 Bot 回合，需 Echo 再授权。

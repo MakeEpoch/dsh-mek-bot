@@ -1369,7 +1369,7 @@ test('finish and accept refusals name the exact record that is still unsettled',
     new RegExp(`work ${child} \\(review\\)`))
 })
 
-test('a stalled task reports once to its owner, its group and team activity until the blockers change', async t => {
+test('a stalled task reports to its group and team activity without messaging the owner chat', async t => {
   const team = seed()
   team.rooms.r = { id: 'r', name: 'Review group', named: true, members: ['a', 'b'], admin: 'a', mode: 'admin', sessions: { a: 'ga' }, segments: {}, log: [], seq: 0, seen: {} }
   const h = await host(t, undefined, team)
@@ -1380,21 +1380,24 @@ test('a stalled task reports once to its owner, its group and team activity unti
   // deciding the handle is gone.
   h.rt.mekBrowserView = () => ({ available: true, plugin: 'fixture', openBotIds: ['b'], holds: { b: { workId } } })
   h.rt.state.mekTasks.works[workId].room = 'r'
+  const before = h.agentOf('a').calls.length
   const activities = []
   h.rt.mekRecordActivity = async input => { activities.push(input); return input }
   h.rt.mekPolicyView = () => ({ resources: [{ kind: 'workspace', key: '/data/workspace/make-epoch', botId: 'b', name: 'Writer', status: 'stale' }] })
   await h.rt.mekRecoverTasks()
-  const ownerNotice = contentOf(h.agentOf('a').calls.at(-1))
-  assert.match(ownerNotice, /no closable state/)
-  assert.match(ownerNotice, /close_browser_wait/)
-  assert.match(ownerNotice, /Stale resource leases/)
-  assert.match(ownerNotice, /never released/)
+  // The owner's chat is the user's dialog: no durable stall text is delivered there.
+  assert.equal(h.agentOf('a').calls.length, before, 'the owner conversation stays quiet')
+  const groupLine = h.rt.state.rooms.r.log.find(line => /no closable state/.test(line.text))
+  assert.ok(groupLine, 'the group gets its own notice')
+  assert.match(groupLine.text, /close_browser_wait/)
+  assert.match(groupLine.text, /Stale resource leases/)
+  assert.match(groupLine.text, /never released/)
   assert.equal(activities.length, 1)
   assert.equal(activities[0].type, 'stall')
   assert.equal(h.rt.state.mekTasks.roots[root.id].stallNotice.level, 2)
-  assert.ok(h.rt.state.rooms.r.log.some(line => /no closable state/.test(line.text)), 'the group gets its own notice')
   await h.rt.mekRecoverTasks()
   assert.equal(activities.length, 1, 'an unchanged stall is not reported again')
+  assert.equal(h.agentOf('a').calls.length, before, 'no owner message on the second scan either')
 })
 
 test('stall thresholds follow each unresolved kind, not a shared clock', async t => {
@@ -1415,7 +1418,8 @@ test('stall thresholds follow each unresolved kind, not a shared clock', async t
   h.rt.state.mekTasks.roots[root.id].updatedAt = Date.now() - 31 * 60 * 1000
   await h.rt.mekRecoverTasks()
   assert.equal(activities.length, 1)
-  assert.ok(contentOf(h.agentOf('a').calls.at(-1)).includes(`work ${workId} (running)`))
+  assert.equal(h.rt.state.mekTasks.roots[root.id].stallNotice.level, 1)
+  assert.equal(h.agentOf('a').calls.length, 0, 'no durable stall text lands in the owner chat')
 
   const key = h.rt.state.mekTasks.roots[root.id].stallNotice.key
   h.rt.state.mekTasks.roots[root.id].updatedAt = Date.now() - 60_000
@@ -1442,11 +1446,31 @@ test('waiting and blocked kinds keep their own windows', async t => {
   const blocked = []
   second.rt.mekRecordActivity = async input => { blocked.push(input); return input }
   second.rt.mekPolicyView = () => ({ resources: [] })
+  const reviewCalls = second.agentOf('a').calls.length
   second.rt.state.mekTasks.works[blockedId].resultAt = Date.now() - 60_000
   await second.rt.mekRecoverTasks()
   assert.equal(blocked.length, 0, 'a one-minute block is not reported at once')
   second.rt.state.mekTasks.works[blockedId].resultAt = Date.now() - 3 * 60 * 1000
   await second.rt.mekRecoverTasks()
   assert.equal(blocked.length, 1)
-  assert.ok(contentOf(second.agentOf('a').calls.at(-1)).includes(`work ${blockedId} (blocked)`))
+  assert.equal(second.agentOf('a').calls.length, reviewCalls, 'the owner chat stays quiet')
+})
+
+test('a recovery-closed handoff without a delivered report is still closable by the owner', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId)
+  h.rt.mekBrowserView = () => ({ available: true, plugin: 'fixture', openBotIds: [], holds: {} })
+  await h.rt.mekRecoverTasks()
+  const work = h.rt.state.mekTasks.works[workId]
+  assert.equal(work.status, 'blocked')
+  assert.equal(work.report.automatic, true)
+  assert.equal(work.report.detectedBy, 'system')
+  assert.ok(work.report.automaticClosure, 'both report shapes mark the system closure')
+  h.take('a')
+  await h.tool('a', 'close_browser_wait', { work_id: workId, summary: 'No one will take over.', evidence: 'The page was not observed; no browser action was replayed.' })
+  assert.equal(h.rt.state.mekTasks.works[workId].status, 'abandoned')
+  await h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Closed the handoff and accepted the outcome.' })
+  assert.equal(task(h).status, 'completed')
 })
