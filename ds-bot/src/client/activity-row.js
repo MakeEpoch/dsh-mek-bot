@@ -117,6 +117,30 @@ export function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useL
   const pendingInput = useSession(snapshot => freshInputAt(snapshot?.pendingSubmissions, steeredAt))
   const bot = roster.byId[sessionId]
   const room = roster.roomsById[sessionId]
+  const resourceWaitKey = useWork?.(work => {
+    const entry = bot && work.bots?.[bot.id]
+    return entry?.roomId === undefined && entry?.resourceWait ? JSON.stringify(entry.resourceWait) : ''
+  })
+  const resourceWait = resourceWaitKey ? JSON.parse(resourceWaitKey) : null
+  const resourceWaitLabel = resourceWait && t('Waiting for {holder} to release {directory}', resourceWait)
+  const codexKey = useWork?.(work => {
+    const child = bot && work.bots?.[bot.id]?.codex
+    return child ? JSON.stringify(child) : ''
+  })
+  const codex = codexKey ? JSON.parse(codexKey) : null
+  const [stopRequest, setStopRequest] = useState(null)
+  const stopError = stopRequest?.id === codex?.childId && stopRequest?.failed === true
+  const stopPending = stopRequest?.id === codex?.childId && stopRequest?.pending === true
+  async function stopCodex() {
+    const id = codex.childId
+    setStopRequest({ id, pending: true })
+    try {
+      await actions.stopCodex(bot.id, id)
+      setStopRequest(current => current?.id === id ? null : current)
+    } catch {
+      setStopRequest(current => current?.id === id ? { id, failed: true } : current)
+    }
+  }
   // The one switch the row names: a working-folder move jumps the chat to a fresh
   // part while a turn is not running, so without it the conversation just empties.
   const moveAt = useWork?.((work) => {
@@ -129,19 +153,22 @@ export function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useL
   const tools = entries.filter(entry => !entry.text).sort((a, b) => a.at - b.at)
   // Group chats show who is typing on their own while members speak.
   const relaying = tools.some(entry => entry.relay)
-  const visible = moveAt !== 0 || rowVisible({ running, streaming, tools, relaying, bot, room })
+  const visible = resourceWait !== null || codex !== null || moveAt !== 0 || rowVisible({ running, streaming, tools, relaying, bot, room })
   const tool = tools.at(-1)
   const inputRef = useRef(0)
   // A steer keeps the run going, so nothing else resets the row: fresh input is
   // the newest activity, and the phrase and the clock restart from the send.
   const inputAt = Math.max(inputRef.current, pendingInput)
   inputRef.current = inputAt
-  const want = !visible ? null
-    : moveAt !== 0 ? { key: 'move', label: t('Switching working folder'), state: 'thinking' }
+  const explicit = resourceWait ? { key: `resource:${resourceWaitKey}`, label: resourceWaitLabel, state: 'waiting' }
+    : codex ? { key: `codex:${codexKey}:${stopError}`, label: t(stopError ? 'Could not stop Codex' : codex.stopping ? 'Stopping Codex' : 'Codex is running'), state: 'working' }
+      : null
+  const want = !visible ? null : explicit
+    ?? (moveAt !== 0 ? { key: 'move', label: t('Switching working folder'), state: 'thinking' }
       : inputAt > (tool?.at ?? 0)
         ? { key: `input:${inputAt}`, pool: PHRASES.thinking, state: 'thinking' }
         : tool ? { key: tool.label ? `tool:${tool.label}` : 'working', label: tool.label, pool: PHRASES.working, state: tool.state ?? 'working' }
-          : { key: 'thinking', pool: PHRASES.thinking, state: 'thinking' }
+          : { key: 'thinking', pool: PHRASES.thinking, state: 'thinking' })
   const [shown, setShown] = useState(null)
   const wantKey = want?.key ?? null
   const markState = useRef('thinking')
@@ -149,7 +176,7 @@ export function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useL
   useEffect(() => {
     if (wantKey === null || shown?.key === wantKey) return undefined
     const make = () => setShown({ key: wantKey, text: want.label ?? drawPhrase(want.pool), at: Date.now() })
-    const wait = shown ? shown.at + PHRASE_HOLD_MS - Date.now() : 0
+    const wait = shown && explicit === null ? shown.at + PHRASE_HOLD_MS - Date.now() : 0
     if (wait <= 0) { make(); return undefined }
     const timer = setTimeout(make, wait)
     return () => clearTimeout(timer)
@@ -185,11 +212,12 @@ export function ActivityIndicator({ sessionId, useRoster, useSessionStatus, useL
   useEffect(() => { if (!running) actions.clearLive(sessionId) }, [running, sessionId])
   // Only rows that take the activity row's place grow out of it.
   useRowEntrances(() => leaving.current || Date.now() - endedAt.current < 300)
-  const host = useRunningHost(running || moveAt !== 0)
+  const host = useRunningHost(running || explicit !== null || moveAt !== 0)
   if (!host || phase === null || !shown) return null
-  return createPortal(h('div', { className: 'bt-typing', 'data-exiting': phase === 'out' ? '' : undefined, 'aria-hidden': true },
+  return createPortal(h('div', { className: 'bt-typing', 'data-exiting': phase === 'out' ? '' : undefined, 'data-resource-wait': resourceWait ? '' : undefined, 'aria-hidden': explicit === null ? true : undefined },
     bot ? h(BotMark, { bot, size: 28, state: markState.current, live: true, pokeable: true }) : h(RoomAvatar, { room, roster, size: 28 }),
     h('span', { className: 'bt-typing-text' },
-      h('span', { key: `${shown.key}:${shown.at}`, className: 'bt-typing-label' }, h(Shimmer, null, `${shown.text}…`)),
-      h(Elapsed, { at: moveAt !== 0 ? moveAt : Math.max(turnAt ?? runAt.current, inputAt), className: 'bt-typing-time' }))), host)
+      h('span', { key: `${shown.key}:${shown.at}`, className: 'bt-typing-label', title: resourceWaitLabel || undefined, role: explicit ? 'status' : undefined }, h(Shimmer, null, resourceWait ? shown.text : `${shown.text}…`)),
+      h(Elapsed, { at: resourceWait?.since ?? codex?.since ?? (moveAt !== 0 ? moveAt : Math.max(turnAt ?? runAt.current, inputAt)), className: 'bt-typing-time' })),
+    codex && actions.stopCodex ? h('button', { type: 'button', className: 'bt-member-stop', disabled: codex.stopping || stopPending, onClick: stopCodex }, t('Stop Codex')) : null), host)
 }

@@ -14,20 +14,21 @@ import { dshHomeOf } from './src/host/folders.js'
 export { inject }
 export const name = 'dsh-mek-bot'
 export function apply(ctx, config = {}) {
-  const rt = createRuntime(ctx, {
+  createRuntime(ctx, {
     ...config,
     home: config.home ?? join(dshHomeOf(process.env.DSH_HOME), 'mek-bot'),
     isolateTools: true,
     coordinateTasks: true,
     autoGreet: false,
     updateCheck: false,
+  }, rt => {
+    installCoordination(rt)
+    installPolicy(rt)
+    installKnowledge(rt)
+    installWorkflows(rt)
+    installTeam(rt)
+    installTodos(rt)
+    installTodoSchedules(rt)
+    installWechatBridge(rt)
   })
-  installCoordination(rt)
-  installPolicy(rt)
-  installKnowledge(rt)
-  installWorkflows(rt)
-  installTeam(rt)
-  installTodos(rt)
-  installTodoSchedules(rt)
-  installWechatBridge(rt)
 }

@@ -3,10 +3,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { createRuntime } from '../index.js'
 import { fakeAttachments, fakeContext } from './fake-ctx.js'
 import { LONG_HEAD, MESSAGE_INLINE_MAX, ROOM_STEP_GAP_MS, ROOM_WORK_GRACE_MS } from '../src/host/constants.js'
 import { promisesWork } from '../src/host/turns.js'
+import { install as installCoordination } from '../src/host/mek-coordination.js'
 
 let rt
 
@@ -28,7 +30,7 @@ const seed = (room = {}, extraRooms = {}, bots = {}) => ({
   revision: 0,
 })
 
-async function start(t, room, services, extraRooms, bots, llm, config = {}) {
+async function start(t, room, services, extraRooms, bots, llm, config = {}, extend) {
   const home = mkdtempSync(join(tmpdir(), 'ds-bot-work-'))
   writeFileSync(join(home, 'state.json'), JSON.stringify(seed(room, extraRooms, bots)))
   const selected = []
@@ -66,7 +68,7 @@ async function start(t, room, services, extraRooms, bots, llm, config = {}) {
   let route
   const register = ctx.connection.fetch.register
   ctx.connection.fetch.register = (options) => { route = options; return register(options) }
-  rt = createRuntime(ctx, { home, ...config })
+  rt = createRuntime(ctx, { home, ...config }, extend)
   t.after(async () => {
     await ctx.dispose()
     rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 })
@@ -122,6 +124,50 @@ const settle = async (check) => {
 }
 const text = message => message.content.map(block => block.text ?? '').join('\n')
 const kinds = result => result.replies.map(reply => [reply.kind ?? 'message', reply.name])
+
+test('native group replies can mention a member while awaiting confirmation without dispatching it', async (t) => {
+  const host = await start(t, undefined, undefined, undefined, undefined, undefined, { coordinateTasks: true }, installCoordination)
+  const first = host.round('clarify', host.say('请先确认改动方案'))
+  await settle(() => host.agentOf('ga').calls.length === 1)
+  const request = host.begin('ga')
+  assert.match(text(request), /Wait for their answer before assigning that work/)
+  host.emit('ga', 'assistant/message', { message: { content: [{ type: 'text', text: '方案会涉及 @Writer，先核对一下。' }] } })
+  host.emit('ga', 'tool/call', { callId: 'read', name: 'read_file', arguments: '{}' })
+  host.emit('ga', 'tool/result', { callId: 'read' })
+  host.finish('ga', '需要保留原入口吗？确认后再由 @Tester 处理。')
+  await settle(() => first() !== undefined)
+  assert.deepEqual(kinds(first()), [['message', 'Chief'], ['message', 'Chief']])
+  assert.match(first().replies[0].text, /@Writer/)
+  assert.match(first().replies[1].text, /@Tester/)
+  assert.deepEqual([host.agentOf('gb').calls, host.agentOf('gc').calls], [[], []])
+
+  const userCall = host.round('user-call', host.say('@Writer 先回复一个问题'))
+  await settle(() => host.agentOf('gb').calls.length === 1)
+  host.begin('gb')
+  host.finish('gb', '我在。')
+  await settle(() => userCall() !== undefined)
+  assert.deepEqual(kinds(userCall()), [['message', 'Writer']])
+})
+
+test('native late member replies keep their mentions in the group without starting another member', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const host = await start(t, undefined, undefined, undefined, undefined, undefined, { coordinateTasks: true }, installCoordination)
+  const first = host.round('late-mention', host.say('请核对方案'))
+  await settle(() => host.agentOf('ga').calls.length === 1)
+  host.begin('ga')
+  host.emit('ga', 'tool/call', { callId: 'inspect', name: 'read_file', arguments: '{}' })
+  t.mock.timers.tick(ROOM_WORK_GRACE_MS)
+  await settle(() => first() !== undefined)
+  host.emit('ga', 'tool/result', { callId: 'inspect' })
+  host.finish('ga', '确认方案后由 @Writer 处理。')
+  await settle(() => host.agentOf('r1').calls.length === 1)
+  const post = host.takePost()
+  assert.equal(post.source.late, true)
+  assert.match(text(post), /@Writer/)
+  const later = host.round('show-late-mention', post)
+  await settle(() => later() !== undefined)
+  assert.deepEqual(host.agentOf('gb').calls, [])
+})
 
 test('work past the grace lets the round go on, and the member that asked answers the result', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
@@ -354,8 +400,11 @@ test('replies a post waits for are work handed on: the answer to the Bot that as
   assert.match(posted, /your answer goes to Tester once all of it is back\.$/)
   host.finish('a', '已经让 Writer 去看了。')
   const waiting = (await host.call('state', {})).value
-  assert.deepEqual([waiting.activity.a, waiting.work.waiting], ['waiting', { a: { bots: [], rooms: ['r1'], for: ['c'] } }])
-  const done = host.round('c1', host.takePost())
+  const post = host.takePost()
+  assert.deepEqual([waiting.activity.a, waiting.work.waiting], ['waiting', {
+    a: { bots: [], rooms: ['r1'], for: ['c'], waits: [{ id: post.source.sub, room: 'r1', name: 'Ops' }] },
+  }])
+  const done = host.round('c1', post)
   await settle(() => host.agentOf('gb').calls.length === 1)
   host.begin('gb')
   host.finish('gb', '文档没问题。')
@@ -1025,6 +1074,17 @@ test('one press stops the group\'s round and every member at work there, and not
   assert.deepEqual(kinds(first()).filter(([kind]) => kind === 'stopped'), [['stopped', 'Chief'], ['stopped', 'Writer']])
 })
 
+test('a failed member cancellation still stops the other members', async (t) => {
+  const host = await start(t)
+  host.emit('ga', 'turn/start', { turn: 1 })
+  host.emit('gb', 'turn/start', { turn: 1 })
+  host.agentOf('ga').cancel = () => { throw new Error('fixture cancellation refused') }
+  const stopped = await host.call('stop-room-work', { roomId: 'r1' })
+  assert.equal(stopped.ok, false)
+  assert.match(stopped.error.message, /fixture cancellation refused/)
+  assert.deepEqual(host.agentOf('gb').cancelled, [{ kind: 'user' }])
+})
+
 test('members still at work show in the team view and in the prompts of the others', async (t) => {
   const host = await start(t)
   host.emit('gb', 'turn/start', { turn: 1 })
@@ -1562,9 +1622,11 @@ test('consecutive 0-tool ack ping-pong relays pause after 6 turns and go on only
 test('a group member with a running DSH subagent stays working and stop-room-work interrupts the subagent (#701)', async (t) => {
   const host = await start(t)
   const interrupted = []
-  host.ctx.subagents = {
+  const get = host.ctx.get
+  const subagents = {
     interrupt: async (childId, opts) => { interrupted.push({ childId, opts }) },
   }
+  host.ctx.get = name => name === 'subagents' ? subagents : get(name)
   const first = host.round('c1', host.say('@Writer 派子代理跑长任务'))
   await settle(() => host.agentOf('gb').calls.length === 1)
   host.begin('gb')
@@ -1605,6 +1667,26 @@ test('a group member with a running DSH subagent stays working and stop-room-wor
   host.emit('gb', 'turn/end', { turn: 2, reason: { kind: 'completed' } })
   await settle(() => true)
   assert.deepEqual(host.agentOf('r1').calls, [], 'suppressed settlement notice does not post to the group')
+})
+
+test('private Codex work uses the DSH parent carrier without a local child Session', async t => {
+  const calls = []
+  const host = await start(t, {}, { subagents: { interrupt: (...args) => calls.push(args) } })
+  const parent = scopeTarget(host.ctx, host.agentOf('a'))
+  const run = { id: 'native-codex-child', runId: 'codex-run', provider: 'codex', local: false }
+  for (const listener of host.ctx.listeners.get('subagent/start')) listener.call(parent, run)
+  assert.equal(rt.hasRunningCodex('a'), true)
+  assert.equal(rt.hasRunningCodex('b'), false)
+  const running = (await host.call('state', {})).value.work.bots.a.codex
+  assert.equal(running.childId, run.id)
+  assert.equal(running.stopping, false)
+  assert.equal((await host.call('stop-codex', { botId: 'b', childId: run.id })).value, false)
+  for (let i = 0; i < 2; i++) assert.equal((await host.call('stop-codex', { botId: 'a', childId: run.id })).value, true)
+  assert.deepEqual(calls, [[run.id, { kind: 'user', parentSessionId: 'a' }]])
+  assert.equal((await host.call('state', {})).value.work.bots.a.codex.stopping, true)
+  for (const listener of host.ctx.listeners.get('subagent/end')) listener.call(parent, { ...run, stopReason: 'aborted' })
+  assert.equal(rt.hasRunningCodex('a'), false)
+  assert.equal((await host.call('stop-codex', { botId: 'a', childId: run.id })).value, false)
 })
 
 

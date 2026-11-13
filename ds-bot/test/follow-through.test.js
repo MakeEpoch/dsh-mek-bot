@@ -32,9 +32,10 @@ const started = new Map()
 
 // The durable logs DSH keeps, by Session: what a Session's turns did and said.
 // `inspect` stands in for DSH reading that log, when a test cannot read it.
-async function start(home, logs, inspect) {
-  const ctx = fakeContext()
-  const agents = new Map()
+async function start(home, logs, inspect, liveAgents) {
+  const agents = liveAgents ?? new Map()
+  const services = liveAgents === undefined ? {} : { agents: { list: () => [...agents.values()], get: id => agents.get(id) } }
+  const ctx = fakeContext({ services })
   const agentOf = (sessionId) => {
     if (!agents.has(sessionId)) {
       const calls = []
@@ -232,6 +233,75 @@ const writerLog = (request, said, reason = { kind: 'completed' }) => [
   { type: 'turn/end', seq: 4, data: { turn: 1, reason } },
 ]
 
+test('a running delegated turn retains its original reply route through a plugin reload', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const home = freshHome(t)
+  const first = await start(home)
+  const request = await askWriter(first, home)
+  const writer = first.agentOf('b')
+  writer.status = 'running'
+  writer.calls.length = 0
+  await first.stop()
+
+  const second = await start(home, undefined, undefined, new Map([['b', writer]]))
+  t.mock.timers.tick(3000)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(writer.calls.length, 0, 'the live turn was not restarted')
+  await second.tool('message_bot', { to: 'Writer', message: 'Check the figures', when: 'queue' }, 'a')
+  const [newRequest] = writer.calls
+  second.emit('b', 'user/message', { content: newRequest.content, source: newRequest.source })
+  second.emit('b', 'assistant/message', { message: { content: [{ type: 'text', text: 'The plan is ready.' }] } })
+  second.emit('b', 'turn/end', { turn: 1, reason: { kind: 'completed' } })
+  await settle(() => second.agentOf('a').calls.length === 1 && writer.calls.length === 2)
+  assert.equal(second.agentOf('a').calls[0].source.replyTo, request.source.exchangeId)
+  assert.match(text(second.agentOf('a').calls[0]), /The plan is ready\./)
+
+  const [, deferred] = writer.calls
+  assert.equal(deferred.source.exchangeId, newRequest.source.exchangeId)
+  run(second, 'b', 2, deferred)
+  second.emit('b', 'assistant/message', { message: { content: [{ type: 'text', text: 'The figures check out.' }] } })
+  second.emit('b', 'turn/end', { turn: 2, reason: { kind: 'completed' } })
+  await settle(() => second.agentOf('a').calls.length === 2)
+  assert.equal(second.agentOf('a').calls[1].source.replyTo, newRequest.source.exchangeId)
+  assert.match(text(second.agentOf('a').calls[1]), /The figures check out\./)
+})
+
+for (const kind of ['completed', 'max-tokens']) {
+  test(`a surviving ${kind} turn returns its pre-reload text to the original asker once`, async (t) => {
+    const home = freshHome(t)
+    const logs = new Map()
+    const first = await start(home, logs)
+    const request = await askWriter(first, home)
+    const writer = first.agentOf('b')
+    writer.status = 'running'
+    await first.stop()
+
+    const second = await start(home, logs, undefined, new Map([['b', writer]]))
+    const reason = { kind }
+    logs.set('b', writerLog(request, 'The plan was written before the reload.', reason))
+    second.emit('b', 'turn/end', { turn: 1, reason })
+    await settle(() => second.agentOf('a').calls.length === 1)
+    const [reply] = second.agentOf('a').calls
+    assert.equal(reply.source.replyTo, request.source.exchangeId)
+    assert.match(text(reply), /The plan was written before the reload\./)
+    assert.equal(text(reply).includes('answer is not complete'), kind === 'max-tokens')
+    await settle(() => inflight(home).b === undefined)
+  })
+}
+
+test('group stop can see a running member and its subagent after the plugin loads again', async (t) => {
+  const home = freshHome(t)
+  const stopped = []
+  const liveAgents = new Map([
+    ['gb', { id: 'gb', session: { id: 'gb' }, status: 'running', cancel: () => stopped.push('gb') }],
+    ['child', { id: 'child', session: { id: 'child', header: { origin: 'subagent', parentSession: 'gb' } }, status: 'running', cancel: () => stopped.push('child') }],
+    ['fork', { id: 'fork', session: { id: 'fork', header: { origin: 'fork', parentSession: 'gb' } }, status: 'running', cancel: () => stopped.push('fork') }],
+  ])
+  const host = await start(home, undefined, undefined, liveAgents)
+  assert.deepEqual(await host.call('stop-member-work', { roomId: 'r1', botId: 'b' }), { ok: true, value: true })
+  assert.deepEqual(stopped, ['child', 'gb'])
+})
+
 for (const role of ['reply', 'report', 'resume']) {
   test(`a completed ${role} turn hands its continued work back after a plugin restart`, async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] })
@@ -364,6 +434,7 @@ test('a turn that ended on the token limit gives what it said', async (t) => {
   const reply = second.agentOf('a').calls[0]
   assert.deepEqual([reply.source.role, reply.source.replyTo], ['reply', exchangeId])
   assert.match(text(reply), /The plan is ready, up to the limit\./)
+  assert.match(text(reply), /answer is not complete/)
   // The work is settled, and the request is not run again.
   await settleState(t, home, () => stateOf(home).works?.[exchangeId] === undefined)
   assert.equal(second.agentOf('b').calls.length, 0)
@@ -805,4 +876,19 @@ test('a written tool call is told apart from text about one', () => {
   assert.equal(writesToolCall('Models such as Step write `<tool_call>` tags in their template.'), false)
   assert.equal(writesToolCall(undefined), false)
   assert.equal(stripWrittenCalls(WRITTEN), 'Checking now.')
+  assert.equal(writesToolCall('＜/parameter＞\n＜/function＞\n＜/tool_call＞'), true)
+  assert.equal(stripWrittenCalls('Checking </parameter> now.'), 'Checking now.')
+  assert.equal(stripWrittenCalls('a < b or c > d'), 'a < b or c > d')
+})
+
+test('a cut-off group reply exposes the useful text without orphaned tool tags', async (t) => {
+  const home = freshHome(t)
+  const host = await start(home)
+  const result = await openRoomTurn(t, host)
+  host.emit('gb', 'assistant/message', { message: { content: [{ type: 'text', text: 'Hello.\n＜/tool_call＞' }] } })
+  host.emit('gb', 'turn/end', { turn: 1, reason: { kind: 'max-tokens' } })
+  await settle(() => result() !== undefined)
+  const [reply] = result().replies
+  assert.match(reply.text, /Hello\.[\s\S]*answer is not complete/)
+  assert.doesNotMatch(reply.text, /tool_call/)
 })

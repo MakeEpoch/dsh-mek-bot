@@ -219,6 +219,13 @@ export function install(rt) {
           await rt.load()
           if (!rt.mekCancelTask) return fail('Task coordination is not enabled', 'bot/invalid')
           return ok(await rt.mekCancelTask(body.taskId))
+        case 'task-review':
+          await rt.load()
+          if (!rt.mekTaskReviewAction) return fail('Task coordination is not enabled', 'bot/invalid')
+          return ok(await rt.mekTaskReviewAction(body))
+        case 'abandon-work':
+          await rt.load()
+          return await rt.abandonWork(String(body.id ?? '')) ? ok(true) : fail('That wait is no longer open', 'bot/stale')
         case 'models':
           await rt.catalog({ fresh: true })
           return ok({ modelsKey: modelsKey() })
@@ -404,16 +411,21 @@ export function install(rt) {
         case 'approval-answer':
           rt.answerApproval(body.id, body.choice)
           return ok(true)
-        case 'stop-member-work': {
-          const stopped = await rt.stopMemberWork(String(body.roomId ?? ''), String(body.botId ?? ''))
-          rt.goalUserStopped?.(String(body.roomId ?? ''))
-          return ok(stopped)
-        }
-        case 'stop-room-work': {
-          const stopped = await rt.stopRoomWork(String(body.roomId ?? ''))
-          rt.goalUserStopped?.(String(body.roomId ?? ''))
-          return ok(stopped)
-        }
+        case 'stop-codex':
+          await rt.load()
+          return ok(rt.stopCodex(String(body.botId ?? ''), String(body.childId ?? '')))
+        case 'stop-member-work':
+          try {
+            return ok(await rt.stopMemberWork(String(body.roomId ?? ''), String(body.botId ?? '')))
+          } finally {
+            rt.goalUserStopped?.(String(body.roomId ?? ''))
+          }
+        case 'stop-room-work':
+          try {
+            return ok(await rt.stopRoomWork(String(body.roomId ?? '')))
+          } finally {
+            rt.goalUserStopped?.(String(body.roomId ?? ''))
+          }
         case 'goal-draft': {
           await rt.load()
           if (!rt.goalDraft) return fail('Use the conversation task panel for goals.', 'bot/invalid')

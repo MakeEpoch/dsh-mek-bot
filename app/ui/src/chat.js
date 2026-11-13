@@ -203,6 +203,7 @@ export function Composer({ sessionId, placeholder, disabled, onSend, actions, us
           },
         })),
       h('div', { className: 'dsb-composer-trailing' },
+        actions.Queue ? h(actions.Queue, { sessionId }) : null,
         h(ComposerVoice, { sessionId, inputActions, actions, useUi, useRoster }),
         h('button', { type: 'button', className: 'dsb-send', disabled: disabled || sending || preparing || (text.trim() === '' && images.length === 0), 'aria-label': t('Send message'), title: t('Send message'), onClick: () => { void submit() } }, h(ArrowUpIcon)))))
 }
@@ -260,7 +261,6 @@ export function Chat({ sessionId, team, children }) {
           // This is transient presentation, never a row in the Session history.
           h('div', { 'data-chat-running': '' })))),
     h('div', { className: 'dsb-composer-root' },
-      actions.Queue ? h(actions.Queue, { sessionId }) : null,
       h(ModelChoiceDock, { sessionId, useRoster: hooks.useRoster, actions }),
       h(Composer, {
         sessionId,

@@ -26,6 +26,12 @@ Small UI seams export existing Composer/GroupReplies/GroupMessage components and
 
 `ds-bot/mek.js` wraps upstream `index.js`. Team state defaults to `DSH_HOME/mek-bot`. `team-registration.js` uses DSH 0.2.2's tool admission condition for team sessions; ordinary DSH sessions do not receive team tools. Optional browser tools use the same seam. `autoGreet: false` avoids automatic model greetings, and downstream automatic update checking is disabled.
 
+During an in-place plugin reload, the runtime rebuilds activity from the live DSH agent registry and restores surviving turn records from `inflight.json`. Owned agents regain their core and downstream tools after extension setup. The surviving turn keeps its original delegation route, and a later request gets its own reply.
+
+Unloading the policy marks in-flight model usage incomplete and in-flight resource leases stale and uncertain. Completion callbacks from that policy instance let the DSH result through after its state lock has been released.
+
+Group relays carry image attachments from the lines a member can read, including formal group dispatches. Each synthesized relay gets unique arguments for DSH’s repeat-tool detector. On two consecutive empty output cut-offs, the idle part checks whether its history fits a fresh Session before switching without a generated note.
+
 The bundle adds only this plugin. It does not change DSH search, presets, native sidebar/composer settings or other plugins. The original `ds-bot` bundle must not be enabled at the same time, because both implement the same Bot API.
 
 Use `npm pack --ignore-scripts` and a content-hashed archive for production. Keep `autoInstallPeers: false`. Host API modules are optional peers, supplied by DSH's loader; never install a second Cordis/tools/scope/LLM core to satisfy raw Node imports. Development dependencies stay in `dev/harness`.
@@ -33,6 +39,8 @@ Use `npm pack --ignore-scripts` and a content-hashed archive for production. Kee
 Uninstalling leaves team state and DSH history in place. Native visual scoping is not an access-control sandbox: normal DSH authentication and model/tool permissions still apply.
 
 ## Task coordination
+
+Giving up an open handoff detaches that wait from its parent. Formal task records keep the abandoned branch and its late output. The same state write retains the notification for the original waiting conversation and cancels pending outbox entries for the detached branch. Existing workers retain their task association while they return late output.
 
 `src/host/mek-coordination.js` is installed only by the downstream entry. It reuses upstream handoffs and delivery, adding a persistent original task owner, suspended decisions, structured results, revisions, acceptance and cancellation. Small optional hooks in tools/turns/resume/approvals/secrets/channel preserve upstream behavior without the adapter. `mek/tasks.jsx` adds collapsible native progress and reuses the real approval and credential cards in the owner's chat.
 
@@ -42,9 +50,13 @@ Question resumes use a fresh delivery id with the same handoff id; revisions use
 
 The downstream entry installs `mek-policy.js`, `mek-knowledge.js`, `mek-workflows.js` and `mek-team.js` after coordination. Their versioned state lives in the existing atomic team store; unknown future formats are refused without replacement. Task events carry metadata only; authorized summaries are separately recorded and delivered through durable notices without changing task ownership. User sharing controls are channel-only, not model tools.
 
-Execution restrictions use public tool guards, tool dispatch and LLM stream hooks. They add restrictions without bypassing DSH approvals. Cooperative resource claims cover known mutators and explicit bindings, not arbitrary background subprocesses. Token limits gate subsequent calls; they cannot stop all in-flight provider output at an exact monetary amount. Project facts require an explicit scope and source. Workflow activation requires an accepted validation task tied to an immutable version digest. Scheduling remains a DSH responsibility.
+Execution restrictions use public tool guards, tool dispatch and LLM stream hooks. They add restrictions without bypassing DSH approvals. Cooperative resource claims cover known mutators and explicit bindings, not arbitrary background subprocesses. Token limits gate subsequent calls; they cannot stop all in-flight provider output at an exact monetary amount. Project facts require an explicit scope and source. Workflow activation requires an accepted validation task tied to an immutable version digest. Scheduling remains a DSH responsibility. The schedule adapter keeps stable team management ownership separately from DSH delivery targets: Main Bots can manage non-private team Bot/group schedules; ordinary Bots remain in their logical chat. New independent targets are captured from successful tool creation, not inferred from directories or the mixed involved-session notification set. Legacy known team targets and durable to-do bindings are adopted; unverified independent tasks remain outside the managed set. Edits carry the read revision to DSH, and to-do clock changes pass through the rule adapter and original tool pipeline rather than editing only the binding. See the [schedule ownership contract](plans/2026-11-03-mek-conversation-tasks.md#20-团队定时管理归属2026-11-05).
 
 Native views remain under `src/client/mek/`; the existing controller exposes optional `mekTeam` state. Artifact previews use public workspace-file APIs and the producing session. The optional browser adapter exposes observation/control of existing sessions through the authenticated Bot channel and serializes human actions with Bot actions. No browser is launched by observation, and screenshot masking does not grant access to credentials. See [team operations design](plans/2026-10-30-mek-team-operations.md).
+
+DSH file queries (`read`, `grep`, `glob` and the editor's `view`) do not acquire an automatic workspace lease. Known writes and shell commands use the Session's workspace lease. Explicit resource bindings remain applicable. Waiting for a live conflict has one 30-second budget across all wakeups and exposes the holder and directory through live work state. Expiry returns the waiting call before dispatch and leaves the active lease with its holder.
+
+The MEK adapter admits the DSH-registered `subagent_codex` in a Main Bot's current private Session. DSH owns the tool, its permissions, and delivery of the completion notice to the exact parent. MEK reads the parent from the scoped lifecycle event, exposes live activity and sends a parent-scoped stop for the selected child. Conversation rollover waits while Codex is running so DSH can deliver the result to the originating Session. A plugin reload can recover activity for the same live DSH Agent. A host restart does not resume a native Codex run. File operations inside the external Codex process use the provider's permission mode and run outside the MEK tool-call lease hooks.
 
 ## Merge and verify upstream
 
@@ -84,7 +96,7 @@ DSH remains the clock owner. The optional schedule adapter uses public durable d
 
 ### 群内首次派工与逐层回传
 
-原生协调器启用时，群管理员从普通群回合调用 `message_bot` 即进入持久化执行任务，根任务保留用户目标及群 Session。成员只能在已有任务内继续派工；结果沿父任务逐层检查，最后回原群协调者。群内问题和返工也保持该入口。计划任务的管理员交接只调整协调者投递，不绕过嵌套检查者。普通群聊/公告/@ 不会变为正式任务，旧讨论不会在升级时自动重放；验收、未知结果、审批和凭据边界沿用既有契约。详见[任务所有权](plans/2026-10-30-mek-task-ownership.md#group-dispatch-return-chain-2026-11-03-hotfix)。
+原生协调器启用时，群管理员从普通群回合调用 `message_bot` 即进入持久化执行任务，根任务保留用户目标及群 Session。成员只能在已有任务内继续派工；结果沿父任务逐层检查，最后回原群协调者。群内问题和返工也保持该入口。计划任务的管理员交接只调整协调者投递，不绕过嵌套检查者。用户 @ 继续选择回复成员，Bot 普通发言中的 @ 只显示提及。显式工具调用负责派工及回传，旧讨论不会在升级时自动重放；验收、未知结果、审批和凭据边界沿用既有契约。详见[任务所有权](plans/2026-10-30-mek-task-ownership.md#group-dispatch-return-chain-2026-11-03-hotfix)。
 
 ### 顶部收藏与临时会话（2026-11-03）
 
@@ -96,4 +108,28 @@ The native entry provides `mekBotBridge` v1 using public Cordis service registra
 
 ## WeChat target settings (0.2.9)
 
-The native details settings render an optional WechatPad-owned link editor. `wechatBotLinks` v1 provides credential-free target views and revisioned updates; Bot resolves stable Main Bot/group identity before forwarding. Optional service references are obtained and released in the injected scope. Transport availability, account login and policy states remain distinct from plugin absence/version mismatch. WechatPad owns discovery and persistence; the native client never reads account credentials or reply context tokens.
+The native details settings render an optional WechatPad-owned link editor. `wechatBotLinks` v1 provides credential-free target views and revisioned updates; Bot resolves stable Main Bot/group identity before forwarding. Optional service references are obtained and released in the injected scope. Transport availability, account login and policy states remain distinct from plugin absence/version mismatch. WechatPad owns discovery and persistence; the native client never reads account credentials or reply context tokens. WechatPad enriches existing group candidates with cached group names; the Bot client keeps the chat ID as the binding key and displays it alongside the name to distinguish duplicates.
+
+
+原生 Bot 私聊和群聊的消息队列复用 DSH 收件箱投影。连续有用户消息排队 500ms 后，输入框内显示计数，点击展开浮层；队列清空即隐藏。切换会话或会话段时释放旧订阅。浮层沿用宿主的介入和移除操作。
+
+## 微信附件与顶部状态展示（2026-11-05）
+
+原生顶部会话标签保持单行，只显示头像、名称及贴头像的未读点，不绘制置顶图标或详情箭头。收藏持久化、列表星标及点击当前项切换详情的行为保留。微信入站附件的固定说明和路径清单仅在展示层转为折叠卡片，语音转写和其他文案直接显示，图片使用已有的真实缩略图；原始持久消息、模型输入及安全提示不改写。旧历史与新消息采用相同规则，解析失败保留原文。
+
+`mekBotBridge` v1 新增可选 `supportsMedia` 和 `send(..., { beforePrompt })`。回调由 WechatPad 提供，Bot 在取消/能力准备及逻辑身份重新解析之后、实际 prompt 之前传入最终 sessionId/requestId；prompt 失败撤销登记。WechatPad 在真实 inbox claimed 事件中只为该微信请求打开附件 consumer，沿用已有的 `wechatpad_return_file`、`present` 快照和连接 `sendFile`。文件在成功轮次结束后发回原连接/聊天，不跟随可见文字向所有绑定广播；网页输入、混合来源、隐藏 Bot 回合、取消及解绑不能借用投递权限。群不继承成员隐藏轮次的产物权限；只有已发布的正式群发言中的显式附件标记进入发送。两插件均需包含本次能力扩展，版本号/既有绑定无需迁移。
+
+
+## 定时管理全面复查（2026-11-06，已正式安装）
+
+管理索引的读/认领使用同一个异步写入队列，未落盘的 owner 不为并发目标修改提供授权。规则编辑在首次意图保存失败或宿主明确未写入时恢复原规则与本次补齐的快照；未知结果仍保留意图核对。回执只来自已保存 clock id，复制 marker 的其他任务不被纳入；零/多绑定停止规则处理，创建响应未知但唯一绑定可被核实时恢复。时间字段无效或投递早于计划的回执，包括旧 pending 实例，不启动业务工作。
+
+内部定时 guard 忽略宿主上下文快照。schedule 注入清理与引用身份绑定，旧 catalog/history 检查在服务替换/卸载或只读后退出。未新增宿主依赖、页面、后台调度器或正式数据迁移；后续获部署授权，隔离 rc.1 验证及卡片浏览器验证通过后，已通过标准 CLI 安装包含定时修复的 Bot 0.2.10 内容修订包。WechatPad 0.1.10 保持原包，未修改正式定时记录；部署回执见 UI 测试文档。
+
+### 任务创建与收尾
+
+普通 `post_to_group` 只写群历史，`report_back: true` 才进入协调器。继续已有任务传稳定 `task_id`；任务标题与执行消息分开存储，相同任务、派发方、目标和指令的重发复用已有派工。任务面板以执行状态区分执行中、待处理和已结束。
+
+`task-review` 在写入前核对任务更新时间；补报告及处理阻塞同时核对原派工和结果时间。补报告使用已有结果与已核对证据，不发消息、不创建派工。验收沿用原有问题、证据、送达与权限校验；处理阻塞复用原任务下的返工链。已开始的待办使用同一报告记录，验收和返工保留自己的版本及依赖校验。存量任务由用户核对后处理，升级不批量改写。
+
+`task-review` 的归档操作只关闭团队任务根记录，保存原因并保留子派工状态、结果、问题及送达记录。进行中的回合、排队消息、待决问题、未确认送达、凭据请求和仍占用的资源均阻止归档。已关联的计划和工作流使用各自的收尾入口。

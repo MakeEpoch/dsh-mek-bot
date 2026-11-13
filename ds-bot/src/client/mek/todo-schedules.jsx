@@ -7,16 +7,17 @@ export function scheduleSummary(rule) {
   const time = when.kind === 'at' ? new Date(when.at).toLocaleString(undefined, { timeZone: 'Asia/Shanghai' })
     : `${when.kind === 'weekly' ? text('Weekly', '每周') : text('Daily', '每天')} ${when.time ?? ''}`
   const action = { reminder: text('Remind', '提醒'), todo: text('Create a to-do', '生成待办'), execute: text('Arrange work', '安排执行') }[rule.action]
+  if (when.kind === 'rrule') return `${text('Custom recurrence', '自定义周期')} · ${action}`
   return `${time} · ${action} · ${text('Beijing time', '北京时间')}`
 }
 export function ScheduleCard({ rule, busy, mutate }) {
   return <details className="mek-todo mek-schedule-card" data-rule-id={rule.id}>
-    <summary><span className="mek-todo-title">{rule.title}<small>{scheduleSummary(rule)}</small></span><span>{rule.state === 'unknown' ? text('Needs checking', '待核对') : rule.state === 'ended' ? text('Ended', '已结束') : rule.enabled ? text('Planned', '计划中') : text('Paused', '已暂停')}</span></summary>
+    <summary><span className="mek-todo-title">{rule.title}<small>{scheduleSummary(rule)}</small></span><span>{rule.state === 'unknown' ? text('Needs checking', '待核对') : rule.state === 'ended' ? text('Ended', '已结束') : rule.state === 'cancelled' ? text('Cancelled', '已取消') : rule.enabled ? text('Planned', '计划中') : text('Paused', '已暂停')}</span></summary>
     <div className="mek-todo-content">
       {rule.nextAt && <p>{text('Next: ', '下次：')}{new Date(rule.nextAt).toLocaleString(undefined, { timeZone: 'Asia/Shanghai' })}</p>}
       {rule.error && <p role="alert">{rule.error}</p>}
       {rule.instances?.slice(-3).map(instance => <small key={instance.id}>{new Date(instance.scheduledAt).toLocaleString(undefined, { timeZone: 'Asia/Shanghai' })} · {instance.reason ?? instance.status}{instance.notification === 'unknown' ? text(' · delivery needs checking', ' · 送达待核对') : ''}</small>)}
-      {rule.state !== 'ended' && <button type="button" disabled={busy} onClick={() => void mutate(`mek-todo-schedule-${rule.enabled ? 'pause' : 'resume'}`, { id: rule.id })}>{rule.enabled ? text('Pause plan', '暂停计划') : text('Resume plan', '恢复计划')}</button>}
+      {!['ended', 'cancelled'].includes(rule.state) && <button type="button" disabled={busy} onClick={() => void mutate(`mek-todo-schedule-${rule.enabled ? 'pause' : 'resume'}`, { id: rule.id, revision: rule.revision ?? 1, expectedUpdatedAt: rule.bindings?.[0]?.updatedAt ?? null })}>{rule.enabled ? text('Pause plan', '暂停计划') : text('Resume plan', '恢复计划')}</button>}
     </div>
   </details>
 }

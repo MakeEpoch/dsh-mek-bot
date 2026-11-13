@@ -96,7 +96,7 @@ export function install(rt) {
     }
     return { ...clone(task), status, reason, coordinator: owner(task) ?? null,
       predecessors: predecessors(task).map(item => ({ id: item.id, title: item.title, status: item.status, resultVersion: item.resultVersion })),
-      ...(work ? { assignment: clone({ id: work.id, status: work.status, report: work.report, result: work.result, attempt: work.attempt, sessionId: work.sourceSessionId ?? work.sessionId }) } : {}) }
+      ...(work ? { assignment: clone({ id: work.id, status: work.status, report: work.report, result: work.result, resultAt: work.resultAt, attempt: work.attempt, sessionId: work.sourceSessionId ?? work.sessionId }) } : {}) }
   }
   function view(target, actor) {
     if (target && !rt.botOf(target) && !rt.roomOf(target)) refuse('Unknown conversation.')
@@ -273,7 +273,7 @@ export function install(rt) {
   }
   rt.mekTodoReviewAdvice = work => {
     const task = all().find(item => item.workId === work.id)
-    return task ? `\n\n[To-do review]\nReturned work belongs to stable to-do ${task.id}, main ${task.rootId}. Use list_todos to read its current revision and report. Accept this child with control_todo accept and concrete verification evidence, or revise with feedback. Only accept the main to-do after all required children were checked. Do not create a new main task or repeat completed external actions.` : undefined
+    return task ? `\n\n[To-do review]\nReturned work belongs to stable to-do ${task.id}, main ${task.rootId}. Use list_todos to read its current revision and report. If a structured report is missing, use read_task and supplement_bot_report with the returned work id and verified evidence from the retained result. Accept this child with control_todo accept and concrete verification evidence; revise only when further work is needed. Only accept the main to-do after all required children were checked. Do not create a new main task or repeat completed external actions.` : undefined
   }
   rt.mekTodoAllowsDelivery = workId => {
     const task = all().find(item => item.workId === workId)

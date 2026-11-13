@@ -4,7 +4,7 @@
 // Turn tracking: which turns were triggered by another Bot, and what they said.
 import { randomUUID } from 'node:crypto'
 import { carrierKeyOf } from '@deepseek-ai/dsh-scope'
-import { HANDOFF_ACK, MESSAGE_INLINE_MAX, REFERENCE_KIND, REPLY_KIND, SOURCE_KIND, STEER_CUT } from './constants.js'
+import { HANDOFF_ACK, LATE_ANSWER, MESSAGE_INLINE_MAX, REFERENCE_KIND, REPLY_KIND, SOURCE_KIND, STEER_CUT } from './constants.js'
 import { cleanText } from './diagnostics.js'
 import { absoluteLinks } from './links.js'
 import { splitRef, textOf } from './text.js'
@@ -41,13 +41,19 @@ export function answerSender(rt, id, source, text, long) {
   const back = rt.roomOf(source.senderRoomId)?.sessions?.[source.senderSessionId]
   const name = rt.botOf(rt.selfOf(id))?.name ?? 'The other Bot'
   const work = rt.closeWork?.(source.exchangeId, name, text)
+  // A reply that arrives after the user gave up the wait is a late answer: it closes
+  // nothing, opens nothing, and says on it that the wait was already over.
+  const late = work === undefined ? rt.abandonedWork?.(source.exchangeId) : undefined
+  const marker = late === undefined ? '' : LATE_ANSWER
+  const body = marker === '' ? (long?.text ?? text) : `${marker}${long?.text ?? text}`
+  const length = long === undefined ? undefined : late === undefined ? long.length : (long.length ?? text.length) + marker.length
   const exchangeId = randomUUID()
   void rt.deliver({
     fromId: rt.selfOf(id),
     toId: source.senderSessionId,
     ...(back ? { sessionId: back } : {}),
-    text: long?.text ?? text,
-    ...(long?.length === undefined ? {} : { files: long.files, length: long.length }),
+    text: body,
+    ...(length === undefined ? {} : { files: long.files, length }),
     role: 'reply',
     replyTo: source.exchangeId,
     exchangeId,
@@ -85,19 +91,30 @@ export function attachReference(queued, source, text) {
 }
 
 // A tool call some models write into their text instead of making it (the XML-like
-// form of their own chat template).
-const WRITTEN_CALL = /<tool_call>\s*<function=|<function=[\w.-]+>\s*<parameter=/
+// form of their own chat template). A reply cut off in the middle of such a call can
+// keep only its closing tags, so those count as one too, or only the first tags of a
+// parameter. Some models write the CJK brackets, so both forms match.
+const TAG_OPEN = '[<＜]'
+const TAG_CLOSE = '[>＞]'
+const TOOL_CALL_TAG = `${TAG_OPEN}tool_call${TAG_CLOSE}`
+const FUNCTION_TAG = `${TAG_OPEN}function=[\\w.-]+${TAG_CLOSE}`
+const PARAMETER_TAG = `${TAG_OPEN}parameter=[\\w.-]+${TAG_CLOSE}`
+const CLOSING_TAG = `${TAG_OPEN}/(?:parameter|function|tool_call)${TAG_CLOSE}`
+const WRITTEN_CALL = new RegExp(`${TOOL_CALL_TAG}\\s*${TAG_OPEN}function=|${FUNCTION_TAG}\\s*${TAG_OPEN}parameter=|${CLOSING_TAG}`)
 export const writesToolCall = text => typeof text === 'string' && WRITTEN_CALL.test(text)
 export const stripWrittenCalls = text => text
-  .replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)/g, '')
-  .replace(/<function=[\w.-]+>[\s\S]*?(?:<\/function>|$)/g, '')
+  .replace(new RegExp(`${TOOL_CALL_TAG}[\\s\\S]*?(?:${TAG_OPEN}/tool_call${TAG_CLOSE}|$)`, 'g'), '')
+  .replace(new RegExp(`${FUNCTION_TAG}[\\s\\S]*?(?:${TAG_OPEN}/function${TAG_CLOSE}|$)`, 'g'), '')
+  .replace(new RegExp(`(?:${CLOSING_TAG}|${PARAMETER_TAG})\\s*`, 'g'), '')
   .trim()
 
 // Under DSH's PTC presentation the model calls only this tool; the program's sub-calls
 // are the tools it really runs.
 const PROGRAM_TOOL = 'run_code'
 // DSH's delegation tools, named by the tool instance: a spawn child and a fork.
-const SUBAGENT_TOOLS = new Set(['subagent', 'subagent_fork'])
+const SUBAGENT_TOOLS = new Set(['subagent', 'subagent_fork', 'subagent_codex'])
+// The DSH Agent and its native children survive disabling and re-enabling this plugin.
+const codexByAgent = new WeakMap()
 // A settled child's closing text, or why it ended without one. A child that did
 // not finish says so: output it left behind can be partial, so the reason it
 // ended is part of its result.
@@ -110,6 +127,11 @@ const subEndText = (data) => {
 
 const RETRY_TEXT = 'Your last reply wrote a tool call as plain text (<tool_call>…), so it did not run and nothing happened. Call the tool through the tool interface now, then reply as you meant to.'
 const RETRY_PROMISE_TEXT = 'Your last reply said you would start working, but you ended the turn without calling any tool, so nothing ran. Call the tools you need and do the work now. If your last reply already was your whole answer, reply [PASS]; it stays posted.'
+// DSH numbers turns from 1. A reload can see that an Agent is running without its turn number.
+const RECOVERED_TURN = -1
+const CUT_OFF_NOTE = "[cut off at the model's output limit; the answer is not complete]"
+const CUT_OFF_EMPTY_NOTE = "[cut off at the model's output limit before it wrote anything]"
+export const cutOffText = text => text === '' ? CUT_OFF_EMPTY_NOTE : `${text}\n\n${CUT_OFF_NOTE}`
 
 // A reply that only promises to start investigating/checking/running tools now without
 // actually calling a tool or handing off with @Name (#469). A verb followed by 过了,
@@ -157,7 +179,7 @@ export function install(rt) {
   // Member turns of a group round the user stopped: what they end with stays out of the group.
   const stoppedRoomTurns = new Set()
   // Running DSH subagents spawned by each Bot Session: parentSessionId → Map<childId, {childId, label?, since}>.
-  /** @type {Map<string, Map<string, {childId:string, label?:string, since:number}>>} */
+  /** @type {Map<string, Map<string, {childId:string, label?:string, since:number, codexParent?:any, stopping?:boolean}>>} */
   const subagentsByParent = new Map()
   /** @type {Map<string, string>} childId → parentSessionId */
   const subagentParent = new Map()
@@ -176,7 +198,7 @@ export function install(rt) {
   }
 
   const subagentLabelFromCall = (entry) => {
-    const call = [...(entry?.calls?.values() ?? [])].findLast(item => item.name === 'subagent')
+    const call = [...(entry?.calls?.values() ?? [])].findLast(item => SUBAGENT_TOOLS.has(item.name))
     if (call === undefined) return undefined
     try {
       const args = JSON.parse(call.args || '{}')
@@ -187,18 +209,31 @@ export function install(rt) {
     }
   }
 
-  const noteSubagentStart = (parentId, childId, label, since = Date.now()) => {
-    if (typeof parentId !== 'string' || parentId === '' || typeof childId !== 'string' || childId === '') return
-    if (stoppedSubagents.has(childId) || (!rt.isBotSession(parentId) && !rt.roomOf(parentId))) return
-    subagentParent.set(childId, parentId)
+  const trackSubagent = (parentId, child) => {
+    subagentParent.set(child.childId, parentId)
     let map = subagentsByParent.get(parentId)
     if (map === undefined) subagentsByParent.set(parentId, map = new Map())
-    const existing = map.get(childId)
-    map.set(childId, {
+    map.set(child.childId, child)
+  }
+
+  const noteSubagentStart = (parentId, childId, label, since = Date.now(), codexParent) => {
+    if (typeof parentId !== 'string' || parentId === '' || typeof childId !== 'string' || childId === '') return
+    if (stoppedSubagents.has(childId) || (!rt.isBotSession(parentId) && !rt.roomOf(parentId))) return
+    const existing = subagentsByParent.get(parentId)?.get(childId)
+    const child = {
       childId,
       label: label || existing?.label || subagentLabelFromCall(live.get(parentId)),
       since: existing?.since ?? since,
-    })
+      codexParent: codexParent ?? existing?.codexParent,
+      stopping: existing?.stopping,
+    }
+    trackSubagent(parentId, child)
+    if (child.codexParent) {
+      let runs = codexByAgent.get(child.codexParent)
+      if (!runs) codexByAgent.set(child.codexParent, runs = new Map())
+      runs.set(childId, child)
+      rt.notifyWorkChanged?.()
+    }
     if (rt.groupOwners.has(parentId)) rt.workRoomTurn?.(parentId, 'subagent')
   }
 
@@ -207,32 +242,60 @@ export function install(rt) {
     const parentId = subagentParent.get(childId)
     if (parentId === undefined) return
     const map = subagentsByParent.get(parentId)
+    const codexParent = map?.get(childId)?.codexParent
+    if (codexParent) {
+      codexByAgent.get(codexParent)?.delete(childId)
+      subagentParent.delete(childId)
+      rt.notifyWorkChanged?.()
+    }
     map?.delete(childId)
     if (map !== undefined && map.size === 0) subagentsByParent.delete(parentId)
   }
 
   const hasSubagents = id => (subagentsByParent.get(id)?.size ?? 0) > 0
+  const activeCodex = id => [...(subagentsByParent.get(id)?.values() ?? [])].findLast(child => child.codexParent)
+  rt.hasRunningCodex = id => activeCodex(id) !== undefined
+
+  rt.stopCodex = (botId, childId) => {
+    const parentSessionId = rt.chatOf(botId)
+    if (rt.chatOwners.get(parentSessionId) !== botId) return false
+    const child = subagentsByParent.get(parentSessionId)?.get(childId)
+    if (!child?.codexParent) return false
+    if (child.stopping) return true
+    const service = ctx.get?.('subagents')
+    if (typeof service?.interrupt !== 'function') throw new Error('DSH cannot stop this Codex subagent right now.')
+    service.interrupt(childId, { kind: 'user', parentSessionId })
+    child.stopping = true
+    rt.notifyWorkChanged?.()
+    return true
+  }
 
   const subagentDoingOf = (id) => {
     const active = [...(subagentsByParent.get(id)?.values() ?? [])].at(-1)
     if (active === undefined) return undefined
-    return { since: active.since, tool: 'subagent', ...(active.label ? { note: active.label.slice(0, 120) } : {}) }
+    return { since: active.since, tool: active.codexParent ? 'subagent_codex' : 'subagent', ...(active.label ? { note: active.label.slice(0, 120) } : {}) }
   }
 
   async function stopSubagents(sessionId) {
     const map = subagentsByParent.get(sessionId)
     const childIds = [...(map?.keys() ?? [])]
     for (const agent of ctx.get?.('agents')?.list?.() ?? []) {
-      if (agent?.session?.header?.parentSession === sessionId && typeof agent.id === 'string' && !childIds.includes(agent.id)) {
+      const header = agent?.session?.header
+      // A fork names its parent too, but it is the user's own Session, not work to stop.
+      if (header?.parentSession === sessionId && header.origin === 'subagent' && typeof agent.id === 'string' && !childIds.includes(agent.id)) {
         childIds.push(agent.id)
       }
     }
     if (childIds.length === 0) return false
     subagentsByParent.delete(sessionId)
+    rt.notifyWorkChanged?.()
     stoppedSubagentParents.add(sessionId)
     for (const childId of childIds) {
+      const parent = map?.get(childId)?.codexParent
+      if (parent) codexByAgent.get(parent)?.delete(childId)
       rememberStopped(stoppedSubagents, childId)
-      await Promise.resolve(ctx.subagents?.interrupt?.(childId, { kind: 'user', parentSessionId: sessionId })).catch(() => {})
+      // Not in the plugin's inject list, where ctx.subagents throws; interrupt can throw too.
+      try { await ctx.get?.('subagents')?.interrupt?.(childId, { kind: 'user', parentSessionId: sessionId }) } catch {}
       const childAgent = ctx.get?.('agents')?.get?.(childId)
       if (childAgent !== undefined) {
         try { childAgent.cancel?.({ kind: 'user' }) } catch {}
@@ -287,6 +350,47 @@ export function install(rt) {
     if (value === undefined) delete next[id]
     else next[id] = value
     activity = next
+  }
+
+  async function adoptLiveWork() {
+    const agents = ctx.get?.('agents')
+    if (typeof agents?.list !== 'function') return
+    await rt.load()
+    const known = id => rt.isBotSession(id) || rt.roomOf(id) !== undefined
+    for (const agent of agents.list()) {
+      const sessionId = agent?.session?.id ?? agent?.id
+      const adopted = [...(codexByAgent.get(agent)?.values() ?? [])]
+      if (adopted.length > 0 && rt.chatOwners.has(sessionId)) {
+        for (const child of adopted) trackSubagent(sessionId, child)
+        rt.notifyWorkChanged?.()
+        // A run could have finished while this plugin's lifecycle listeners were absent.
+        const service = ctx.get?.('subagents')
+        if (typeof service?.waitForChildren === 'function') {
+          void service.waitForChildren(agent).then(() => {
+            for (const child of adopted) noteSubagentEnd(child.childId)
+          }).catch(error => rt.warn('ds-bot: checking restored Codex work failed: %s', error))
+        }
+      }
+      if (agent?.status !== 'running' || typeof sessionId !== 'string') continue
+      const header = agent.session?.header
+      const parentId = header?.parentSession
+      if (header?.origin === 'subagent' && typeof parentId === 'string' && known(parentId)) {
+        noteSubagentStart(parentId, sessionId)
+        continue
+      }
+      if (!known(sessionId)) continue
+      const entry = liveOf(sessionId)
+      if (entry.turn !== undefined) continue
+      const record = rt.takeLiveTurnNote(sessionId)
+      entry.turn = RECOVERED_TURN
+      entry.recovered = record
+      entry.since = record?.since ?? Date.now()
+      if (record?.trigger) entry.info = { kind: SOURCE_KIND, ...record.trigger }
+      // New input belongs to a later turn, even when the old turn had no Bot trigger.
+      entry.opened = true
+      entry.answers = true
+      setActivity(sessionId, 'thinking')
+    }
   }
   // The newest call still running, a program's sub-calls included, is what the Session
   // is doing.
@@ -446,15 +550,20 @@ export function install(rt) {
       const owner = rt.groupOwners.get(id)
       const botId = owner?.botId ?? rt.chatOwners.get(id)
       if (botId === undefined || (owner !== undefined && bots[botId] !== undefined)) continue
-      bots[botId] = { since: entry.since, ...doingOf(entry), ...(owner ? { roomId: owner.roomId } : {}) }
+      const resourceWait = rt.mekResourceWait?.(id)
+      bots[botId] = { since: resourceWait?.since ?? entry.since, ...doingOf(entry), ...(resourceWait ? { resourceWait } : {}), ...(owner ? { roomId: owner.roomId } : {}) }
     }
     for (const [id] of subagentsByParent) {
       const sub = subagentDoingOf(id)
       if (sub === undefined) continue
       const owner = rt.groupOwners.get(id)
       const botId = owner?.botId ?? rt.chatOwners.get(id)
-      if (botId === undefined || bots[botId] !== undefined) continue
-      bots[botId] = { ...sub, ...(owner ? { roomId: owner.roomId } : {}) }
+      if (botId === undefined) continue
+      const codex = owner === undefined ? activeCodex(id) : undefined
+      if (codex) {
+        const local = bots[botId]?.roomId === undefined ? bots[botId] : undefined
+        bots[botId] = { ...(local ?? sub), codex: { childId: codex.childId, since: codex.since, stopping: codex.stopping === true } }
+      } else if (bots[botId] === undefined) bots[botId] = { ...sub, ...(owner ? { roomId: owner.roomId } : {}) }
     }
     for (const job of rt.switchJobs()) {
       // `folder` marks the switch the chat must name: the working folder changed. A
@@ -490,7 +599,10 @@ export function install(rt) {
     }
     for (const [id, entry] of live) {
       const owner = rt.groupOwners.get(id)
-      if (entry.turn !== undefined && owner !== undefined) add(owner.roomId, owner.botId, { since: entry.since, ...doingOf(entry) })
+      if (entry.turn !== undefined && owner !== undefined) {
+        const resourceWait = rt.mekResourceWait?.(id)
+        add(owner.roomId, owner.botId, { since: resourceWait?.since ?? entry.since, ...doingOf(entry), ...(resourceWait ? { resourceWait } : {}) })
+      }
     }
     for (const [id] of subagentsByParent) {
       const owner = rt.groupOwners.get(id)
@@ -519,6 +631,19 @@ export function install(rt) {
   const placeOf = (id) => {
     const room = rt.roomOf(rt.groupOwners.get(id)?.roomId) ?? rt.roomOf(id)
     return room ? `group "${room.name}"` : 'own chat'
+  }
+  rt.noteCutOff = (id, { empty, route, tokens }) => {
+    const facts = [
+      route?.provider && route?.model ? `${route.provider}/${route.model}` : undefined,
+      Number.isFinite(tokens) && tokens > 0 ? `${tokens} tokens in` : undefined,
+    ].filter(Boolean)
+    rt.noteFailure({
+      level: 'warn', source: 'turn', code: 'MAX_TOKENS',
+      text: `${empty ? 'the turn was cut off at the output limit before it wrote anything' : 'the turn was cut off at the output limit, so its answer is not complete'}${facts.length ? ` (${facts.join(', ')})` : ''}`,
+      bot: rt.botOf(rt.selfOf(id))?.name,
+      where: placeOf(id),
+      sessionId: id,
+    })
   }
   const noteTurnFailure = (id, failure) => {
     rt.noteFailure({
@@ -591,13 +716,17 @@ export function install(rt) {
       text: `Your last turn failed${code ? ` (${code})` : ''} and the user has fixed it. Answer the user's last unanswered message.`,
     })
   }
-  ctx.on?.('subagent/start', (info) => {
+  ctx.on?.('subagent/start', function (info) {
     const childId = info?.id
     if (typeof childId !== 'string' || childId === '' || stoppedSubagents.has(childId)) return
-    const parentId = subagentParent.get(childId)
+    const parent = carrierKeyOf(this)
+    const parentId = parent?.session?.id ?? subagentParent.get(childId)
       ?? ctx.get?.('agents')?.get?.(childId)?.session?.header?.parentSession
       ?? [...live.entries()].find(([, entry]) => [...(entry.calls?.values() ?? [])].some(call => call.name === 'subagent'))?.[0]
-    if (parentId !== undefined) noteSubagentStart(parentId, childId, undefined)
+    if (parentId !== undefined) {
+      const codexParent = info.local === false && info.provider === 'codex' && rt.chatOwners.has(parentId) ? parent : undefined
+      noteSubagentStart(parentId, childId, undefined, Date.now(), codexParent)
+    }
   })
   ctx.on?.('subagent/end', (info) => {
     noteSubagentEnd(info?.id)
@@ -652,6 +781,7 @@ export function install(rt) {
         entry.shown = 0
         entry.step = undefined
         entry.info = undefined
+        entry.recovered = undefined
         entry.toolCount = 0
         entry.suppressedSubagent = false
         // A turn turned away before its first step may end without a turn/end.
@@ -883,9 +1013,12 @@ export function install(rt) {
           entry.carry = { info: entry.info, joined: entry.joined ?? [], later: entry.later ?? [], texts: entry.texts.slice(0, cut.texts), shown: entry.shown, answers: entry.answers, toolCount: entry.toolCount ?? 0 }
         }
         const info = entry.info
+        const recovered = entry.recovered
         const joined = entry.joined ?? []
         // What the group already saw of the turn is not posted again.
         const texts = entry.texts.slice(entry.shown)
+        const wroteText = entry.texts.some(text => stripWrittenCalls(text) !== '')
+        const watched = entry.turn !== undefined
         const shown = entry.shown > 0 || (info?.retried === true && promisedOpenings.delete(info.exchangeId))
         const { lastText, lastCalled } = entry
         const toolCount = entry.toolCount ?? 0
@@ -894,6 +1027,7 @@ export function install(rt) {
         const switched = entry.switched === true
         entry.turn = undefined
         entry.info = undefined
+        entry.recovered = undefined
         entry.texts = []
         entry.shown = 0
         entry.step = undefined
@@ -935,6 +1069,13 @@ export function install(rt) {
         }
         const held = rt.groupOwners.has(id) ? rt.takeRoomSteps?.(id) ?? '' : ''
         if (switched) break
+        const cutOff = watched && reason?.kind === 'max-tokens'
+        const recoveredNeedsLog = recovered && texts.length === 0
+          && (reason?.kind === 'completed' || cutOff) && rt.ownsWork?.(rt.selfOf(id), rt.workOf?.(info))
+        if (watched && !recoveredNeedsLog) {
+          rt.noteCutOffTurn?.(id, cutOff && !wroteText && !recovered)
+          if (cutOff) rt.noteCutOff(id, { empty: !wroteText && !recovered, route: session.requestHeader?.()?.config, tokens: rt.sessionTokens?.(session) })
+        }
         const owner = rt.chatOwners.get(id)
         if (failure !== undefined) {
           if (blockBot(id, session, failure) && owner !== undefined && info?.role === 'kickoff') rt.holdKickoffAgain(owner)
@@ -950,7 +1091,7 @@ export function install(rt) {
         const wroteCall = failure === undefined && reason?.kind === 'completed' && lastCalled !== true && writesToolCall(lastText)
         const promisedOnly = !wroteCall && failure === undefined && reason?.kind === 'completed'
           && toolCount === 0 && lastCalled !== true && info?.role === 'room'
-          && promisesWork(lastText) && !rt.callsRoomMember?.(id, info, lastText)
+          && promisesWork(lastText) && !rt.mentionsRoomMember?.(id, info, lastText)
         const retry = (wroteCall || promisedOnly) && info?.retried !== true && !(info?.role === 'room' && stoppedRoomTurns.has(info.exchangeId))
         if (retry) {
           if (promisedOnly) {
@@ -966,7 +1107,8 @@ export function install(rt) {
           }
         }
         const replyText = () => {
-          const reply = (wroteCall ? texts.map(stripWrittenCalls) : texts).join('\n\n').trim()
+          const reply = (wroteCall || cutOff ? texts.map(stripWrittenCalls) : texts).join('\n\n').trim()
+          if (cutOff) return reply === '' && wroteText ? CUT_OFF_NOTE : cutOffText(reply)
           return wroteCall && reply === '' ? 'Tried to run a tool but wrote the call as text, so it did not run.' : reply
         }
         const groupReply = () => rt.withRoomSteps?.(held, replyText()) ?? replyText()
@@ -997,6 +1139,7 @@ export function install(rt) {
           }
           if (rt.mekSuspended?.(work)) return rt.holdWork(work, reply)
           if (rt.waitsWork(work)) return rt.holdWork(work, reply)
+          if (cutOff) rt.mekFailWork?.(work, 'blocked')
           // With what came back, the answer may pass what one message carries.
           const text = rt.answerText(work, reply, name)
           if (text.length <= MESSAGE_INLINE_MAX) return tellSender(id, asker, text)
@@ -1005,7 +1148,12 @@ export function install(rt) {
             .catch(error => rt.warn('ds-bot: answer from %s not sent: %s', name, error))
         }
         // A retried turn answers the same waiter or sender, so this one passes nothing on.
-        if (!retry && rt.mekHandlesGroupTurn?.(id, info)) {
+        if (!retry && recoveredNeedsLog) {
+          // The answer can have been written before the reload. Use the durable log
+          // when this runtime did not see any new text from the original turn.
+          void ctx.sessions.flush(session).then(() => rt.reconcileEnded(id, recovered, event.data))
+            .catch(error => rt.warn('ds-bot: settling the reloaded work of %s failed: %s', id, error))
+        } else if (!retry && rt.mekHandlesGroupTurn?.(id, info)) {
           finish(info, groupReply())
         } else if (!retry && info?.role === 'room') {
           const waiter = roomWaiters.get(info.exchangeId)
@@ -1080,7 +1228,7 @@ export function install(rt) {
   ctx.on('tools/result', (exec, result) => {
     if (!SUBAGENT_TOOLS.has(exec?.name) || result?.isError || typeof result?.value?.subagentId !== 'string') return
     const description = exec.arguments?.description
-    rt.nameSubWork?.(result.value.subagentId, `subagent${typeof description === 'string' && description.trim() !== '' ? ` ${description.trim()}` : ''}`)
+    rt.nameSubWork?.(result.value.subagentId, `${exec.name === 'subagent_codex' ? 'Codex' : 'subagent'}${typeof description === 'string' && description.trim() !== '' ? ` ${description.trim()}` : ''}`)
   })
 
   const markSteerCut = (id) => {
@@ -1129,5 +1277,5 @@ export function install(rt) {
     }, 'ds-bot: prompt rejection reasons')
   }
 
-  Object.assign(rt, { live, liveOf, roomWaiters, roomProgress, roomInbox, activityView, workView, roomWorkView, turnsView, steeredView, callDetail, doingOf, stopRoomTurn, releaseBot, unblockBots, resumeBot, markSteerCut, hasSubagents, stopSubagents })
+  Object.assign(rt, { live, liveOf, roomWaiters, roomProgress, roomInbox, activityView, workView, roomWorkView, turnsView, steeredView, callDetail, doingOf, stopRoomTurn, releaseBot, unblockBots, resumeBot, markSteerCut, hasSubagents, stopSubagents, adoptLiveWork })
 }

@@ -25,6 +25,8 @@ import { BtwCardView } from './btw.js'
 import { partIndexOf, withBtwRows } from './btw-model.js'
 import { layoutOf, thinkingShown } from './themes.js'
 
+import { wechatMessage, WechatAttachments } from './wechat-media.js'
+
 export { clockLabel }
 
 // -------------------------------------------------------------------------
@@ -482,8 +484,9 @@ function HistoryImage({ attachment, sessionId, actions }) {
       : h('span', { className: 'bt-hint' }, t('Loading…'))
 }
 
-function EarlierUser({ row, sessionId, actions }) {
-  const { shown, folded, control, code, codeHead } = useFold(row.text ?? '')
+function EarlierUser({ row, sessionId, actions, clock = false }) {
+  const media = wechatMessage(row.text ?? '')
+  const { shown, folded, control, code, codeHead } = useFold(media.text)
   const body = row.text && shown !== '' ? h(MarkdownText, { text: shown, labels: mdLabels(), variant: 'compact' }) : null
   const area = foldArea(body, code, codeHead, actions)
   return h('div', { className: 'bt-urow' }, h('div', { className: 'bt-ububble', 'data-folded': folded || undefined },
@@ -491,7 +494,9 @@ function EarlierUser({ row, sessionId, actions }) {
     control,
     row.imagePreviews?.length ? h('div', { className: 'bt-history-images' }, row.imagePreviews.map((src, index) => h('img', { key: index, src, alt: t('Image') })))
       : row.imageAttachments?.length && actions?.readImage ? h('div', { className: 'bt-history-images' }, row.imageAttachments.map(attachment => h(HistoryImage, { key: attachment.attachmentId, attachment, sessionId: row.imageSessionId ?? sessionId, actions })))
-        : row.images ? h('span', { className: 'bt-uimages' }, row.images === 1 ? t('1 image') : t('{count} images', { count: row.images })) : null))
+        : row.images ? h('span', { className: 'bt-uimages' }, row.images === 1 ? t('1 image') : t('{count} images', { count: row.images })) : null,
+    h(WechatAttachments, { files: media.files })),
+    clock && Number.isFinite(row.time) ? h('div', { className: 'bt-utime', title: clockLabel(row.time) }, messageClock(row.time)) : null)
 }
 
 // The earlier parts of a Bot's own chat, above its current part as one conversation.
@@ -903,7 +908,9 @@ function toolActivity(name, arg, findBot, self) {
 // call's own description, else the kind of tool and what it works on. `doing` is a work
 // entry, or just a tool name.
 export function workPhrase(doing) {
-  const { tool, said, note, target, switching, folder } = typeof doing === 'string' ? { tool: doing } : doing ?? {}
+  const { tool, said, note, target, switching, folder, resourceWait, codex } = typeof doing === 'string' ? { tool: doing } : doing ?? {}
+  if (resourceWait) return t('Waiting for {holder} to release {directory}', resourceWait)
+  if (codex) return t(codex.stopping ? 'Stopping Codex' : 'Codex is running')
   if (switching) return folder === true ? t('Switching working folder') : t('Moving to a fresh conversation')
   const own = (said || note)?.replace(/[\s.。…]+$/u, '')
   if (own) return own
@@ -1013,9 +1020,7 @@ export function GroupReplies({ sessionId, callId, done, content, roster, actions
     stackReplies(replies).map(({ reply, index, texts, time, duration }) => {
       const bot = roster.byId[reply.botId] ?? { id: reply.botId, name: reply.name, color: reply.color ?? 'gray' }
       if (reply.kind === 'user') {
-        return h('div', { key: `user-${index}`, className: 'bt-urow' },
-          h('div', { className: 'bt-ububble' }, h(MarkdownText, { text: reply.text, labels: mdLabels(), variant: 'compact' })),
-          Number.isFinite(time) ? h('div', { className: 'bt-utime', title: clockLabel(time) }, messageClock(time)) : null)
+        return h(EarlierUser, { key: `user-${index}`, row: { ...reply, time }, sessionId, actions, clock: true })
       }
       if (reply.kind !== undefined) {
         return h(RelayEvent, { key: `${reply.botId ?? reply.kind}-${index}`, reply, bot, sessionId, actions })

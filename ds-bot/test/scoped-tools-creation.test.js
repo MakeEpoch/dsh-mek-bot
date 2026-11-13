@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { createRuntime } from '../index.js'
+import { apply as applyMek } from '../mek.js'
 import { TEAM_TOOLS } from '../src/host/constants.js'
 import { fakeContext } from './fake-ctx.js'
 
@@ -145,7 +146,8 @@ const start = (team = TEAM, services = {}, globals = [], shared = {}) => {
   let route
   const register = ctx.connection.fetch.register
   ctx.connection.fetch.register = (options) => { route = options; return register(options) }
-  rt = createRuntime(ctx, { home })
+  if (shared.native) applyMek(ctx, { home })
+  else rt = createRuntime(ctx, { home })
   const call = async (endpoint, payload) => (await route.fetch(new Request('http://localhost/api/bot', {
     method: 'POST', body: JSON.stringify({ endpoint, payload }),
   }))).json()
@@ -463,4 +465,33 @@ test('a live Bot Session gets its team tools back after a disable and re-enable'
   await second.call('state', {})
   assert.ok(hasShowView(second, 'a'), 'the scoped team tools are back')
   assert.ok(denied(second, 'a'), 'the blocking question tool is denied again')
+})
+
+test('the native reload restores extension tools and retries a temporarily occupied name', async (t) => {
+  const shared = { native: true, scoped: [], restricted: [], liveAgents: new Map(), live: ['a', 'r1', 'plain'] }
+  const first = start(TEAM, {}, [], shared)
+  shared.home = first.home
+  t.after(first.unload)
+  await first.call('state', {})
+  await first.unload()
+  const agent = first.agentOf('a')
+  const register = agent.ctx.tools.register
+  let occupied = true
+  agent.ctx.tools.register = tool => {
+    if (occupied && tool.name === 'control_todo') throw new Error('tool "control_todo" is already registered in this scope')
+    return register(tool)
+  }
+
+  const second = start(TEAM, {}, [], shared)
+  t.after(second.stop)
+  await second.call('state', {})
+  assert.ok(scopedNames(second, 'a').includes('report_bot_task'))
+  assert.ok(!scopedNames(second, 'a').includes('control_todo'))
+  occupied = false
+  await assemble(second, agent)
+  await assemble(second, agent)
+  assert.equal(scopedNames(second, 'a').filter(name => name === 'control_todo').length, 1)
+  assert.equal(scopedNames(second, 'a').filter(name => name === 'report_bot_task').length, 1)
+  assert.deepEqual(scopedNames(second, 'r1'), ['group_relay'])
+  assert.deepEqual(scopedNames(second, 'plain'), [])
 })

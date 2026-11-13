@@ -106,8 +106,8 @@ export const TEAM_HEADER_CSS = `
 .mek-team-nav .bt-row{flex:none;width:auto;max-width:160px;min-height:32px;padding:4px 10px 4px 6px;border-radius:999px}
 .mek-team-nav .bt-row-name{font-size:13px;line-height:18px}
 .mek-team-nav .bt-row-preview,.mek-team-nav .bt-agent-sub{display:none}
-.mek-team-nav .bt-row[aria-current=page] .bt-pill-go{width:14px;margin-left:0;opacity:1;filter:none;transform:none}
-.mek-team-nav .bt-row[aria-expanded=true] .bt-pill-go svg{transform:rotate(180deg)}
+.mek-nav-avatar{position:relative;display:inline-flex;flex:none;align-items:center;justify-content:center}
+.mek-nav-avatar>.mek-nav-unread{position:absolute;top:-1px;right:-1px;box-shadow:0 0 0 2px var(--bt-main)}
 .mek-team-nav .bt-row[aria-expanded=true]{box-shadow:inset 0 0 0 1px var(--bt-line-2)}
 .mek-team-nav .bt-read-only{position:absolute;top:40px;left:8px;right:8px;z-index:1}
 .mek-team-tools{grid-column:3;position:relative;display:flex;justify-content:flex-end;gap:6px}

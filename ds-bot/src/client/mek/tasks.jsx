@@ -5,6 +5,7 @@ import { SecretCard } from '../secret-card.js'
 import { ApprovalCard } from '../member-status.js'
 import { Artifacts } from './artifacts.jsx'
 import { ChevronRightIcon } from '../icons.js'
+import { isEnded } from './task-views.js'
 
 const label = (en, zh) => language().startsWith('zh') ? zh : en
 const states = {
@@ -12,11 +13,35 @@ const states = {
   waiting_secret: ['Waiting for a secure credential', '等待安全凭据'], waiting_decision: ['Waiting for the owner', '等待负责人决策'], review: ['Awaiting review', '待验收'],
   needs_report: ['Report required', '待补报告'], needs_user: ['Waiting for you', '等待用户决定'],
   waiting_approval: ['Waiting for approval', '等待授权'], unknown: ['Outcome unknown', '结果待核对'],
-  completed: ['Accepted', '已验收'], cancelled: ['Cancelled', '已取消'], failed: ['Needs attention', '需要处理'],
+  completed: ['Accepted', '已验收'], cancelled: ['Cancelled', '已取消'], archived: ['Archived', '已归档'], failed: ['Needs attention', '需要处理'],
   blocked: ['Blocked', '遇到阻塞'], superseded: ['Revised', '已安排修正'],
+  abandoned: ['Wait given up', '已放弃等待'],
   waiting_browser: ['Waiting for browser control', '等待浏览器交接'],
+  needs_start: ['Needs an assignment', '未安排执行'],
 }
 export const taskStatus = value => label(...(states[value] ?? [value, value]))
+// Why a task cannot be closed right now. The host derives these from durable work,
+// so the card and finish_bot_task agree; the short id is what the owner needs to act.
+const blockerLabel = item => {
+  const id = String(item.id ?? '').slice(0, 8)
+  const waited = item.waitedMinutes === undefined ? '' : ` ${item.waitedMinutes} min`
+  const stalled = item.stalled ? label(' (stalled)', '（长时间无进展）') : ''
+  return ({
+    missing_report: label(`Report missing for ${id}`, `待补报告 ${id}`),
+    unaccepted: label(`Result awaits acceptance ${id}`, `待接受 ${id}`),
+    waiting_browser: label(`Waiting for browser control${waited} ${id}: the target page is unconfirmed; the owner can close this wait`, `等待浏览器交接${waited} ${id}：目标页面未确认，负责人可手动收口`),
+    waiting_decision: label(`Waiting for a decision${waited} ${id}`, `等待决策${waited} ${id}`),
+    waiting_secret: label(`Waiting for a secure credential${waited} ${id}`, `等待安全凭据${waited} ${id}`),
+    waiting_approval: label(`Waiting for approval${waited} ${id}`, `等待授权${waited} ${id}`),
+    running: label(`Running${stalled} ${id}`, `执行中${stalled} ${id}`),
+    queued: label(`Queued to start ${id}`, `排队待启动 ${id}`),
+    blocked: label(`Blocked by work ${id}`, `被 ${id} 阻塞`),
+    failed: label(`Failed work ${id}`, `失败任务 ${id}`),
+    unknown: label(`Outcome unknown for ${id}`, `结果待核对 ${id}`),
+    open_decision: label(`Question still open ${id}`, `仍有未答问题 ${id}`),
+    uncertain_delivery: label(`Delivery not confirmed ${id}`, `投递待确认 ${id}`),
+  })[item.kind] ?? `${item.kind} ${id}`
+}
 const foldsKey = 'mek-bot:task-list-folds'
 const savedFolds = () => {
   try {
@@ -38,8 +63,52 @@ export function TaskAttention({ team, sessionId }) {
   </section>
 }
 
+export const reviewLabel = action => ({
+  report: label('Add report', '补报告'), accept: label('Accept', '验收'), retry: label('Resolve blocker', '处理阻塞'), archive: label('Archive task', '归档任务'),
+}[action])
+
+export function TaskReviewForm({ action, initialSummary = '', initialEvidence = '', criteria = [], submit, close }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const save = async event => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    setBusy(true); setError('')
+    try {
+      const payload = action === 'retry' ? { feedback: data.get('feedback') } : action === 'archive' ? { summary: data.get('summary') } : {
+        summary: data.get('summary'), evidence: data.get('evidence'),
+        checks: criteria.map((criterion, i) => ({ criterion, evidence: data.get(`criterion-${i}`), passed: true })),
+      }
+      await submit(payload)
+      close()
+    } catch (failure) { setError(failure.message) }
+    finally { setBusy(false) }
+  }
+  return <form className="mek-task-review" onSubmit={save} aria-label={reviewLabel(action)}>
+    {action === 'archive' ? <label>{label('Reason for archiving', '归档原因')}<textarea name="summary" required rows={3} /></label> : action === 'retry' ? <>
+      <p>{label('Retry this assignment after the blocker has been addressed.', '解决阻塞后，只重试这一项。')}</p>
+      <label>{label('What changed and what still needs checking', '解阻情况和剩余验证')}<textarea name="feedback" required rows={3} /></label>
+    </> : <>
+      <label>{label('Outcome', '结果摘要')}<textarea name="summary" required rows={3} defaultValue={initialSummary} /></label>
+      <label>{label('Reviewed evidence', '已核对的证据')}<textarea name="evidence" required rows={2} defaultValue={initialEvidence} /></label>
+      {criteria.map((criterion, i) => <label key={i}>{criterion}<textarea name={`criterion-${i}`} required rows={2} /></label>)}
+      <label className="mek-task-review-check"><input type="checkbox" required />{label('I checked the outcome and evidence', '我已核对结果和证据')}</label>
+    </>}
+    {error && <p role="alert">{error}</p>}
+    <div className="mek-todo-actions"><button type="submit" disabled={busy}>{action === 'retry' ? label('Retry assignment', '重试此项') : reviewLabel(action)}</button><button type="button" disabled={busy} onClick={close}>{label('Back', '返回')}</button></div>
+  </form>
+}
+
 export function TaskCard({ task, roster, team, ctx, compact = false, onChanged }) {
   const [busy, setBusy] = useState(false)
+  const [review, setReview] = useState(null)
+  const closed = isEnded(task)
+  const openReview = (action, work) => setReview({ action, work, updatedAt: task.updatedAt })
+  const submit = async values => {
+    const { action, work, updatedAt } = review
+    await call('task-review', { ...values, action, taskId: task.id, updatedAt, workId: work?.id, resultAt: work?.resultAt })
+    await team.refresh(); onChanged?.(task.id)
+  }
   const cancel = async taskId => {
     setBusy(true)
     try { await call('task-cancel', { taskId }); await team.refresh(); onChanged?.(taskId) }
@@ -49,17 +118,28 @@ export function TaskCard({ task, roster, team, ctx, compact = false, onChanged }
   return <details className="mek-task" data-task-state={task.status}>
       <summary><span className={compact ? "mek-task-title" : undefined}>{compact ? task.title ?? task.summary : label('Team task', '团队任务')}</span><span>{taskStatus(task.status)}</span>{!compact && <span className="mek-task-preview">{task.title ?? task.summary}</span>}</summary>
       <div className="mek-task-body">
-        {task.status === 'needs_report' && <p role="status">{label('The result has returned. The owner must request a structured report and verification evidence before accepting it. Missing a report alone does not require cancellation.', '结果已返回，负责人需请求执行者补充结构化报告和验证证据，再进行验收；无需仅因缺报告取消任务。')}</p>}
+        {task.archiveReason && <p>{label('Reason for archiving: ', '归档原因：')}{task.archiveReason}</p>}
+        {(task.blockers ?? []).filter(item => item.kind !== 'criteria').map(item => <p key={`${item.kind}:${item.id}`} className="mek-task-blocker" data-kind={item.kind} role="status">{blockerLabel(item)}</p>)}
+        {task.status === 'needs_report' && <p role="status">{label('Use the returned result and evidence to add a report.', '根据已返回的结果和证据补报告。')}</p>}
         {task.status === 'review' && <p role="status">{label('The results are ready for the owner to review and accept. The task is not still executing.', '结果已返回，等待负责人检查证据并验收。')}</p>}
         {(task.work ?? []).filter(item => item.status !== 'superseded').map(item => <div key={item.id} className="mek-task-step">
           <strong>{item.name}</strong><span>{taskStatus(item.status)}</span>
-          {item.report && <p>{item.report.summary}<br />{item.report.evidence}</p>}
-          {!item.report && item.result && <p>{item.result}</p>}
-          {item.report?.artifacts?.length > 0 && <Artifacts values={item.report.artifacts} sessionId={item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to} ctx={ctx} />}
+          {item.status === 'abandoned' && item.result && <p>{item.result}</p>}
+          {item.lateResultAt && <p><strong>{label('Late result', '迟到结果')}</strong><br />{item.lateResult}</p>}
+          {item.report && (item.status !== 'abandoned' || item.lateResultAt) && <p>{item.report.summary}<br />{item.report.evidence}</p>}
+          {item.status !== 'abandoned' && !item.report && item.result && <p>{item.result}</p>}
+          {item.report?.artifacts?.length > 0 && (item.status !== 'abandoned' || item.lateResultAt) && <Artifacts values={item.report.artifacts} sessionId={item.report.sourceSessionId ?? item.sourceSessionId ?? item.sessionId ?? roster.byId[item.to]?.sessionId ?? item.to} ctx={ctx} />}
+          {!closed && !review && item.status === 'needs_report' && item.resultAt && item.result?.trim() && <button type="button" onClick={() => openReview('report', item)}>{reviewLabel('report')}</button>}
+          {!closed && !review && ['blocked', 'failed'].includes(item.status) && !task.work?.some(parent => parent.id === item.groupRoot && parent.id !== item.id && parent.resultAt) && <button type="button" onClick={() => openReview('retry', item)}>{reviewLabel('retry')}</button>}
         </div>)}
         {(task.decisions ?? []).filter(item => item.status === 'open').map(item => <p key={item.id}>{label('Question being handled by the owner: ', '负责人正在处理的问题：')}{item.question}</p>)}
         {task.deliveries?.some(item => item.status === 'uncertain') && <p role="status">{label('A delivery is being reconciled. The task has not been repeated.', '消息送达情况待核对，未重复执行任务。')}</p>}
-        {!['completed', 'cancelled'].includes(task.status) && <button type="button" disabled={busy} onClick={() => cancel(task.id)}>{label('Cancel task', '取消任务')}</button>}
+        {review && !closed && <TaskReviewForm key={`${review.action}:${review.work?.id ?? task.id}`} action={review.action} initialSummary={review.action === 'report' ? review.work.report?.summary ?? review.work.result : ''} initialEvidence={review.action === 'report' ? review.work.report?.evidence : ''} criteria={review.action === 'accept' ? task.criteria : undefined} submit={submit} close={() => setReview(null)} />}
+        {!closed && !review && <div className="mek-todo-actions">
+          {task.status === 'review' && <button type="button" onClick={() => openReview('accept')}>{reviewLabel('accept')}</button>}
+          {task.canArchive && <button type="button" disabled={busy} onClick={() => openReview('archive')}>{reviewLabel('archive')}</button>}
+          <button type="button" disabled={busy} onClick={() => cancel(task.id)}>{label('Cancel task', '取消任务')}</button>
+        </div>}
       </div>
     </details>
 }
@@ -82,7 +162,7 @@ export function TaskProgress({ team, sessionId, ctx, all = false }) {
     const timer = setTimeout(async () => {
       setLoading(true); setFailure('')
       try {
-        const value = await call('mek-task-list', { search, ...(['completed','cancelled'].includes(filter) ? { status: filter } : {}), limit: 50 }, controller.signal)
+        const value = await call('mek-task-list', { search, ...(['completed','cancelled','archived'].includes(filter) ? { status: filter } : {}), limit: 50 }, controller.signal)
         if (!controller.signal.aborted) { setHistory(value.tasks); setCursor(value.nextCursor) }
       } catch (error) { if (!controller.signal.aborted) setFailure(error.message) }
       finally { if (!controller.signal.aborted) setLoading(false) }
@@ -93,7 +173,7 @@ export function TaskProgress({ team, sessionId, ctx, all = false }) {
     const generation = query.current
     setLoading(true); setFailure('')
     try {
-      const value = await call('mek-task-list', { before: cursor, search, ...(['completed','cancelled'].includes(filter) ? { status: filter } : {}), limit: 50 })
+      const value = await call('mek-task-list', { before: cursor, search, ...(['completed','cancelled','archived'].includes(filter) ? { status: filter } : {}), limit: 50 })
       if (query.current === generation) { setHistory(previous => [...previous,...value.tasks]); setCursor(value.nextCursor) }
     } catch (error) { if (query.current === generation) setFailure(error.message) }
     finally { if (query.current === generation) setLoading(false) }
@@ -104,7 +184,7 @@ export function TaskProgress({ team, sessionId, ctx, all = false }) {
   const known = all ? [...new Map([...history,...(roster.tasks ?? [])].map(task => [task.id, task])).values()] : (roster.tasks ?? [])
   const planned = new Set((roster.todos ?? []).map(task => task.executionId).filter(Boolean))
   const owned = known.filter(task => !planned.has(task.id) && (all || (room ? roomSessions.has(task.originSessionId) || task.work?.some(item => item.fromRoom === room.id || item.room === room.id) : task.owner === owner)))
-  const tasks = owned.filter(task => !all || (filter === 'all' || (filter === 'open' ? !['completed','cancelled'].includes(task.status) : task.status === filter)) && `${task.title ?? ''} ${task.summary ?? ''} ${roster.byId[task.owner]?.name ?? ''}`.toLowerCase().includes(search.toLowerCase()))
+  const tasks = owned.filter(task => !all || (filter === 'all' || (filter === 'open' ? !isEnded(task) : task.status === filter)) && `${task.title ?? ''} ${task.summary ?? ''} ${roster.byId[task.owner]?.name ?? ''}`.toLowerCase().includes(search.toLowerCase()))
   const foldOwner = room?.id ?? owner
   const expanded = all || folds[foldOwner] !== true
   const toggleTasks = () => setFolds(previous => {
@@ -115,7 +195,7 @@ export function TaskProgress({ team, sessionId, ctx, all = false }) {
   return <section className={`mek-tasks${all ? ' mek-task-ledger' : ''}`} aria-label={label('Team tasks', '团队任务')}>
     {!all && !owned.length && <p className="mek-task-empty">{label('No team tasks in this conversation.', '当前会话暂无团队任务。')}</p>}
     {!all && tasks.length > 0 && <button type="button" className="mek-task-toggle" aria-expanded={expanded} aria-label={expanded ? label('Collapse tasks', '收起任务') : label('Expand tasks', '展开任务')} onClick={toggleTasks}><span>{label('Team tasks', '团队任务')} · {tasks.length}</span><span>{expanded ? label('Collapse', '收起') : label('Expand', '展开')}</span></button>}
-    {all && <div className="mek-form-row"><input aria-label={label('Search tasks', '搜索任务')} placeholder={label('Search tasks', '搜索任务')} value={search} onChange={event => setSearch(event.target.value)} /><select aria-label={label('Task status', '任务状态')} value={filter} onChange={event => setFilter(event.target.value)}>{[['open','Open tasks','未完成'],['completed','Accepted','已验收'],['cancelled','Cancelled','已取消'],['all','All tasks','全部任务']].map(([key,en,zh]) => <option key={key} value={key}>{label(en,zh)}</option>)}</select></div>}
+    {all && <div className="mek-form-row"><input aria-label={label('Search tasks', '搜索任务')} placeholder={label('Search tasks', '搜索任务')} value={search} onChange={event => setSearch(event.target.value)} /><select aria-label={label('Task status', '任务状态')} value={filter} onChange={event => setFilter(event.target.value)}>{[['open','Open tasks','未完成'],['completed','Accepted','已验收'],['cancelled','Cancelled','已取消'],['archived','Archived','已归档'],['all','All tasks','全部任务']].map(([key,en,zh]) => <option key={key} value={key}>{label(en,zh)}</option>)}</select></div>}
     {all && !tasks.length && <p>{label('No matching tasks.', '没有符合条件的任务。')}</p>}
     {expanded && tasks.slice(0, all ? tasks.length : limit).map(task => <TaskCard key={task.id} task={task} roster={roster} team={team} ctx={ctx} />)}
     {!all && expanded && tasks.length > limit && <div className="mek-task-footer"><button type="button" className="mek-task-more" onClick={() => setLimit(value => value + 8)}><span>{label('Show more tasks', '显示更多任务')}</span><span className="mek-task-more-count">{tasks.length - limit}</span><ChevronRightIcon /></button></div>}

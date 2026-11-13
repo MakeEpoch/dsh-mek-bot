@@ -16,20 +16,21 @@ export const GROUP_REF = { type: 'string', required: true, description: 'Exact g
 const BLOCKING_QUESTION_TOOL = 'ask_user_question'
 // DS Bot has its own group goals; DSH's session goal still does not survive conversation parts.
 const GOAL_TOOLS = ['create_goal', 'update_goal', 'get_goal']
+const CODEX_TOOL = 'subagent_codex'
 // DSH's delegation tools start child agents the user cannot watch or stop, and they
 // end with the conversation part that started them; Bots hand work to other Bots.
-const DELEGATION_TOOLS = ['subagent', 'subagent_fork', 'subagent_codex', 'subagent_claude_code', 'list_subagent_models', 'send_message', 'interrupt_agent', 'list_agents', 'workflow', 'ralph']
+const DELEGATION_TOOLS = ['subagent', 'subagent_fork', 'subagent_claude_code', 'list_subagent_models', 'send_message', 'interrupt_agent', 'list_agents', 'workflow', 'ralph']
 // restrict() refuses a whole list when one name is registered in the Agent's own
 // scope, so each group is masked on its own.
 const HIDDEN_TOOL_GROUPS = [[BLOCKING_QUESTION_TOOL, ...GOAL_TOOLS], DELEGATION_TOOLS]
-const HIDDEN_TOOLS = HIDDEN_TOOL_GROUPS.flat()
+const HIDDEN_TOOLS = [...HIDDEN_TOOL_GROUPS.flat(), CODEX_TOOL]
 // The guidance DSH writes into the prompt for the hidden tools.
 const HIDDEN_SECTIONS = new Set([...HIDDEN_TOOLS.map(name => `tool:${name}`), 'tool:goal'])
 const GOAL_REFUSAL = 'Bot chats do not run /goal. To give a group a goal, use Set a goal in its + menu.'
-// DSH 0.2.2's schedule tools can deliver to a new Session, which is outside the team and
-// has no Bot; a Bot's tasks deliver to its own chat, which DS Bot moves on with each part.
+// Execution can use a DSH-created Session without transferring team management
+// ownership. schedules.js keeps that ownership independently of the target.
 const SCHEDULE_TARGET_TOOLS = ['schedule_create', 'schedule_edit']
-const SCHEDULE_TARGET_REFUSAL = 'A Bot’s scheduled tasks run in its own chat. Use target "this_session".'
+const SCHEDULE_TARGET_REFUSAL = 'Choose this_session, new_once or new for the scheduled task delivery target.'
 const DELEGATION_REFUSAL = 'Bots do not start subagents or workflows. Do the work yourself, or hand it to another Bot with message_bot.'
 const MODE_PARAM = {
   type: 'string',
@@ -244,9 +245,13 @@ export function install(rt) {
       const send = async () => {
         const toUser = args.reply_to === 'user'
         const work = toUser ? undefined : works[0]
-        const rootId = rt.mekRootForDelegation?.(sender.id, work, exec.agent?.id, { taskId: args.task_id, title: args.task_title, instruction: text.trim() })
         const chat = rt.chatOf(target.id)
         const agent = await rt.resolveAgent(chat)
+        const rootId = rt.mekRootForDelegation?.(sender.id, work, exec.agent?.id, { taskId: args.task_id, title: args.task_title, instruction: text.trim() })
+        const duplicate = () => rootId && rt.mekDuplicateDispatch?.({ rootId, from: sender.id, to: target.id, parent: work, instruction: text })
+        const already = id => `Already assigned as ${id} under task ${rootId}. Read its status or revise that assignment if more work is needed.`
+        const seen = duplicate()
+        if (seen) return already(seen)
         const status = rt.statusOf(target.id)
         // A request it has not read yet, sent for the same work, takes this one in, so
         // messages to a Bot that cannot read them do not pile up.
@@ -257,13 +262,20 @@ export function install(rt) {
         // Nothing went out, so a named request must not take this as a delivered
         // receipt: admitRequest drops the pending record instead, and a retry can send.
         if (long === undefined) { if (request !== undefined) request.unsent = true; return tooLong(text) }
+        const sentMeanwhile = duplicate()
+        if (sentMeanwhile) return already(sentMeanwhile)
         const joins = before !== undefined && agent.inbox?.remove?.(earlier.message.id) === true
-        if (before !== undefined && !joins) long = await rt.attachLong(text, `Message from ${sender.name}.txt`) ?? long
+        if (before !== undefined && !joins) {
+          long = await rt.attachLong(text, `Message from ${sender.name}.txt`) ?? long
+          const prior = duplicate()
+          if (prior) return already(prior)
+        }
         const working = rt.live.get(chat)?.turn !== undefined
         const steer = (args.when !== 'queue' && !toUser) || (joins && earlier.steered)
         const exchangeId = joins ? earlier.message.source.exchangeId : randomUUID()
         if (joins) rt.forgetDelivery?.(exchangeId)
         else if (!toUser) rt.openWork(exchangeId, { from: sender.id, to: target.id, parent: work, ...(rootId ? { rootId } : {}) })
+        if (rootId) rt.mekRememberDispatch?.(exchangeId, text)
         try {
           await rt.deliver({ fromId: sender.id, toId: target.id, text: long.text, files: [...long.files, ...(joins ? before.files : [])], length: long.length, role: 'request', steer, exchangeId, ...(joins ? { merged: true } : {}), ...(toUser ? { audience: 'user' } : {}) })
         } catch (error) {
@@ -601,11 +613,15 @@ export function install(rt) {
 
   rt.teamTools.push(defineTool({
     name: 'post_to_group',
-    description: 'Post a message into a group chat as yourself. A Main Bot may post into any group, any other Bot into a group it is in. A Main Bot\'s or the group admin\'s post starts a round: members reply in the group, where the user reads them. Another member\'s post calls only the members it names with "@Name"; without one it is only written into the group.',
+    description: rt.config.coordinateTasks ? 'Post an announcement in a group. Set report_back: true only to explicitly assign work and collect its report. A Main Bot may post into any group, and other Bots may post into groups they belong to.' : 'Post a message into a group chat as yourself. A Main Bot may post into any group, any other Bot into a group it is in. A Main Bot\'s or the group admin\'s post starts a round: members reply in the group, where the user reads them. Another member\'s post calls only the members it names with "@Name"; without one it is only written into the group.',
     parameters: {
       group: GROUP_REF,
-      message: { type: 'string', required: true, description: 'What to say; write "@Name" to choose who answers, and a name without "@" to only mention a member' },
-      report_back: { type: 'boolean', description: rt.config.coordinateTasks ? 'Reports always come back to the task owner in this integration.' : 'Also send the members\' replies back to you as a new message when the round ends' },
+      message: { type: 'string', required: true, description: rt.config.coordinateTasks ? 'Announcement or assignment text. With report_back: true, use "@Name" to choose who should receive the assignment.' : 'What to say; write "@Name" to choose who answers, and a name without "@" to only mention a member'  },
+      report_back: { type: 'boolean', description: rt.config.coordinateTasks ? 'True to assign work and return reports. Omit or set false for a group announcement.' : 'Also send the members\' replies back to you as a new message when the round ends' },
+      ...(rt.config.coordinateTasks ? {
+        task_id: { type: 'string', description: 'Exact existing task id when continuing work' },
+        task_title: { type: 'string', description: 'Concise outcome title for a new task' },
+      } : {}),
     },
     output,
     async execute(args, exec) {
@@ -635,21 +651,24 @@ export function install(rt) {
       }
       const long = await rt.attachLong(text, `Post from ${sender.name}.txt`)
       if (long === undefined) return tooLong(text)
+      if (rt.config.coordinateTasks && !reportBack) {
+        await rt.postToRoom(room, sender, long.text, { quiet: true, ...(long.length ? { length: long.length } : {}) }, long.files)
+        return `Posted in "${room.name}" as an announcement. Nobody answers it unless called by the user.`
+      }
       if (member && named.length === 0) {
         await rt.postToRoom(room, sender, long.text, { member: true, quiet: true, mentions, ...(long.length ? { length: long.length } : {}) }, long.files)
         return `Posted in "${room.name}", where the user and its members read it. Nobody answers it: your post only calls the members you name with @Name.`
       }
       // Replies the poster waits for, while it works on what a Bot asked it for, are
       // work handed on for that request (handoffs.js).
-      // Work a Bot posts from inside a tracked task belongs to that task, whether or
-      // not it asked for the replies: its result rises to the original owner.
       const work = worksOf(exec).find(id => rt.ownsWork(self, id))
       const sub = work === undefined && !rt.config.coordinateTasks ? undefined : randomUUID()
       const fromRoom = rt.mekPostGroup ? rt.groupOwners.get(exec.agent?.id)?.roomId : undefined
-      if (sub !== undefined) rt.openWork(sub, { from: self, room: room.id, parent: work, ...(fromRoom ? { fromRoom } : {}) })
+      const rootId = rt.mekRootForDelegation?.(self, work, exec.agent?.id, { taskId: args.task_id, title: args.task_title, instruction: text })
+      const prior = rootId && rt.mekDuplicateDispatch?.({ rootId, from: self, room: room.id, parent: work, instruction: text, mentions })
+      if (prior) return `Already assigned as ${prior} under task ${rootId}. Read its status or revise that assignment if more work is needed.`
+      if (sub !== undefined) rt.openWork(sub, { from: self, room: room.id, parent: work, ...(rootId ? { rootId } : {}), ...(fromRoom ? { fromRoom } : {}) })
       try {
-        // A post is a dispatch only when the poster asked for the replies or is handing
-        // work on inside a task; an ordinary announcement wakes only the members it names.
         // The "@" resolved above travels with it, so a dispatch keeps its named targets.
         if (rt.mekPostGroup && sub) await rt.mekPostGroup(room, sender, text, sub, long.files, { delegated: reportBack || work !== undefined, mentions })
         else await rt.postToRoom(room, sender, long.text, { mentions, ...(reportBack ? { reportBack: true, ...callerRoom(exec) } : {}), ...(member ? { member: true } : {}), ...(sub ? { sub } : {}), ...(long.length ? { length: long.length } : {}) }, long.files)
@@ -782,13 +801,14 @@ export function install(rt) {
   // the live Agents back: a reload lifts their scope while they are still
   // live, and agent/created does not fire for them again, so without the walk
   // their next request would come without the team tools.
-  /** @type {Map<string, {agent: any, relay: boolean, tools: boolean, restricted: boolean, filtered: boolean, disposers: Array<() => void>, unlisted: Set<string>}>} */
+  /** @type {Map<string, {agent: any, relay: boolean, restricted: boolean, filtered: boolean, disposers: Array<() => void>, unlisted: Set<string>, added?: Set<string>, missed?: Set<string>, liftCodexMask?: () => void}>} */
   const scoped = new Map()
+  const allowsCodex = id => rt.config.coordinateTasks === true && rt.isMain(rt.chatOwners.get(id))
   const unscope = (id) => {
     const held = scoped.get(id)
     if (held === undefined) return
     scoped.delete(id)
-    for (const dispose of held.disposers) {
+    for (const dispose of [...held.disposers, ...(held.liftCodexMask ? [held.liftCodexMask] : [])]) {
       try {
         dispose()
       } catch (error) {
@@ -804,13 +824,13 @@ export function install(rt) {
     // A reload lifts the scope of Agents that are still live, and an adopted
     // file can newly own one that already runs: scope each live Agent the team
     // owns before its next request. hideBotUnusedTools does nothing for a
-    // Session that stays unowned, and nothing twice for one already scoped.
+    // Session that stays unowned and only fills missing tools on one already scoped.
     for (const agent of ctx.get?.('agents')?.list?.() ?? []) hideBotUnusedTools(agent)
   }
   ctx.effect(() => () => { for (const id of scoped.keys()) unscope(id) }, 'ds-bot: scoped team tools')
 
   // A wanted Session whose Agent cannot take scoped tools yet is warned about
-  // once; held.tools stays unset, so the next step's check tries again.
+  // once and checked again at the next step.
   const registerless = new WeakSet()
   const shareBotTools = (agent) => {
     if (agent === undefined) return
@@ -825,7 +845,7 @@ export function install(rt) {
       unscope(id)
       held = undefined
     }
-    if (!wanted || held?.tools === true) return
+    if (!wanted) return
     if (typeof agent.ctx?.tools?.register !== 'function') {
       if (!registerless.has(agent)) {
         registerless.add(agent)
@@ -833,30 +853,28 @@ export function install(rt) {
       }
       return
     }
-    const disposers = []
+    held ??= { relay: relayOnly, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
+    const added = held.added ??= new Set()
+    const missed = held.missed ??= new Set()
     const failed = []
-    const registered = []
     for (const def of rt.teamTools) {
-      if (relayOnly && def.name !== 'group_relay') continue
+      if ((relayOnly && def.name !== 'group_relay') || added.has(def.name)) continue
       try {
         const dispose = agent.ctx.tools.register(def)
-        if (typeof dispose === 'function') disposers.push(dispose)
-        registered.push(def.name)
+        if (typeof dispose === 'function') held.disposers.push(dispose)
+        added.add(def.name)
+        held.unlisted.add(def.name)
       } catch (error) {
-        // A tool another plugin already scoped onto this agent stays missing
-        // rather than stopping the team; the rest still land.
-        failed.push(`${def.name}: ${error.message ?? error}`)
+        // The old runtime may still hold this name. Retry at the next assembly.
+        const message = String(error?.message ?? error)
+        if (/already registered/i.test(message) || missed.has(def.name)) continue
+        missed.add(def.name)
+        failed.push(`${def.name}: ${message}`)
       }
     }
-    held ??= { relay: relayOnly, tools: false, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
     held.agent = agent
     held.relay = relayOnly
-    held.tools = true
-    held.disposers.push(...disposers)
     scoped.set(id, held)
-    // A scope made outside creation never reached a collected tool list; the
-    // assemble adds the pending names to the step's list once, then clears them.
-    for (const name of registered) held.unlisted.add(name)
     if (failed.length > 0) rt.warn('ds-bot: team tools not served to %s: %s', id, failed.join('; '))
   }
 
@@ -871,14 +889,18 @@ export function install(rt) {
     if (held.filtered === true || typeof agent.ctx?.on !== 'function') return
     const dispose = agent.ctx.on('system-prompt/assemble', async (_assembly, _context, next) => {
       const assembled = await next()
+      const codexAllowed = allowsCodex(agent.session.id)
       // DSH 0.2.2 adds the tool list after this waterfall (#814), so only an
       // older assembly still carries tools to drop here.
       return {
         ...assembled,
         // DSH 0.2.2's presentation waterfall owns sections, while tools stay in
         // the provider's admitted tool set. Older hosts supplied tools here too.
-        ...(Array.isArray(assembled.tools) ? { tools: assembled.tools.filter(tool => !HIDDEN_TOOLS.includes(tool.name)) } : {}),
-        sections: assembled.sections.filter(section => !HIDDEN_SECTIONS.has(section.name)),
+        ...(Array.isArray(assembled.tools) ? { tools: assembled.tools.filter(tool => (codexAllowed && tool.name === CODEX_TOOL) || !HIDDEN_TOOLS.includes(tool.name)) } : {}),
+        sections: assembled.sections.filter(({ name }) => {
+          if (name === `tool:${CODEX_TOOL}` || name?.startsWith(`tool:${CODEX_TOOL}:`)) return codexAllowed
+          return !HIDDEN_SECTIONS.has(name)
+        }),
       }
     })
     held.filtered = true
@@ -924,28 +946,42 @@ export function install(rt) {
     // the team lifts them like the rest, and the Agent can be scoped again.
     const shadows = rt.shadowShells?.(agent) ?? []
     if (shadows.length > 0) {
-      const held = scoped.get(id) ?? { relay: false, tools: false, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
+      const held = scoped.get(id) ?? { relay: false, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
       held.agent = agent
       held.disposers.push(...shadows)
       scoped.set(id, held)
     }
     if (agent === undefined || !rt.isBotSession(id)) return
-    const held = scoped.get(id) ?? { relay: false, tools: false, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
+    const held = scoped.get(id) ?? { relay: false, restricted: false, filtered: false, disposers: [], unlisted: new Set() }
     held.agent = agent
     scoped.set(id, held)
     filterBotAssembly(agent, held)
-    if (held.restricted === true || typeof agent.ctx?.tools?.restrict !== 'function') return
-    maskHiddenTools(agent, held, new Set(ctx.tools.schemas(agent).map(schema => schema.name)))
+    if (typeof agent.ctx?.tools?.restrict !== 'function') return
+    const codexAllowed = allowsCodex(id)
+    if (codexAllowed && held.liftCodexMask) {
+      held.liftCodexMask()
+      held.liftCodexMask = undefined
+    }
+    const needCodexMask = !codexAllowed && !held.liftCodexMask
+    if (held.restricted === true && !needCodexMask) return
+    const served = new Set(ctx.tools.schemas(agent).map(schema => schema.name))
+    // The optional DSH provider can be enabled after this Agent was created.
+    if (needCodexMask && served.has(CODEX_TOOL)) {
+      try { held.liftCodexMask = agent.ctx.tools.restrict({ deny: [CODEX_TOOL] }) } catch { /* the assembly and guard still apply */ }
+    }
+    if (held.restricted !== true) maskHiddenTools(agent, held, served)
   }
   // A new Bot, part, or group Session gets its Agent before ds-bot records it, so the
   // recording path resolves it again once the session is known as a Bot's; meanwhile
   // the guard refuses the question and delegation tools in any Bot Session, and a
   // goal made there is blocked.
   ctx.tools.guard((exec) => {
-    if (!rt.isBotSession(exec.agent?.id)) return undefined
+    const id = exec.agent?.id
+    if (exec.name === CODEX_TOOL && (rt.isBotSession(id) || rt.roomOf(id) !== undefined)) return allowsCodex(id) ? undefined : DELEGATION_REFUSAL
+    if (!rt.isBotSession(id)) return undefined
     if (exec.name === BLOCKING_QUESTION_TOOL) return `Bots cannot use ${BLOCKING_QUESTION_TOOL}. Ask with ask_user in your own chat, or ask in your reply.`
     const target = exec.arguments?.target
-    if (SCHEDULE_TARGET_TOOLS.includes(exec.name) && target !== undefined && target !== 'this_session') return SCHEDULE_TARGET_REFUSAL
+    if (SCHEDULE_TARGET_TOOLS.includes(exec.name) && target !== undefined && !['this_session', 'new_once', 'new'].includes(target)) return SCHEDULE_TARGET_REFUSAL
     return DELEGATION_TOOLS.includes(exec.name) ? DELEGATION_REFUSAL : undefined
   })
   // Creation waits for this listener, so the Agent's first step already lacks the tool.

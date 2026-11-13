@@ -60,7 +60,7 @@ export function apply(ctx, config = {}) {
   createRuntime(ctx, config)
 }
 
-export function createRuntime(ctx, config = {}) {
+export function createRuntime(ctx, config = {}, installExtensions) {
   const dshHome = folders.dshHomeOf(process.env.DSH_HOME)
   const home = config.home ?? join(dshHome, 'bot')
   const rt = {
@@ -82,5 +82,9 @@ export function createRuntime(ctx, config = {}) {
     if (config.coordinateTasks && (module === goals || module === goalSkills)) continue
     module.install(rt)
   }
+  installExtensions?.(rt)
+  // Loading the roster can scope existing agents before all modules have added their tools.
+  rt.syncScopedTools()
+  void rt.adoptLiveWork().catch(error => rt.warn('ds-bot: adopting the work still running failed: %s', error))
   return rt
 }

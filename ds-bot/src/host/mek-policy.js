@@ -5,9 +5,10 @@ import { realpathSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { clone, optionalText, own, refuse, safeText, teamTool, writable } from './mek-safe.js'
 
-const DONE = new Set(['completed', 'cancelled'])
+const DONE = new Set(['completed', 'cancelled', 'archived'])
 const SAFE_TOOLS = new Set(['ask_user', 'show_view', 'list_tasks', 'read_task', 'name_bot_task', 'list_todos', 'control_todo', 'report_bot_task', 'accept_bot_work', 'finish_bot_task', 'cancel_bot_task', 'release_task_resource', 'list_task_resources'])
-const WRITES = new Set(['exec_command', 'run_command', 'shell', 'bash', 'terminal', 'execute', 'apply_patch', 'write_file', 'edit_file', 'create_file', 'delete_file', 'move_file'])
+const WRITES = new Set(['exec_command', 'run_command', 'shell', 'bash', 'pwsh', 'terminal', 'execute', 'apply_patch', 'write', 'edit', 'write_file', 'edit_file', 'create_file', 'delete_file', 'move_file'])
+const RESOURCE_WAIT_MS = 30_000
 const DEFAULTS = { maxParallel: 4, maxRevisions: 3, maxTokens: null, deadlineAt: null }
 const ROLES = {
   general: 'You are a general-purpose assistant. Choose methods suited to the user task; software development is only one possible activity. Do not impose a coding workflow on non-coding work.',
@@ -44,10 +45,11 @@ export function install(rt) {
   if (configured.maxTokens !== undefined && configured.maxTokens !== null) defaults.maxTokens = integer(configured.maxTokens, 1, 1000000000, 'Token budget')
   const inFlightLeases = new Map()
   const executing = new Map()
+  const activeMeters = new Set()
   const waiters = new Set()
+  const resourceWaits = new Map()
   const stopped = new AbortController()
   const wake = () => { for (const done of [...waiters]) done() }
-  ctx.effect(() => () => { stopped.abort(new Error('The Bot plugin was unloaded.')); wake() }, 'mek-bot: resource waiters')
   const countedUsage = new WeakSet()
   const rootOf = id => rt.mekTaskRoot?.(id) ?? own(state.mekTasks?.roots, id)
   const rootForSession = id => rt.mekTaskForSession?.(id)
@@ -56,6 +58,20 @@ export function install(rt) {
   const taskPolicy = root => data().tasks[root.id] ??= { limits: {}, usage: { input: 0, output: 0, total: 0, calls: 0 }, usageComplete: true }
   const save = () => rt.save({ required: true })
   const noteSave = () => { void save().catch(error => rt.warn('mek-bot: execution policy save failed: %s', error)) }
+  ctx.effect(() => () => {
+    stopped.abort(new Error('The Bot plugin was unloaded.'))
+    wake()
+    if (activeMeters.size === 0 && inFlightLeases.size === 0) return
+    // DSH can finish these operations after this runtime has released its state lock.
+    for (const { root } of activeMeters) taskPolicy(root).usageComplete = false
+    for (const id of inFlightLeases.keys()) {
+      const lease = own(data().leases, id)
+      if (lease === undefined) continue
+      lease.uncertain = true
+      lease.status = 'stale'
+    }
+    return save().catch(error => rt.warn('mek-bot: recording unsettled execution policy state failed: %s', error))
+  }, 'mek-bot: execution policy unload')
   function guard({ root, action, work }) {
     if (!root || action === 'finish') return
     const policy = taskPolicy(root)
@@ -158,7 +174,7 @@ export function install(rt) {
   }
   function neededResources(exec, context) {
     const needed = []
-    if (WRITES.has(exec.name)) {
+    if (WRITES.has(exec.name) || (exec.name === 'str_replace_editor' && exec.arguments?.command !== 'view')) {
       const cwd = rt.sessionFolder?.(exec.agent?.session) ?? rt.workDirOf?.({ botId: context.botId }) ?? rt.teamFolder?.()
       if (cwd) needed.push({ kind: 'workspace', key: cwd })
     }
@@ -181,6 +197,13 @@ export function install(rt) {
     signal.addEventListener('abort', aborted, { once: true })
     if (signal.aborted) aborted()
   })
+  rt.mekResourceWait = sessionId => {
+    for (const waiting of resourceWaits.values()) {
+      if (waiting.sessionId === sessionId && waiting.lease.kind === 'workspace') {
+        return { since: waiting.since, directory: waiting.lease.key, holder: rt.botOf(waiting.lease.botId)?.name ?? waiting.lease.botId }
+      }
+    }
+  }
   ctx.on('session/event', (session, event) => {
     if (event.type === 'job/registered') {
       const ids = executing.get(`${session.id}:${event.data?.toolCall?.callId}`) ?? []
@@ -205,20 +228,48 @@ export function install(rt) {
     const signal = AbortSignal.any([stopped.signal, ...(exec.signal ? [exec.signal] : [])])
     const resources = neededResources(exec, context).map(resource => ({ ...resource, key: resource.kind === 'workspace' ? canonicalPath(resource.key) : resource.key }))
     const owner = leaseOwner(context)
-    while (true) {
-      await writable(rt)
-      signal.throwIfAborted()
-      if (profile(context.botId).denyTools.includes(exec.name)) refuse('This tool is disabled by the Bot role policy.')
-      if (!SAFE_TOOLS.has(exec.name)) guard({ root: rootOf(context.rootId), action: 'execute' })
-      reconcile()
-      const clashes = Object.values(data().leases).filter(lease => ['held', 'stale'].includes(lease.status) && leaseOwner(lease) !== owner
-        && resources.some(resource => resource.kind === lease.kind && (lease.kind === 'workspace' ? overlaps(lease.key, resource.key) : lease.key === resource.key)))
-      if (!clashes.length) break
-      // Only a live operation can notify us safely. Old/explicit holds require an
-      // owner decision, rather than waiting forever or stealing an uncertain lock.
-      const uncertain = clashes.find(lease => lease.uncertain || (!inFlightLeases.has(lease.id) && !runningJobs(lease)))
-      if (uncertain) refuse(`Resource is in use by Bot ${rt.botOf(uncertain.botId)?.name ?? uncertain.botId}, lease ${uncertain.id} (${uncertain.status}). Check and explicitly release the old hold before retrying. Nothing was executed.`)
-      await waitForRelease(signal)
+    const waitKey = Symbol()
+    let waiting
+    let waitLimit
+    let waitTimer
+    let waitSignal = signal
+    try {
+      while (true) {
+        await writable(rt)
+        waitSignal.throwIfAborted()
+        if (profile(context.botId).denyTools.includes(exec.name)) refuse('This tool is disabled by the Bot role policy.')
+        if (!SAFE_TOOLS.has(exec.name)) guard({ root: rootOf(context.rootId), action: 'execute' })
+        if (!resources.length) return next()
+        reconcile()
+        const clashes = Object.values(data().leases).filter(lease => ['held', 'stale'].includes(lease.status) && leaseOwner(lease) !== owner
+          && resources.some(resource => resource.kind === lease.kind && (lease.kind === 'workspace' ? overlaps(lease.key, resource.key) : lease.key === resource.key)))
+        if (!clashes.length) break
+        // An old or uncertain hold requires an owner decision.
+        const uncertain = clashes.find(lease => lease.uncertain || (!inFlightLeases.has(lease.id) && !runningJobs(lease)))
+        if (uncertain) refuse(`Resource is in use by Bot ${rt.botOf(uncertain.botId)?.name ?? uncertain.botId}, lease ${uncertain.id} (${uncertain.status}). Check and explicitly release the old hold before retrying. Nothing was executed.`)
+        if (!waiting) {
+          waitLimit = new AbortController()
+          waitSignal = AbortSignal.any([signal, waitLimit.signal])
+          waitTimer = setTimeout(() => waitLimit.abort(), RESOURCE_WAIT_MS)
+        }
+        const lease = clashes.find(item => item.kind === 'workspace') ?? clashes[0]
+        if (waiting?.lease !== lease) {
+          waiting = { sessionId: context.sessionId, since: waiting?.since ?? now(), lease }
+          resourceWaits.set(waitKey, waiting)
+          rt.notifyWorkChanged?.()
+        }
+        await waitForRelease(waitSignal)
+      }
+    } catch (error) {
+      if (waitLimit?.signal.aborted && !signal.aborted) {
+        const { lease } = waiting
+        const resource = lease.kind === 'workspace' ? `working directory ${lease.key}` : `${lease.kind} resource`
+        refuse(`Waited 30 seconds for ${resource} held by Bot ${rt.botOf(lease.botId)?.name ?? lease.botId}. This tool call did not run. The holder may still be working.`)
+      }
+      throw error
+    } finally {
+      clearTimeout(waitTimer)
+      if (resourceWaits.delete(waitKey)) rt.notifyWorkChanged?.()
     }
     const claimed = []
     const previousIds = new Set(Object.keys(data().leases))
@@ -250,7 +301,7 @@ export function install(rt) {
           if ((!invoked && !previousIds.has(id)) || (!lease.uncertain && !runningJobs(lease) && (lease.scope === 'call' || lease.releasePending))) finishLease(lease)
         }
       }
-      if (claimed.length) {
+      if (claimed.length && !stopped.signal.aborted) {
         if (invoked) await save()
         else noteSave()
       }
@@ -262,6 +313,8 @@ export function install(rt) {
     // The owner still needs one ordinary response after accepting a task.
     if (!(root.status === 'completed' && rt.selfOf(options.sessionId) === root.owner)) guard({ root, action: 'request' })
     return (async function* taskMeter() {
+      const meter = { root }
+      activeMeters.add(meter)
       let usage, sawUsage = false
       try {
         for await (const chunk of next()) {
@@ -272,14 +325,17 @@ export function install(rt) {
           yield chunk
         }
       } finally {
-        const record = taskPolicy(root)
-        if (usage) {
-          const tokens = value => Number.isFinite(value) ? Math.max(0, value) : 0
-          const input = tokens(usage.inputTokens), output = tokens(usage.outputTokens)
-          if (!Number.isFinite(usage.inputTokens) || !Number.isFinite(usage.outputTokens)) record.usageComplete = false
-          record.usage.input += input; record.usage.output += output; record.usage.total += input + output; record.usage.calls += 1
-        } else if (!sawUsage) record.usageComplete = false
-        await save()
+        activeMeters.delete(meter)
+        if (!stopped.signal.aborted) {
+          const record = taskPolicy(root)
+          if (usage) {
+            const tokens = value => Number.isFinite(value) ? Math.max(0, value) : 0
+            const input = tokens(usage.inputTokens), output = tokens(usage.outputTokens)
+            if (!Number.isFinite(usage.inputTokens) || !Number.isFinite(usage.outputTokens)) record.usageComplete = false
+            record.usage.input += input; record.usage.output += output; record.usage.total += input + output; record.usage.calls += 1
+          } else if (!sawUsage) record.usageComplete = false
+          await save()
+        }
       }
     })()
   })
@@ -349,6 +405,6 @@ export function install(rt) {
     const self = rt.selfOf(context?.agent?.id)
     if (!self) return ''
     const role = profile(self)
-    return `## Role and execution policy\n${ROLES[role.mode]}\n${role.instructions}\nDelegation defaults: at most ${defaults.maxParallel} open assignments and ${defaults.maxRevisions} revisions. Respect task-specific limits. When a resource is busy, wait or use an independent resource; never bypass its lease with another tool. Resource leases do not replace approvals. Task token accounting covers tracked Bot model calls, not external service prices; unavailable usage stays unknown.`
+    return `## Role and execution policy\n${ROLES[role.mode]}\n${role.instructions}\nDelegation defaults: at most ${defaults.maxParallel} open assignments and ${defaults.maxRevisions} revisions. Respect task-specific limits. For read-only file queries, use the available DSH read, grep or glob tools. Use an independent resource when needed; never bypass a write lease with another tool. Resource leases do not replace approvals. Task token accounting covers tracked Bot model calls, not external service prices; unavailable usage stays unknown.`
   } }), 'mek-bot: execution policy')
 }

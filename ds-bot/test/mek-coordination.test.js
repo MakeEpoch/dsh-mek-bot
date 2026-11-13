@@ -89,6 +89,39 @@ async function delegate(h) {
   return task(h)
 }
 
+test('giving up a tracked wait keeps the other assignment and records a late result without waking its caller again', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const parent = root.work[0].id
+  await h.tool('b', 'message_bot', { to: 'Tester', message: 'Check the change.' })
+  await h.tool('b', 'message_bot', { to: 'Other chief', message: 'Check the rollout.' })
+  const abandoned = h.agentOf('c').calls[0].source.exchangeId
+  const remaining = h.agentOf('d').calls[0].source.exchangeId
+  h.take('c')
+  h.take('d')
+  h.end('b', 'Waiting for both checks')
+  const before = h.agentOf('b').calls.length
+  assert.ok((await h.call('state')).value.work.waiting.b.waits.some(item => item.id === abandoned))
+  assert.deepEqual(await h.call('abandon-work', { id: abandoned }), { ok: true, value: true })
+  assert.equal((await h.call('abandon-work', { id: abandoned })).error.code, 'bot/stale')
+  const notice = h.agentOf('b').calls.at(-1)
+  assert.equal(notice.source.work, parent)
+  assert.equal(notice.source.abandoned, true)
+  assert.deepEqual(h.rt.state.works[parent].open, [remaining])
+  await assert.rejects(ask(h, 'c', 'Can I do more?'), /gave up waiting/)
+  await h.tool('c', 'report_bot_task', { status: 'completed', summary: 'The old check passed.', evidence: 'Late fixture check.' })
+  h.end('c', 'Late check result')
+  await settled(() => task(h).work.find(item => item.id === abandoned)?.lateResultAt)
+  assert.equal(h.agentOf('b').calls.length, before + 1)
+  const branch = task(h).work.find(item => item.id === abandoned)
+  assert.equal(branch.status, 'abandoned')
+  assert.equal(branch.lateResult, 'Late check result')
+  assert.match(branch.result, /gave up waiting/)
+  assert.equal(h.rt.state.works[abandoned], undefined)
+  h.end('d', 'The rollout check is ready.')
+  await settled(() => h.agentOf('b').calls.some(message => message.source.replyTo === remaining))
+})
+
 test('two questions resume the same work, user answers stay in Chief, review and revision close the loop', async t => {
   const h = await host(t)
   const root = await delegate(h)
@@ -301,7 +334,7 @@ test('group work runs in native group sessions and returns only when the member 
   team.rooms.r = { id: 'r', name: 'Review group', named: true, members: ['a', 'b'], admin: 'b', mode: 'admin', sessions: { b: 'gb' }, segments: {}, log: [], seq: 0, seen: {} }
   const h = await host(t, undefined, team)
   h.begin('a')
-  const posted = await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design', report_back: false })
+  const posted = await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design', report_back: true })
   assert.match(posted, /Delegated in/)
   const root = task(h)
   const group = root.work.find(work => !work.to)
@@ -380,24 +413,56 @@ test('structured evidence and explicit criteria are required for acceptance', as
   await settled(() => h.agentOf('a').calls.length > 0)
   assert.equal(task(h).status, 'needs_report')
   assert.equal(task(h).work[0].status, 'needs_report')
-  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /revise_bot_task/)
-  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /Do not repeat completed external actions or cancel solely/)
+  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /supplement_bot_report/)
+  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /does not dispatch work/)
   h.take('a')
   await assert.rejects(h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Done' }), /structured completed result/)
   const work = task(h).work[0]
-  await assert.rejects(h.tool('c', 'revise_bot_task', { task_id: work.id, feedback: 'Steal this review' }), /Only the delegating/)
-  await h.tool('a', 'revise_bot_task', { task_id: work.id, feedback: 'Return a verified structured report' })
-  h.end('a'); h.take('b')
-  await h.tool('b', 'report_bot_task', { status: 'completed', summary: 'Verified', evidence: 'Regression test passed' })
-  h.end('b', 'Verified')
-  await settled(() => h.agentOf('a').calls.length > 1)
+  const payload = { taskId: root.id, updatedAt: task(h).updatedAt, action: 'report', workId: work.id, resultAt: work.resultAt, summary: 'Verified', evidence: 'Regression test passed' }
+  const calls = h.agentOf('b').calls.length
+  const outbox = structuredClone(h.rt.state.mekTasks.outbox)
+  await assert.rejects(h.tool('c', 'supplement_bot_report', { work_id: work.id, summary: payload.summary, evidence: payload.evidence }), /own or delegated/)
+  assert.match((await h.call('task-review', { ...payload, resultAt: 0 })).error.message, /assignment changed/)
+  assert.equal((await h.call('task-review', payload)).ok, true)
   assert.equal(task(h).status, 'review')
-  assert.equal(task(h).work.find(item => item.previous === work.id).status, 'review')
+  assert.equal(task(h).work.length, 1)
+  assert.equal(task(h).work[0].result, work.result)
+  assert.equal(task(h).work[0].resultAt, work.resultAt)
+  assert.equal(h.agentOf('b').calls.length, calls)
+  assert.deepEqual(h.rt.state.mekTasks.outbox, outbox)
+  assert.equal((await h.call('task-review', payload)).ok, false)
   h.take('a')
   await assert.rejects(h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Done' }), /criterion/)
-  await h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Verified result delivered', checks: [{ criterion: 'Regression checked', evidence: 'Regression test passed', passed: true }] })
+  assert.equal((await h.call('task-review', { action: 'accept', taskId: root.id, updatedAt: task(h).updatedAt, summary: 'Verified result delivered', evidence: 'Reviewed the recorded regression check.', checks: [{ criterion: 'Regression checked', evidence: 'Regression test passed', passed: true }] })).ok, true)
+  assert.equal(task(h).status, 'completed')
   assert.equal(task(h).goal, 'Deliver a verified result')
   assert.equal(task(h).checks.length, 1)
+})
+
+test('archiving a quiet task preserves returned work and rejects active or stale requests', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const archive = updatedAt => h.call('task-review', { taskId: root.id, updatedAt, action: 'archive', summary: 'Superseded by the newer plan.' })
+  assert.match((await archive(task(h).updatedAt)).error.message, /outstanding work/)
+  await h.tool('b', 'report_bot_task', { status: 'completed', summary: 'Prior plan prepared', evidence: 'Three proposed checks recorded' })
+  h.end('b', 'Prior plan prepared')
+  await settled(() => h.agentOf('a').calls.length > 0)
+  h.take('a')
+  assert.match((await archive(task(h).updatedAt)).error.message, /still running/)
+  h.end('a')
+  const before = (await h.snapshot()).mekTasks
+  const callCount = h.agentOf('a').calls.length + h.agentOf('b').calls.length
+  assert.match((await archive(0)).error.message, /task changed/i)
+  const result = await archive(task(h).updatedAt)
+  assert.equal(result.ok, true)
+  assert.equal(result.value.status, 'archived')
+  assert.equal(result.value.archiveReason, 'Superseded by the newer plan.')
+  const after = (await h.snapshot()).mekTasks
+  assert.deepEqual(after.works, before.works)
+  assert.deepEqual(after.outbox, before.outbox)
+  assert.deepEqual(after.decisions, before.decisions)
+  assert.equal(h.agentOf('a').calls.length + h.agentOf('b').calls.length, callCount)
+  assert.equal((await h.call('mek-task-list', { search: root.id, status: 'archived' })).value.tasks[0].id, root.id)
 })
 
 test('returned work remains distinct from active execution, failure and malformed reports', async t => {
@@ -427,7 +492,7 @@ test('returned work remains distinct from active execution, failure and malforme
   await settled(() => h.agentOf('a').calls.length === 2)
   assert.equal(task(h).status, 'blocked', 'an unresolved failure must not look ready for acceptance')
   assert.match(contentOf(h.agentOf('a').calls.at(-1)), new RegExp(returned.id))
-  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /Do not revise an unrelated worker/)
+  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /exact returned worker id/)
 })
 
 test('legacy returned work gets one durable owner reminder without replaying worker actions', async t => {
@@ -444,7 +509,7 @@ test('legacy returned work gets one durable owner reminder without replaying wor
   assert.equal(restored.agentOf('b').calls.length, 0, 'recovery does not re-execute the assignment')
   assert.equal(restored.agentOf('a').calls.length, 1)
   assert.match(contentOf(restored.agentOf('a').calls[0]), /previously returned task/)
-  assert.match(contentOf(restored.agentOf('a').calls[0]), /revise_bot_task/)
+  assert.match(contentOf(restored.agentOf('a').calls[0]), /supplement_bot_report/)
   await restored.rt.mekRecoverTasks()
   assert.equal(restored.agentOf('a').calls.length, 1, 'a recovery tick must not spam the owner')
   const saved = await restored.snapshot()
@@ -489,14 +554,16 @@ const groupTeam = () => {
 test('an administrator group dispatch retains the user goal and nested return chain through revision', async t => {
   const team = groupTeam()
   const goal = 'Review, repair defects, verify again, then prepare the final delivery.'
+  const screenshot = { attachmentId: 'sha256:abcd1234', name: 'fixture.png', mediaType: 'image/png', bytes: 12, width: 1, height: 1 }
   Object.assign(team.rooms.r, { admin: 'a', sessions: { a: 'ga', b: 'gb', c: 'gc' }, seq: 1,
-    log: [{ seq: 1, who: 'User', text: goal }] })
+    log: [{ seq: 1, who: 'User', text: goal, images: [screenshot] }] })
   const h = await host(t, undefined, team)
   h.begin('ga', { content: text(goal), source: { kind: 'bot', role: 'room', roomId: 'r', exchangeId: 'opening' } })
   const dispatch = { to: 'Tester', message: 'Review the patch and arrange any necessary fixes.', request_id: 'first-review' }
   await h.tool('ga', 'message_bot', dispatch)
   await h.tool('ga', 'message_bot', dispatch)
   assert.equal(h.agentOf('gc').calls.length, 1, 'a named retry must not duplicate dispatch')
+  assert.deepEqual(h.agentOf('gc').calls[0].content.filter(block => block.type === 'image').map(block => block.attachment), [screenshot])
   const root = task(h)
   assert.equal(root.goal, goal)
   assert.equal(root.originSessionId, 'ga')
@@ -569,7 +636,7 @@ test('questions from an administrator group dispatch stay with the original grou
 test('a returned group with missing member evidence can be repaired instead of cancelled', async t => {
   const h = await host(t, undefined, groupTeam())
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review existing results' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review existing results', report_back: true })
   h.end('a'); h.take('gb'); h.end('gb', 'Plain-text group result')
   await settled(() => h.agentOf('a').calls.length > 0)
   const root = task(h)
@@ -593,7 +660,7 @@ test('a returned group with missing member evidence can be repaired instead of c
 test('nested group questions, approvals and results use the original owner and native sessions', async t => {
   const h = await host(t, undefined, groupTeam())
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the result' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the result', report_back: true })
   h.end('a'); h.take('gb')
   await h.tool('gb', 'message_bot', { to: 'Tester', message: 'Check the edge case' })
   h.end('gb', 'Checking')
@@ -623,7 +690,7 @@ test('nested group questions, approvals and results use the original owner and n
 test('group revision keeps its root and cancellation stops the group work without stopping a private turn', async t => {
   const h = await host(t, undefined, groupTeam())
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the result' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the result', report_back: true })
   h.end('a'); h.take('gb')
   h.end('gb', 'Initial group review')
   const root = task(h)
@@ -726,7 +793,7 @@ test('uncertain initial delivery retains its work for reconciliation and eventua
 test('tracked group step mentions do not launch an unowned relay', async t => {
   const h = await host(t, undefined, groupTeam())
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the result' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the result', report_back: true })
   h.end('a'); h.take('gb')
   await h.rt.roomStepText('gb', h.rt.live.get('gb').info, '@Tester will review later; I am still working.', true)
   assert.equal(h.agentOf('gc').calls.length, 0)
@@ -738,7 +805,7 @@ test('tracked group step mentions do not launch an unowned relay', async t => {
 test('interrupted group work resumes its same identity once and a second interruption is unknown', async t => {
   const h = await host(t, undefined, groupTeam())
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the result' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the result', report_back: true })
   h.end('a'); h.take('gb')
   const source = structuredClone(h.rt.live.get('gb').info)
   const workId = source.exchangeId
@@ -758,7 +825,7 @@ test('interrupted group work resumes its same identity once and a second interru
 test('deleting a group returns blocked work to its original owner and cancels only that group session', async t => {
   const h = await host(t, undefined, groupTeam())
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the result' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the result', report_back: true })
   h.end('a'); h.take('gb'); h.begin('b')
   await h.rt.deleteRoom('r')
   await settled(() => h.agentOf('a').calls.length > 0)
@@ -799,7 +866,7 @@ test('group concurrency pressure retains partial dispatch and admits remaining m
     if (action === 'delegate' && work?.to && task(h).work.some(item => item.to && ['queued', 'running'].includes(item.status))) throw new Error('Parallel limit reached')
   }
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer @Tester Check the result' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer @Tester Check the result', report_back: true })
   h.end('a')
   assert.ok(h.rt.state.works[task(h).work.find(work => !work.to).id])
   assert.equal(h.agentOf('gb').calls.length, 1)
@@ -865,9 +932,9 @@ test('a nested group dispatch returns to the delegating native group session bef
   team.rooms.s = { id: 's', name: 'Test group', named: true, members: ['b', 'c'], admin: 'c', mode: 'admin', sessions: { b: 'sb', c: 'sc' }, segments: {}, log: [], seq: 0, seen: {} }
   const h = await host(t, undefined, team)
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Check the feature' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Check the feature', report_back: true })
   h.end('a'); h.take('gb')
-  await h.tool('gb', 'post_to_group', { group: 'Test group', message: '@Tester Verify this feature' })
+  await h.tool('gb', 'post_to_group', { group: 'Test group', message: '@Tester Verify this feature', report_back: true })
   h.end('gb', 'Testing'); h.take('sc')
   await h.tool('sc', 'report_bot_task', { status: 'completed', summary: 'Tested', evidence: 'Mock group test passed' })
   h.end('sc', 'Tested')
@@ -881,27 +948,47 @@ test('a nested group dispatch returns to the delegating native group session bef
   assert.equal(h.rt.mekTasksView().length, 1)
 })
 
-// Regression: an ordinary member's post without an @mention wakes no one. The
-// dispatcher used to take its empty member list as "nobody was named, so wake the
-// admin or everyone", and because `coordinateTasks` opens a sub-task for any post the
-// call also answered "Delegated in ..." — so a plain announcement silently started
-// Chief and Tester. A dispatch (report_back, or work handed on inside a task) still
-// reaches its members, which the nested-group test above covers.
-test('an ordinary member\'s group post with no mention dispatches no work', async t => {
+test('ordinary group announcements from members, Main Bot, and admin never open tasks or wake workers', async t => {
   const team = groupTeam()
-  team.rooms.r.admin = 'a'
+  team.rooms.r.admin = 'b'
+  team.rooms.r.sessions = { a: 'ga', b: 'gb', c: 'gc' }
   const h = await host(t, undefined, team)
-  h.take('gb')
-  const posted = await h.tool('gb', 'post_to_group', { group: 'Review group', message: 'Status update: the build is green', report_back: false })
-  assert.match(posted, /Nobody answers it/)
-  assert.doesNotMatch(posted, /Delegated in/)
+  for (const [poster, report_back] of [['a', undefined], ['gb', undefined], ['gc', false]]) {
+    h.begin(poster)
+    const posted = await h.tool(poster, 'post_to_group', { group: 'Review group', message: 'Status update: @all the build is green', ...(report_back === undefined ? {} : { report_back }) })
+    assert.match(posted, /as an announcement/)
+    h.end(poster)
+  }
   await delay(40)
-  assert.equal(h.agentOf('a').calls.length, 0)
-  assert.equal(h.agentOf('gc').calls.length, 0)
-  const roots = h.rt.mekTasksView()
-  assert.equal(roots.length, 0, 'an announcement is not a blocked task')
-  assert.deepEqual([...h.agentOf('a').calls, ...h.agentOf('gc').calls], [])
-  assert.equal(h.agentOf('gb').calls.length, 0, 'the poster receives no failure or review notice')
+  assert.equal(h.rt.mekTasksView().length, 0)
+  assert.deepEqual(['a', 'ga', 'gb', 'gc'].flatMap(id => h.agentOf(id).calls), [])
+  const relay = h.agentOf(h.rt.sessionOfRoom(h.rt.state.rooms.r))
+  assert.equal(relay.calls.filter(message => message.source?.role === 'post' && message.source.quiet === true).length, 3)
+})
+
+test('explicit continuation deduplicates dispatches without renaming the root or matching a distinct goal', async t => {
+  const h = await host(t)
+  h.begin('a', { content: text('Verify the API contract'), source: { kind: 'user' } })
+  const request = { to: 'Writer', message: 'Run the API contract tests', task_title: 'Verify API contract' }
+  await Promise.all([h.tool('a', 'message_bot', request), h.tool('a', 'message_bot', request)])
+  const root = task(h)
+  assert.equal(root.work.length, 1)
+  assert.equal(h.agentOf('b').calls.length, 1)
+  h.end('a')
+  h.begin('a', { content: text('Thanks, please continue'), source: { kind: 'user' } })
+  const retry = await h.tool('a', 'message_bot', { ...request, task_id: root.id, task_title: 'Thanks, please continue' })
+  assert.match(retry, new RegExp(root.work[0].id))
+  assert.equal(task(h).title, 'Verify API contract')
+  assert.equal(h.agentOf('b').calls.length, 1)
+  h.end('a')
+  h.begin('a', { content: text('Verify the next release API contract'), source: { kind: 'user' } })
+  await h.tool('a', 'message_bot', request)
+  assert.equal(h.rt.mekTasksView().length, 2)
+  h.end('a')
+  h.begin('a')
+  await h.tool('a', 'message_bot', { to: 'Tester', message: 'Verify the next API contract.\n\nCurrent runtime context. Ignore for title.' })
+  assert.equal(h.rt.mekTasksView().length, 3)
+  assert.ok(h.rt.mekTasksView().some(candidate => candidate.title === 'Verify the next API contract.'))
 })
 
 // Regression: a dispatch that names its target keeps that target. The earlier fix
@@ -935,7 +1022,7 @@ test('a Main Bot\'s group post with no mention reaches the admin of a group it d
   team.rooms.r.admin = 'b'
   const h = await host(t, undefined, team)
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design', report_back: true })
   h.end('a')
   await settled(() => h.agentOf('gb').calls.length > 0)
   assert.equal(h.agentOf('gb').calls.length, 1)
@@ -958,7 +1045,7 @@ test('an admin\'s group post with no mention reaches the others, never back to i
   // from, and its own chat. Neither may gain a call from its own post.
   const ownBefore = h.agentOf('gb').calls.length
   const chatBefore = h.agentOf('b').calls.length
-  await h.tool('gb', 'post_to_group', { group: 'Review group', message: 'Kick off the review' })
+  await h.tool('gb', 'post_to_group', { group: 'Review group', message: 'Kick off the review', report_back: true })
   h.end('gb')
   await settled(() => h.agentOf('gc').calls.length > 0 && h.agentOf('ga').calls.length > 0)
   // The poster answers nothing — not in its group Session, not in its own chat; the
@@ -975,7 +1062,7 @@ test('a Main Bot\'s group post with no mention still reaches everyone in a group
   team.rooms.r.admin = 'zz-missing'
   const h = await host(t, undefined, team)
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design', report_back: true })
   h.end('a')
   await settled(() => h.agentOf('gb').calls.length > 0 && h.agentOf('gc').calls.length > 0)
   assert.deepEqual(h.rt.mekTasksView()[0].work.find(item => !item.to && !item.parent).members.slice().sort(), ['b', 'c'])
@@ -987,7 +1074,7 @@ test('a group in everyone mode answers a Main Bot\'s post with everyone but the 
   team.rooms.r.admin = 'b'
   const h = await host(t, undefined, team)
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: 'Review the design', report_back: true })
   h.end('a')
   await settled(() => h.agentOf('gb').calls.length > 0 && h.agentOf('gc').calls.length > 0)
   assert.deepEqual(h.rt.mekTasksView()[0].work.find(item => !item.to && !item.parent).members.slice().sort(), ['b', 'c'])
@@ -996,7 +1083,7 @@ test('a group in everyone mode answers a Main Bot\'s post with everyone but the 
 test('removing a group worker blocks its result and cancels its delegated branch', async t => {
   const h = await host(t, undefined, groupTeam())
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Check the feature' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Check the feature', report_back: true })
   h.end('a'); h.take('gb')
   await h.tool('gb', 'message_bot', { to: 'Tester', message: 'Check the test' })
   h.end('gb'); h.take('gc')
@@ -1053,7 +1140,7 @@ test('Main Bot and admin @all posts keep every eligible target, including mixed 
     team.rooms.r.sessions = { a: 'ga', b: 'gb', c: 'gc' }
     const h = await host(t, undefined, team)
     h.begin(poster)
-    await h.tool(poster, 'post_to_group', { group: 'Review group', message })
+    await h.tool(poster, 'post_to_group', { group: 'Review group', message, report_back: true })
     const expected = poster === 'a' ? ['b', 'c'] : ['a', 'c']
     assert.deepEqual(h.rt.mekTasksView()[0].work.filter(work => work.to).map(work => work.to).sort(), expected)
   }
@@ -1067,7 +1154,7 @@ test('a first group assignment creates its member Session and delivers once', as
   h.ctx.sessionController.create = async () => ({ sessionId: `fresh-${++created}` })
   h.rt.ownChatBrief = async () => ''
   h.begin('a')
-  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the design' })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the design', report_back: true })
   assert.equal(created, 1)
   assert.equal(h.rt.state.rooms.r.sessions.b, 'fresh-1')
   assert.equal(h.agentOf('fresh-1').calls.length, 1)
@@ -1162,4 +1249,150 @@ test('accepted steps and the final outcome retain their title and require checke
   assert.equal(task(h).title, 'Reviewed editor entry design')
   assert.equal(task(h).goal, root.goal)
   assert.equal(task(h).status, 'completed', 'correcting a title must not reopen accepted work')
+})
+
+// A waiting browser handoff is the shape that stranded PostFaro/chat work: the
+// browser process stayed open, so recovery treated the handoff as live forever.
+const heldBrowser = async (h, workId, minutes = 0) => {
+  assert.equal(h.rt.mekBrowserHeld('b', { callId: 'call_fixture_browser' }), true)
+  const work = h.rt.state.mekTasks.works[workId]
+  work.browserHold.createdAt = Date.now() - minutes * 60 * 1000
+  return work
+}
+
+test('a waiting browser handoff never reads as running and names its wait on the board', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId, 31)
+  // A fresh save may still say running; only a work item that is queued or running
+  // may produce "running" on the board.
+  h.rt.state.mekTasks.roots[root.id].status = 'running'
+  h.rt.state.mekTasks.roots[root.id].updatedAt = Date.now()
+  const view = task(h)
+  assert.equal(view.status, 'waiting_browser')
+  const blocker = view.blockers.find(item => item.kind === 'waiting_browser')
+  assert.ok(blocker, 'the board must state why the task cannot close')
+  assert.equal(blocker.id, workId)
+  assert.equal(blocker.stale, true)
+  assert.ok(blocker.waitedMinutes >= 31)
+  assert.match(blocker.detail, /close_browser_wait/)
+})
+
+test('the owner closes a browser wait, keeps the result, and only then can finish the task', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId, 30)
+  // What the worker had already reported before asking for control must survive.
+  h.rt.state.mekTasks.works[workId].result = 'Partial finding: the login page renders.'
+  h.rt.state.mekTasks.works[workId].resultAt = Date.now() - 30 * 60 * 1000
+  // The stuck worker must not be able to close its own wait.
+  await assert.rejects(h.tool('b', 'close_browser_wait', { work_id: workId, summary: 'Giving up', evidence: 'Page gone' }), /worker cannot close/)
+  // Neither can an unrelated Bot.
+  await assert.rejects(h.tool('c', 'close_browser_wait', { work_id: workId, summary: 'Giving up', evidence: 'Page gone' }), /task owner or the group administrator/)
+  h.take('a')
+  const closed = await h.tool('a', 'close_browser_wait', { work_id: workId, summary: 'The preview server was gone and no one will take over.', evidence: 'The page never loaded; no browser action was replayed.' })
+  assert.match(closed, /abandoned/)
+  const work = h.rt.state.mekTasks.works[workId]
+  assert.equal(work.status, 'abandoned')
+  assert.equal(work.browserHold.status, 'closed-by-owner')
+  assert.match(work.report.evidence, /never confirmed and no browser action was replayed/)
+  assert.ok(work.result, 'the delivered result must be kept')
+  await h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Closed the handoff and accepted the delivered outcome.' })
+  assert.equal(task(h).status, 'completed')
+})
+
+test('recovery closes a browser handoff whose handle is gone, appending an automatic note', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId)
+  const work = h.rt.state.mekTasks.works[workId]
+  work.result = 'Delivered finding before control was lost.'
+  work.resultAt = Date.now() - 60_000
+  work.report = { status: 'completed', summary: 'Partial delivery', evidence: 'Screenshot saved' }
+  h.rt.mekBrowserView = () => ({ available: true, plugin: 'fixture', openBotIds: [], holds: {} })
+  await h.rt.mekRecoverTasks()
+  const after = h.rt.state.mekTasks.works[workId]
+  assert.equal(after.browserHold.status, 'unavailable')
+  assert.equal(after.status, 'blocked')
+  assert.match(after.result, /Delivered finding before control was lost/, 'the delivered result is kept')
+  assert.match(after.result, /\[System\]/, 'the automatic note is marked as such')
+  assert.equal(after.report.summary, 'Partial delivery', 'an existing report is not overwritten')
+  assert.equal(after.report.automaticClosure.detectedBy, 'system')
+  assert.notEqual(task(h).status, 'completed', 'automatic detection never completes the task')
+  // The owner still decides: the detected absence can be closed with its result kept.
+  h.take('a')
+  await h.tool('a', 'close_browser_wait', { work_id: workId, summary: 'No one will take over.', evidence: 'The page was not observed; no browser action was replayed.' })
+  assert.equal(h.rt.state.mekTasks.works[workId].status, 'abandoned')
+})
+
+test('a missing worker session alone never closes a slow browser wait', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId)
+  // The handle still matches. An idle session missing from the live map is not proof
+  // of loss: a merely slow task must not be turned into a false idle.
+  h.rt.mekBrowserView = () => ({ available: true, plugin: 'fixture', openBotIds: ['b'], holds: { b: { workId } } })
+  h.rt.state.mekTasks.works[workId].sessionId = 'session-not-in-the-live-map'
+  await h.rt.mekRecoverTasks()
+  const work = h.rt.state.mekTasks.works[workId]
+  assert.equal(work.status, 'waiting_browser', 'the wait stays open and needs a human decision')
+  assert.equal(work.browserHold.sessionUnconfirmed, true)
+  assert.equal(task(h).status, 'waiting_browser')
+  assert.equal(task(h).blockers.find(item => item.kind === 'waiting_browser').sessionUnconfirmed, true)
+})
+
+test('finish and accept refusals name the exact record that is still unsettled', async t => {
+  const h = await host(t)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId)
+  h.take('a')
+  await assert.rejects(h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Done' }),
+    new RegExp(`work ${workId} \\(waiting_browser, close_browser_wait closes it\\)`))
+
+  // A returned child that is still unaccepted keeps its delegator from accepting.
+  const nested = await host(t)
+  const parent = await delegate(nested)
+  const parentId = parent.work[0].id
+  const child = 'returned-child-work'
+  Object.assign(nested.rt.state.mekTasks.works[parentId], { status: 'review', result: 'Parent result', resultAt: Date.now(),
+    report: { status: 'completed', summary: 'Parent implemented', evidence: 'Build passed' } })
+  nested.rt.state.mekTasks.works[child] = { id: child, rootId: parent.id, from: 'b', to: 'c', parent: parentId, status: 'review',
+    createdAt: Date.now(), result: 'Child result', resultAt: Date.now(), attempt: 1,
+    report: { status: 'completed', summary: 'Child checked', evidence: 'Ran the check' } }
+  nested.take('a')
+  await assert.rejects(nested.tool('a', 'accept_bot_work', { work_id: parentId, summary: 'Ok', evidence: 'Checked' }),
+    new RegExp(`work ${child} \\(review\\)`))
+})
+
+test('a stalled task reports once to its owner, its group and team activity until the blockers change', async t => {
+  const team = seed()
+  team.rooms.r = { id: 'r', name: 'Review group', named: true, members: ['a', 'b'], admin: 'a', mode: 'admin', sessions: { a: 'ga' }, segments: {}, log: [], seq: 0, seen: {} }
+  const h = await host(t, undefined, team)
+  const root = await delegate(h)
+  const workId = root.work[0].id
+  await heldBrowser(h, workId, 61)
+  // Keep the handoff live: this test is about the stall notice, not about recovery
+  // deciding the handle is gone.
+  h.rt.mekBrowserView = () => ({ available: true, plugin: 'fixture', openBotIds: ['b'], holds: { b: { workId } } })
+  h.rt.state.mekTasks.works[workId].room = 'r'
+  const activities = []
+  h.rt.mekRecordActivity = async input => { activities.push(input); return input }
+  h.rt.mekPolicyView = () => ({ resources: [{ kind: 'workspace', key: '/data/workspace/make-epoch', botId: 'b', name: 'Writer', status: 'stale' }] })
+  await h.rt.mekRecoverTasks()
+  const ownerNotice = contentOf(h.agentOf('a').calls.at(-1))
+  assert.match(ownerNotice, /no closable state/)
+  assert.match(ownerNotice, /close_browser_wait/)
+  assert.match(ownerNotice, /Stale resource leases/)
+  assert.match(ownerNotice, /never released/)
+  assert.equal(activities.length, 1)
+  assert.equal(activities[0].type, 'stall')
+  assert.equal(h.rt.state.mekTasks.roots[root.id].stallNotice.level, 2)
+  assert.ok(h.rt.state.rooms.r.log.some(line => /no closable state/.test(line.text)), 'the group gets its own notice')
+  await h.rt.mekRecoverTasks()
+  assert.equal(activities.length, 1, 'an unchanged stall is not reported again')
 })

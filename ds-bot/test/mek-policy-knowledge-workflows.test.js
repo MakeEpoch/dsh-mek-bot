@@ -103,6 +103,39 @@ test('task usage prevents the next budgeted model call; absent provider usage st
   assert.equal(h.state.mekPolicy.tasks.r.usageComplete, false)
 })
 
+test('unloading the policy preserves live model and tool results and records unsettled accounting', async t => {
+  const h = host(t); policy(h.rt)
+  h.root(); h.turn('b', 'r')
+  const meter = h.ctx.listeners.get('llm/stream').at(-1)
+  const execute = h.ctx.listeners.get('tools/execute').at(-1)
+  const toolStarted = Promise.withResolvers()
+  const releaseTool = Promise.withResolvers()
+  async function* response() {
+    yield { type: 'text', text: 'partial' }
+    yield { type: 'usage', usage: { inputTokens: 6, outputTokens: 5 } }
+  }
+  const stream = meter({ sessionId: 'b' }, response)
+  assert.equal((await stream.next()).value.text, 'partial')
+  const tool = execute(h.exec('b', 'apply_patch'), async () => {
+    toolStarted.resolve()
+    await releaseTool.promise
+    return 'success'
+  })
+  await toolStarted.promise
+  await h.ctx.dispose()
+  const policyState = h.snapshots.at(-1).mekPolicy
+  assert.equal(policyState.tasks.r.usageComplete, false)
+  const [lease] = Object.values(policyState.leases)
+  assert.equal(lease.status, 'stale')
+  assert.equal(lease.uncertain, true)
+  h.rt.save = async () => { throw new Error('The Bot team cannot be saved after this host stopped.') }
+
+  assert.equal((await stream.next()).value.type, 'usage')
+  assert.equal((await stream.next()).done, true)
+  releaseTool.resolve()
+  assert.equal(await tool, 'success')
+})
+
 test('project facts require membership and preserve conflicts, source versions and history', async t => {
   const h = host(t); knowledge(h.rt)
   const project = await h.rt.mekKnowledgeAction('mek-knowledge-project', { name: 'Release', owner: 'a', members: ['b'] })
@@ -272,6 +305,45 @@ test('automatic direct-call leases release after settlement and resume an alread
   await Promise.all([first, second])
   assert.equal(started, 1)
   assert.deepEqual(h.rt.mekPolicyView().resources, [])
+})
+
+test('native file queries bypass the workspace write lease and a writer times out without interrupting its holder', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 })
+  const h = host(t)
+  let updates = 0
+  h.rt.notifyWorkChanged = () => { updates++ }
+  policy(h.rt)
+  const dispatch = h.ctx.listeners.get('tools/execute').at(-1)
+  const ownerStarted = Promise.withResolvers()
+  const finishOwner = Promise.withResolvers()
+  const owner = dispatch(h.exec('a', 'write'), () => {
+    ownerStarted.resolve()
+    return finishOwner.promise
+  })
+  await ownerStarted.promise
+  try {
+    for (const [name, args] of [['read'], ['grep'], ['glob'], ['str_replace_editor', { command: 'view' }]]) {
+      assert.equal(await dispatch(h.exec('b', name, args), async () => 'read'), 'read')
+    }
+    const waiting = dispatch(h.exec('b', 'edit'), async () => assert.fail('timed-out write ran'))
+    const rejection = assert.rejects(waiting, /Waited 30 seconds.*held by Bot a.*did not run/)
+    await new Promise(resolve => setImmediate(resolve))
+    assert.deepEqual(h.rt.mekResourceWait('b'), { since: 1000, directory: '/tmp/mek-test-workspace', holder: 'a' })
+    assert.equal(updates, 1)
+    t.mock.timers.tick(29_000)
+    for (const listener of h.ctx.listeners.get('session/event')) listener({ id: 'c' }, { type: 'job/settled', data: { jobId: 'unrelated' } })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(h.rt.mekResourceWait('b').since, 1000)
+    t.mock.timers.tick(1000)
+    await rejection
+    assert.equal(updates, 2)
+    assert.equal(h.rt.mekResourceWait('b'), undefined)
+    assert.equal(h.rt.mekPolicyView().resources[0].botId, 'a')
+  } finally {
+    finishOwner.resolve('done')
+    await owner
+  }
+  assert.equal(await dispatch(h.exec('b', 'edit'), async () => 'written'), 'written')
 })
 
 test('background jobs retain automatic leases until their settlement event', async t => {

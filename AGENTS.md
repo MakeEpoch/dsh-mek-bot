@@ -10,6 +10,7 @@ This checkout ships **dsh-mek-bot, a native DSH plugin**, not the upstream stand
 - Preserve downstream task ownership, review, navigation restoration, team operations and shared-feed behavior during upstream merges. Classify each upstream capability as reused, adapted, omitted or pending verification; do not equate upstream release notes with fork acceptance.
 - **Every new feature, changed user flow, capability restriction or upstream adaptation must update its applicable documentation in the same change.** Maintain the current feature inventory and upstream differences in the single Chinese `README.md`, synchronize its packaged `ds-bot/README.md` copy, and keep `README.zh.md` files as compatibility links. Record upstream changes and adoption per version in `docs/fork-vs-upstream.md`; update integration/design notes when contracts change and the UI test matrix when visible behavior changes. Remove obsolete descriptions. A feature is not done while its documentation describes the old behavior.
 - UI changes require relevant automated checks plus real-browser evidence under the UI test plan. Upstream merges also require an isolated DSH integration pass. Record the exact tested source/bundle, environment, skipped cases and remaining unknowns. A fixture pass is not a DSH installation or release pass.
+- For the MakeEpoch fork, merge completed changes into local `main` once verification passes or after a successful authorized deployment. Verify that `main` contains the resulting commits. Follow the user's instructions for any push or deployment.
 - For documentation-only changes, check links, commands against source, root/package copy consistency and factual status. Do not rerun model/UI suites unless the documentation work exposes a behavior change that needs validation.
 
 ## What this project is
@@ -54,7 +55,7 @@ A change is done when `npm test`, the `--check` and `npm run lint` pass; CI runs
 
 ## Branches, pull requests and issues
 
-The full workflow is in [CONTRIBUTING.md](CONTRIBUTING.md#how-we-work). The parts that an agent must follow:
+The upstream contribution workflow is in [CONTRIBUTING.md](CONTRIBUTING.md#how-we-work). For MakeEpoch fork integration, follow the local `main` rule above.
 
 - Start work from the latest `dev` on a branch named `fix/<issue>-<name>`, `feat/<issue>-<name>`, `docs/<name>` or `chore/<name>`. Never start a branch name with `dev/`. Open the pull request into `dev`, not `main`; only releases and hotfixes go into `main`.
 - Bring a branch up to date with `git merge dev`. Never rebase a pushed branch and never force-push.

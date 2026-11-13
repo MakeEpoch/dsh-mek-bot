@@ -35,6 +35,7 @@ export function install(rt) {
   const bridge = {
     version: 1,
     supportsInterrupt: true,
+    supportsMedia: true,
     async targets() {
       await rt.load()
       return [
@@ -49,7 +50,7 @@ export function install(rt) {
       const work = rt.workView()[current.id]
       return { busy: current.kind === 'bot' && work !== undefined && work.roomId === undefined }
     },
-    async send(target, { text, images = [], requestId = randomUUID(), mode = 'queue' }) {
+    async send(target, { text, images = [], requestId = randomUUID(), mode = 'queue', beforePrompt }) {
       await ready()
       const current = assertTarget(target)
       const content = [...(text?.trim() ? [{ type: 'text', text }] : []), ...images.map(image => ({ type: 'image', mediaType: image.mediaType, data: image.data, ...(image.name ? { name: image.name } : {}) }))]
@@ -60,7 +61,10 @@ export function install(rt) {
       // Recheck after asynchronous capability preparation: deletion or demotion
       // cannot silently redirect an external user's message to another identity.
       const latest = assertTarget(target)
-      await rt.ctx.sessionController.prompt({ sessionId: latest.sessionId, requestId, mode: 'queue', content }, AbortSignal.timeout(30_000))
+      const cancelDelivery = latest.kind === 'bot' ? beforePrompt?.(latest.sessionId, requestId) : undefined
+      try {
+        await rt.ctx.sessionController.prompt({ sessionId: latest.sessionId, requestId, mode: 'queue', content }, AbortSignal.timeout(30_000))
+      } catch (error) { cancelDelivery?.(); throw error }
       return true
     },
     async stop(target) {

@@ -647,15 +647,16 @@ export function install(rt) {
       return segment.note === undefined ? `${head})` : `${head} Below is the note written at the end of part ${segment.noteFrom}, carried over unchanged.)\n\n${segment.note}`
     }
     const why = segment.fallback === 'overflow' ? 'the part overflowed the model\'s window'
-      : segment.fallback === 'failure' ? 'a request in the previous part kept failing'
-        : 'the model did not write a usable note'
+      : segment.fallback === 'cutoff' ? 'the part kept being cut off at the output limit'
+        : segment.fallback === 'failure' ? 'a request in the previous part kept failing'
+          : 'the model did not write a usable note'
     const head = `(DS Bot put this note together without the model, because ${why}.`
     return segment.note === undefined
       ? `${head} There was no earlier note to carry over. Go by the messages below, and look up anything else.)`
       : `${head} It is the note written at the end of part ${segment.noteFrom}, carried over unchanged; anything newer is in the messages below, and read_own_chat finds the rest.)\n\n${segment.note}`
   }
 
-  function handoffPackage({ room, self = false, segment, lines, number, resume, overflow, failed, bare, folder }) {
+  function handoffPackage({ room, self = false, segment, lines, number, resume, overflow, cutoff, failed, bare, folder }) {
     const where = room === undefined ? 'your own chat with the user'
       : self ? `the group chat "${room.name}"` : `your conversation in the group chat "${room.name}"`
     const lookup = room === undefined
@@ -664,7 +665,8 @@ export function install(rt) {
         : 'read_group_chat shows the group\'s latest messages, and read_own_chat your own chat.'
     const reason = failed !== undefined ? `a request in the previous part kept failing (${failed})`
       : overflow ? 'the previous part overflowed the model\'s window'
-        : folder !== undefined ? `${self ? 'the group\'s' : 'your'} working folder changed to ${folder}` : 'the previous part grew long'
+        : cutoff ? 'the previous part kept being cut off at the output limit'
+          : folder !== undefined ? `${self ? 'the group\'s' : 'your'} working folder changed to ${folder}` : 'the previous part grew long'
     const { recent, earlier, unlisted, complete } = lines
     const omitted = [
       ...(unlisted > 0 ? [`(${unlisted} older messages are not listed.)`] : []),
@@ -730,6 +732,12 @@ export function install(rt) {
   const noteFailures = new Map()
   // Parts the steward is deciding about at the end of a turn.
   const checking = new Set()
+  const cutOffs = new Map()
+  rt.noteCutOffTurn = (sessionId, empty) => {
+    if (empty) cutOffs.set(sessionId, (cutOffs.get(sessionId) ?? 0) + 1)
+    else cutOffs.delete(sessionId)
+  }
+  rt.sessionTokens = tokensOf
 
   const placeOf = (sessionId) => {
     const botId = rt.chatOwners.get(sessionId)
@@ -834,10 +842,10 @@ export function install(rt) {
 
   // `hard`: past the hard line or the window, the part moves on even without a note
   // from the model. `folder`: the part moves on because its working folder changed.
-  function startSwitch(agent, { resume = false, carry = [], info, joined, overflow = false, failed, bare = false, folder = false, hard = overflow || folder } = {}) {
+  function startSwitch(agent, { resume = false, carry = [], info, joined, overflow = false, failed, bare = false, folder = false, cutoff = false, hard = overflow || folder || cutoff } = {}) {
     const place = placeOf(agent.id)
-    if (place === undefined || switches.has(agent.id) || readOnly()) return
-    const job = { ...place, carry: [...carry], info, joined, resume, overflow, failed, bare, folder, hard, since: Date.now() }
+    if (place === undefined || switches.has(agent.id) || rt.hasRunningCodex?.(agent.id) || readOnly()) return
+    const job = { ...place, carry: [...carry], info, joined, resume, overflow, failed, bare, folder, cutoff, hard, since: Date.now() }
     switches.set(agent.id, job)
     void runSwitch(agent, job)
       .catch(error => {
@@ -854,6 +862,7 @@ export function install(rt) {
             await rt.save()
           }
           noteFailures.delete(agent.id)
+          cutOffs.delete(agent.id)
           folderRetry.delete(agent.id)
           // The folder may have changed again while the switch ran.
           void followFolder(job)
@@ -953,7 +962,7 @@ export function install(rt) {
     let written
     let failure
     // The group's own Session only relays; it has no route a note could be written with.
-    if (!job.overflow && job.failed === undefined && !whole && bot !== undefined) {
+    if (!job.overflow && !job.cutoff && job.failed === undefined && !whole && bot !== undefined) {
       try {
         written = await writeNote(agent, AbortSignal.any([signal, AbortSignal.timeout(NOTE_TIMEOUT_MS)]), { folder: job.folder })
       } catch (error) {
@@ -974,7 +983,7 @@ export function install(rt) {
     if (failure !== undefined) rt.warn('ds-bot: handoff note for %s failed past the hard line; moving on with the earlier note: %s', name, failure)
     const previous = parts.at(-2)
     const noted = written !== undefined ? { note: written.note }
-      : { fallback: whole ? 'whole' : job.failed !== undefined ? 'failure' : job.overflow ? 'overflow' : 'failed', ...(previous?.note ? { note: previous.note, noteFrom: previous.noteFrom ?? previous.number } : {}) }
+      : { fallback: whole ? 'whole' : job.failed !== undefined ? 'failure' : job.overflow ? 'overflow' : job.cutoff ? 'cutoff' : 'failed', ...(previous?.note ? { note: previous.note, noteFrom: previous.noteFrom ?? previous.number } : {}) }
     carried ??= await readLines()
     if (signal.aborted) throw signal.reason
     const dir = rt.workDirOf(job)
@@ -1041,7 +1050,7 @@ export function install(rt) {
         folderRetry.set(freshId, Date.now() + FOLDER_RETRY_MS)
         rt.warn('ds-bot: the fresh part of %s did not start in %s; it works in %s', name, intended, cwd)
       }
-      const text = handoffPackage({ room, self: bot === undefined, segment, lines: carried, number: number + 1, resume, overflow: job.overflow, failed: job.failed, bare: job.bare, folder })
+      const text = handoffPackage({ room, self: bot === undefined, segment, lines: carried, number: number + 1, resume, overflow: job.overflow, cutoff: job.cutoff, failed: job.failed, bare: job.bare, folder })
       freshParts.set(freshId, estimateTokens(text))
       fresh.followup(createUserMessage({ content: [{ type: 'text', text }], source: handoffSource(job, resume) }))
       await ctx.sessions.flush(fresh.session)
@@ -1098,7 +1107,9 @@ export function install(rt) {
       freshParts.delete(agent.id)
       partBase.set(agent.id, (tokensOf(agent.session) ?? 0) + fresh)
     }
-    if (!readOnly() && await folderMove(agent, { midTurn: payload.step > 1 }) !== undefined) return switchBeforeStep(agent, payload, { folder: true })
+    // DSH delivers Codex's completion to the exact parent that started it.
+    if (rt.hasRunningCodex?.(agent.id) || payload.messages.some(message => message.source?.kind === 'subagent-settled')) return next()
+    if (!readOnly() && await folderMove(agent, { midTurn: payload.step > 1 }) !== undefined) return switchBeforeStep(agent, payload, next, { folder: true })
     // The group's own Session moves only for its folder, never for its size: its turns
     // are synthesized relay calls, so the steward's lines do not apply to it.
     if (place.botId === undefined) return next()
@@ -1107,11 +1118,12 @@ export function install(rt) {
     if (lines === undefined || tokens === undefined || tokens < lines.hard || !grown(agent.id, tokens, lines) || readOnly()) return next()
     if (await decide(agent, { midTurn: payload.step > 1 }) === 'compact' && await condense(agent, lines, { inTurn: true, signal: payload.signal })) return next()
     if (!await canMakeRoom(agent, payload.messages)) return next()
-    return switchBeforeStep(agent, payload, { hard: true })
+    return switchBeforeStep(agent, payload, next, { hard: true })
   }, { prepend: true })
 
   // `messages` left the inbox for this step, so the switch carries them along.
-  function switchBeforeStep(agent, payload, options) {
+  function switchBeforeStep(agent, payload, next, options) {
+    if (rt.hasRunningCodex?.(agent.id)) return next()
     // A switch may have started while the checks above awaited.
     const running = switches.get(agent.id)
     if (running !== undefined) {
@@ -1211,7 +1223,7 @@ export function install(rt) {
     if (decided !== undefined || payload.signal?.aborted) return decided
     await rt.load()
     const { agent } = payload
-    if (!rt.isBotSession(agent.id) || switches.has(agent.id) || readOnly() || rescued.get(agent.id) === 'bare') return decided
+    if (!rt.isBotSession(agent.id) || switches.has(agent.id) || rt.hasRunningCodex?.(agent.id) || readOnly() || rescued.get(agent.id) === 'bare') return decided
     const entry = rt.liveOf(agent.id)
     entry.switched = true
     // The latest messages carried into a rescued part may be what breaks the request.
@@ -1223,7 +1235,7 @@ export function install(rt) {
     if (payload.failure?.code !== OVERFLOW || payload.signal?.aborted) return next()
     await rt.load()
     const { agent } = payload
-    if (!rt.isBotSession(agent.id) || switches.has(agent.id) || readOnly() || !await canMakeRoom(agent)) return next()
+    if (!rt.isBotSession(agent.id) || switches.has(agent.id) || readOnly() || !await canMakeRoom(agent) || rt.hasRunningCodex?.(agent.id)) return next()
     const entry = rt.liveOf(agent.id)
     entry.switched = true
     startSwitch(agent, { resume: true, info: entry.info, joined: [...(entry.joined ?? [])], overflow: true })
@@ -1234,8 +1246,21 @@ export function install(rt) {
   // the part ends up below the line, and nothing is decided again until it grows
   // past it.
   async function checkContext(agent) {
-    if (switches.has(agent.id) || freshParts.has(agent.id) || checking.has(agent.id) || readOnly()) return
+    if (switches.has(agent.id) || freshParts.has(agent.id) || checking.has(agent.id) || rt.hasRunningCodex?.(agent.id) || readOnly()) return
     if (lastTurnEnd(agent)?.data?.reason?.kind === 'error') return
+    // Two empty cut-offs suggest the effective window is smaller than configured.
+    if ((cutOffs.get(agent.id) ?? 0) >= 2) {
+      checking.add(agent.id)
+      try {
+        if (await canMakeRoom(agent) && agent.status === 'idle' && !rt.hasRunningCodex?.(agent.id) && (cutOffs.get(agent.id) ?? 0) >= 2) {
+          cutOffs.delete(agent.id)
+          startSwitch(agent, { cutoff: true })
+        }
+      } finally {
+        checking.delete(agent.id)
+      }
+      return
+    }
     const lines = await contextLines(agent.session)
     const tokens = tokensOf(agent.session)
     if (lines === undefined || tokens === undefined || tokens < lines.check || !grown(agent.id, tokens, lines)) return

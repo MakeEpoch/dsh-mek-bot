@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { HISTORY_TIMEOUT_MS, MESSAGE_INLINE_MAX, SOURCE_KIND, STEER_CUT } from './constants.js'
-import { answerSender, failureLine, turnFailure } from './turns.js'
+import { answerSender, cutOffText, failureLine, stripWrittenCalls, turnFailure } from './turns.js'
 import { textOf } from './text.js'
 
 // Long enough for DSH to finish opening its workspaces after a start.
@@ -130,7 +130,7 @@ export function install(rt) {
   const persist = () => {
     // Only the host that saves the team runs its work again.
     if (stopped || rt.readOnly() !== undefined) return
-    latest = JSON.stringify({ turns, queued })
+    latest = JSON.stringify({ turns: { ...interrupted.turns, ...turns }, queued })
     // One write waits at a time and takes the latest notes, so a busy round does not
     // write the file once per change.
     if (due) return
@@ -199,6 +199,14 @@ export function install(rt) {
   // picked up. A turn that ends, or still runs, before one starts here outlived the
   // last run: only DS Bot restarted (the plugin reloaded) and DSH went on.
   let firstTurn = Object.keys(interrupted.turns).length > 0 ? new Map() : undefined
+  rt.takeLiveTurnNote = sessionId => {
+    const record = interrupted.turns[sessionId]
+    if (record === undefined || firstTurn?.has(sessionId)) return undefined
+    // A surviving Agent owns this turn now. The delayed restart pass must not replay it.
+    delete interrupted.turns[sessionId]
+    update(sessionId, () => record)
+    return record
+  }
   ctx.on('session/event', (session, event) => {
     const id = session?.id
     if (id === undefined) return
@@ -378,18 +386,27 @@ export function install(rt) {
       answerSender(rt, sessionId, asker, `${name} was stopped before it could answer your message.`)
       return
     }
+    const cutOff = reason.kind === 'max-tokens'
+    const written = cutOff ? turn.texts.map(stripWrittenCalls).join('\n\n').trim() : said
+    if (cutOff) {
+      const route = events.findLast(event => event.type === 'request/context')?.data
+      rt.noteCutOff?.(sessionId, { empty: written === '', route })
+    }
+    const answer = cutOff ? cutOffText(written) : written
     // The turn ended with what it said: the answer goes up the way a finished turn's
     // does, with the results that came back for it and the text it held. A work that
     // still waits for what it handed on keeps its part until that comes back.
     if (rt.mekSuspended?.(workId)) return
     if (rt.waitsWork(workId)) {
-      rt.holdWork(workId, said)
+      rt.holdWork(workId, answer)
       return
     }
-    const text = rt.answerText(workId, said, name)
+    if (cutOff) rt.mekFailWork?.(workId, 'blocked')
+    const text = rt.answerText(workId, answer, name)
     const long = text.length > MESSAGE_INLINE_MAX ? await rt.attachLong(text, `Answer from ${name}.txt`) : undefined
     answerSender(rt, sessionId, asker, text, long)
   }
+  rt.reconcileEnded = reconcileEnded
 
   async function resumeAll() {
     await rt.load()

@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import { createRuntime } from '../index.js'
 import { fakeContext } from './fake-ctx.js'
 import { reminderText } from '../src/host/schedules.js'
+import { modernSchedule } from './schedule-service.js'
 
 const TEAM = {
   version: 1,
@@ -196,11 +197,11 @@ test('on DSH 0.2.2 tasks target the Bot’s current part, list by target, delete
   const removed = await call('schedule-delete', { sessionId: 'm1', id: 'schedule-2' })
   assert.equal(removed.ok, true, JSON.stringify(removed))
   assert.equal(schedule.tasks.has('schedule-2'), false)
-  assert.deepEqual(schedule.edits.at(-1), { id: 'schedule-2', action: 'delete' })
+  assert.deepEqual(schedule.edits.at(-1), { id: 'schedule-2', action: 'delete', expectedUpdatedAt: null })
 })
 
 // DSH 0.2.2's task ids are Host-wide, so schedule_edit could reach another Bot's task.
-test('on DSH 0.2.2 a Bot reads and changes only the tasks of its own chat', async (t) => {
+test('ordinary Bots stay in their chat while a Main Bot lists non-private team schedules', async (t) => {
   const schedule = hostSchedule()
   const { ctx, home, rt } = setup({ schedule })
   t.after(async () => { await ctx.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
@@ -249,7 +250,7 @@ test('on DSH 0.2.2 a Bot reads and changes only the tasks of its own chat', asyn
   assert.deepEqual(asked.at(-1), { limit: 501 })
   assert.deepEqual(wide.result.value.items.map(task => task.id), ['own', 'own2'])
   assert.equal(wide.result.value.total, 2)
-  assert.deepEqual((await run('m1', {})).result.value.items.map(task => task.id), ['chief'])
+  assert.deepEqual((await run('m1', {})).result.value.items.map(task => task.id), ['own', 'chief', 'own2'])
   assert.equal((await run('outside', {})).result.value.items.length, 4)
 })
 
@@ -275,4 +276,229 @@ test('a failed task move can resume without losing identical remaining tasks', a
   await rt.moveSchedules('w2', 's9')
   assert.equal(on('s9').length, 2)
   assert.equal(on('w2').length, 0)
+})
+
+function toolHarness(ctx, schedule) {
+  const gate = ctx.listeners.get('tools/pre-execute')[0]
+  const manage = ctx.listeners.get('tools/execute').find(listener => listener.name === 'manageSchedules')
+  const list = ctx.listeners.get('tools/execute').find(listener => listener.name === 'listOwnSchedules')
+  const resultOf = value => ({ isError: false, value, content: [{ type: 'text', text: JSON.stringify(value) }] })
+  return {
+    gate: (name, id, sessionId, extra = {}) => gate({ name, arguments: { id, ...extra }, agent: { id: sessionId } }, async () => ({ kind: 'allow' })),
+    async run(name, args, sessionId, body) {
+      const exec = { name, arguments: args, agent: { id: sessionId } }
+      return manage(exec, async () => resultOf(await body(exec.arguments)))
+    },
+    async list(sessionId, args = {}) {
+      const exec = { name: 'schedule_list', arguments: args, agent: { id: sessionId } }
+      return list(exec, async () => {
+        const all = (await schedule.catalog()).filter(item => args.active === undefined || (item.status === 'active') === args.active)
+        const { offset = 0, limit = 100 } = exec.arguments
+        return resultOf({ items: all.slice(offset, offset + limit), total: all.length, shown: all.slice(offset, offset + limit).length, offset, limit })
+      })
+    },
+  }
+}
+const timing = { kind: 'daily', daily: { time: '09:00:00', time_zone: 'UTC' } }
+
+test('Main management excludes private and ordinary DSH schedules; involved editors are not owners', async t => {
+  const schedule = modernSchedule(), { ctx, rt, home } = setup({ schedule })
+  t.after(async () => { await ctx.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
+  await rt.load()
+  rt.state.bots.p = { id: 'p', sessionId: 'p', private: true }; rt.chatOwners.set('p', 'p')
+  rt.state.rooms.g1.sessions = { w1: 'gw' }
+  rt.groupOwners.set('gw', { botId: 'w1', roomId: 'g1' })
+  const make = (title, target, actor) => schedule.create({ title, prompt: title, timing, target }, actor)
+  const writer = await make('writer', { kind: 'session', sessionId: 'w1' })
+  const group = await make('group', { kind: 'session', sessionId: 'g1' })
+  const privateTask = await make('private', { kind: 'session', sessionId: 'p' })
+  const external = await make('external', { kind: 'session', sessionId: 'outside' }, 'm1')
+  const legacy = await make('legacy independent', { kind: 'new' }, 'w2')
+  const h = toolHarness(ctx, schedule)
+  for (const name of ['schedule_view', 'schedule_edit']) {
+    const extra = name === 'schedule_edit' ? { expectedUpdatedAt: writer.updatedAt } : {}
+    assert.equal((await h.gate(name, writer.id, 'm1', extra)).kind, 'allow')
+    for (const entry of [privateTask, external, legacy]) assert.equal((await h.gate(name, entry.id, 'm1', { expectedUpdatedAt: entry.updatedAt })).kind, 'deny')
+  }
+  assert.equal((await h.gate('schedule_view', privateTask.id, 'p')).kind, 'allow')
+  assert.equal((await h.gate('schedule_view', group.id, 'gw')).kind, 'allow')
+  assert.equal((await h.gate('schedule_view', writer.id, 'gw')).kind, 'deny')
+  assert.equal((await h.gate('schedule_view', group.id, 'w2')).kind, 'deny')
+  const listed = await h.list('m1')
+  assert.deepEqual(listed.value.items.map(item => item.id), [writer.id, group.id])
+  assert.deepEqual(JSON.parse(listed.content[0].text), listed.value)
+  assert.ok(!listed.content[0].text.includes('legacy independent'))
+  assert.ok(!rt.state.botSchedules.owners[legacy.id])
+})
+
+test('new_once/new creation captures stable management ownership across target edits, parts and restart', async t => {
+  const schedule = modernSchedule(), { ctx, rt, home } = setup({ schedule })
+  const contexts = [ctx]
+  t.after(async () => { for (const context of contexts) await context.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
+  await rt.load()
+  const h = toolHarness(ctx, schedule), ids = []
+  for (const kind of ['new_once', 'new']) {
+    assert.ok(ctx.guards.every(guard => guard({ name: 'schedule_create', arguments: { target: kind }, agent: { id: 'w2' } }) === undefined))
+    const made = await h.run('schedule_create', { target: kind }, 'w2', () => schedule.create({ title: kind, prompt: 'Work', timing, target: { kind } }, 'w2'))
+    ids.push(made.value.id)
+    assert.deepEqual(rt.state.botSchedules.owners[made.value.id].owner, { botId: 'w1' })
+    const [context] = made.additionalContexts
+    assert.equal(context.role, 'user')
+    assert.equal(context.source.kind, 'bot-schedule-management')
+    assert.match(context.id, /^[\da-f-]{36}$/i)
+    // A new_once destination becomes an ordinary Session after its first delivery.
+    schedule.tasks.get(made.value.id).target = { kind: 'session', sessionId: 'independent-execution' }
+  }
+  await rt.moveSchedules('w2', 'w3')
+  rt.state.bots.w1.segments.push({ sessionId: 'w2', endedAt: 8 }); rt.state.bots.w1.sessionId = 'w3'
+  await rt.save({ required: true }); await ctx.dispose()
+  const second = fakeContext({ services: { schedule } }); contexts.push(second)
+  const resumed = createRuntime(second, { home }); await resumed.load()
+  const after = toolHarness(second, schedule)
+  assert.deepEqual((await after.list('w3')).value.items.map(item => item.id), ids)
+  assert.equal((await after.gate('schedule_view', ids[0], 'm1')).kind, 'allow')
+  assert.equal(schedule.tasks.get(ids[0]).target.sessionId, 'independent-execution')
+})
+
+test('edits require the read revision and pass CAS to the public service without changing ownership', async t => {
+  const schedule = modernSchedule(), { ctx, rt, home } = setup({ schedule })
+  t.after(async () => { await ctx.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
+  await rt.load()
+  const entry = await schedule.create({ title: 'Old', prompt: 'Work', timing, target: { kind: 'session', sessionId: 'w2' } })
+  const h = toolHarness(ctx, schedule)
+  assert.equal((await h.gate('schedule_edit', entry.id, 'm1')).kind, 'deny')
+  const args = { id: entry.id, action: 'update', title: 'New', expectedUpdatedAt: entry.updatedAt }
+  const result = await h.run('schedule_edit', args, 'm1', checked => schedule.edit({ id: checked.id, action: checked.action, patch: { title: checked.title, target: { kind: 'new' } }, expectedUpdatedAt: checked.expectedUpdatedAt }, 'm1'))
+  assert.equal(result.value.id, entry.id)
+  assert.equal((await h.gate('schedule_edit', entry.id, 'm1', { expectedUpdatedAt: entry.updatedAt })).kind, 'deny')
+  assert.deepEqual(rt.state.botSchedules.owners[entry.id].owner, { botId: 'w1' })
+  assert.equal((await h.gate('schedule_view', entry.id, 'w2')).kind, 'allow')
+  const current = schedule.tasks.get(entry.id)
+  const concurrent = await h.run('schedule_edit', { id: entry.id, action: 'update', expectedUpdatedAt: current.updatedAt }, 'm1', async checked => {
+    await schedule.edit({ id: entry.id, action: 'update', patch: { title: 'Concurrent' } })
+    return schedule.edit({ id: entry.id, action: 'update', patch: { title: 'Stale' }, expectedUpdatedAt: checked.expectedUpdatedAt })
+  })
+  assert.equal(concurrent.value.code, 'schedule_conflict')
+  assert.equal(schedule.tasks.get(entry.id).title, 'Concurrent')
+})
+
+test('sparse filtered pages retain own offset and never include external tasks in rendered content', async t => {
+  const schedule = modernSchedule(), { ctx, rt, home } = setup({ schedule })
+  t.after(async () => { await ctx.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
+  await rt.load()
+  for (let at = 0; at < 602; at++) await schedule.create({ title: `row-${at}`, prompt: 'x', timing, target: { kind: 'session', sessionId: [0, 601].includes(at) ? 'w2' : 'outside' } })
+  const h = toolHarness(ctx, schedule)
+  const first = await h.list('w2', { limit: 2 })
+  assert.equal(first.value.items.length, 1); assert.equal(first.value.total, 2)
+  assert.equal(first.value.limit, 1)
+  const next = await h.list('w2', { limit: 2, offset: first.value.offset + first.value.limit })
+  assert.deepEqual([...first.value.items, ...next.value.items].map(item => item.title), ['row-0', 'row-601'])
+  const last = await h.list('w2', { limit: 2, offset: 1 })
+  assert.equal(last.value.items[0].title, 'row-601')
+  assert.deepEqual(JSON.parse(last.content[0].text), last.value)
+})
+
+test('future ownership formats refuse creation before the public schedule write', async t => {
+  const schedule = modernSchedule(), { ctx, rt, home, call } = setup({ schedule })
+  t.after(async () => { await ctx.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
+  await rt.load(); rt.state.botSchedules = { version: 99, owners: {} }
+  const h = toolHarness(ctx, schedule)
+  await assert.rejects(h.run('schedule_create', { target: 'new' }, 'w2', () => { throw new Error('Must not dispatch') }), /newer plugin/)
+  const refused = await call('schedule-create', { target: 'w1', title: 'Future', prompt: 'x', when: { kind: 'daily', time: '09:00', timeZone: 'UTC' } })
+  assert.equal(refused.ok, false); assert.equal(schedule.tasks.size, 0)
+})
+
+test('failed ownership persistence never grants management of an independent task', async t => {
+  const schedule = modernSchedule(), { ctx, rt, home } = setup({ schedule })
+  t.after(async () => { await ctx.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
+  await rt.load()
+  const h = toolHarness(ctx, schedule), save = rt.save
+  rt.save = async () => { throw new Error('Ownership write failed') }
+  await assert.rejects(h.run('schedule_create', { target: 'new' }, 'w2', () => schedule.create({ title: 'Unconfirmed owner', prompt: 'Work', timing, target: { kind: 'new' } }, 'w2')), /Ownership write failed/)
+  rt.save = save
+  const entry = [...schedule.tasks.values()][0]
+  assert.equal(rt.state.botSchedules.owners[entry.id], undefined)
+  assert.equal((await h.gate('schedule_view', entry.id, 'm1')).kind, 'deny')
+  assert.equal((await h.list('m1')).value.items.length, 0)
+  assert.equal(schedule.tasks.size, 1, 'a successful host create is never repeated')
+})
+
+test('failed legacy ownership adoption is rolled back and retried durably on the next read', async t => {
+  const schedule = modernSchedule(), { ctx, rt, home } = setup({ schedule })
+  t.after(async () => { await ctx.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
+  await rt.load()
+  const entry = await schedule.create({ title: 'Known target', prompt: 'Work', timing, target: { kind: 'session', sessionId: 'w2' } })
+  const h = toolHarness(ctx, schedule), save = rt.save
+  rt.save = async () => { throw new Error('Ownership write failed') }
+  await assert.rejects(h.list('m1'), /Ownership write failed/)
+  assert.equal(rt.state.botSchedules.owners[entry.id], undefined)
+  let saves = 0
+  rt.save = async options => { saves++; return save(options) }
+  assert.equal((await h.list('m1')).value.items[0].id, entry.id)
+  assert.equal(saves, 1)
+  assert.deepEqual(rt.state.botSchedules.owners[entry.id].owner, { botId: 'w1' })
+})
+
+test('native deletion checks the displayed revision and preserves a concurrently edited task', async t => {
+  const schedule = modernSchedule(), { ctx, rt, home, call } = setup({ schedule })
+  t.after(async () => { await ctx.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
+  await rt.load()
+  const entry = await schedule.create({ title: 'Original', prompt: 'Work', timing, target: { kind: 'session', sessionId: 'w2' } })
+  const current = await schedule.edit({ id: entry.id, action: 'update', patch: { title: 'New' } })
+  const stale = await call('schedule-delete', { id: entry.id, sessionId: 'w2', expectedUpdatedAt: entry.updatedAt })
+  assert.equal(stale.ok, false)
+  assert.ok(schedule.tasks.has(entry.id))
+  assert.equal((await call('schedule-delete', { id: entry.id, sessionId: 'w2', expectedUpdatedAt: current.updatedAt })).ok, true)
+  assert.equal(schedule.tasks.has(entry.id), false)
+})
+
+test('a read-only team can view known schedules but cannot edit the host through saved ownership', async t => {
+  const schedule = modernSchedule(), { ctx, rt, home } = setup({ schedule })
+  t.after(async () => { await ctx.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
+  await rt.load()
+  const entry = await schedule.create({ title: 'Owned', prompt: 'Work', timing, target: { kind: 'session', sessionId: 'w2' } })
+  const h = toolHarness(ctx, schedule)
+  await h.list('m1')
+  assert.ok(rt.state.botSchedules.owners[entry.id])
+  const readOnly = rt.readOnly
+  rt.readOnly = () => 'The team is held by another host.'
+  try {
+    const args = { id: entry.id, action: 'update', title: 'Blocked', expectedUpdatedAt: entry.updatedAt }
+    assert.equal((await h.gate('schedule_edit', entry.id, 'm1', args)).kind, 'deny')
+    assert.equal((await h.gate('schedule_view', entry.id, 'm1')).kind, 'allow')
+    await assert.rejects(h.run('schedule_edit', args, 'm1', () => { throw new Error('Must not dispatch') }), /held by another host/)
+    assert.equal(schedule.edits.length, 0)
+    assert.equal(schedule.tasks.get(entry.id).title, 'Owned')
+  } finally { rt.readOnly = readOnly }
+})
+
+test('concurrent ownership adoption must settle durably before another request retargets the task', async t => {
+  const schedule = modernSchedule(), { ctx, rt, home } = setup({ schedule })
+  t.after(async () => { await ctx.dispose(); rmSync(home, { recursive: true, force: true, maxRetries: 5 }) })
+  await rt.load()
+  const entry = await schedule.create({ title: 'Known team task', prompt: 'Work', timing, target: { kind: 'session', sessionId: 'w2' } })
+  const h = toolHarness(ctx, schedule), save = rt.save
+  let release, entered, first = true, writes = 0
+  const held = new Promise(resolve => { release = resolve }), started = new Promise(resolve => { entered = resolve })
+  rt.save = async (...args) => {
+    if (first && rt.state.botSchedules?.owners[entry.id]) { first = false; entered(); await held; throw new Error('First ownership write failed') }
+    return save(...args)
+  }
+  const listing = h.list('m1').catch(error => error)
+  await started
+  const editing = h.run('schedule_edit', { id: entry.id, action: 'update', expectedUpdatedAt: entry.updatedAt }, 'm1', args => {
+    writes++
+    return schedule.edit({ ...args, patch: { target: { kind: 'new' } } })
+  })
+  await new Promise(setImmediate)
+  const writesBeforePersistence = writes
+  release()
+  try {
+    assert.match((await listing).message, /First ownership write failed/)
+    await editing
+    assert.equal(writesBeforePersistence, 0)
+    assert.equal(writes, 1)
+    assert.deepEqual(rt.state.botSchedules.owners[entry.id].owner, { botId: 'w1' })
+    assert.equal(schedule.tasks.get(entry.id).target.kind, 'new')
+  } finally { rt.save = save }
 })

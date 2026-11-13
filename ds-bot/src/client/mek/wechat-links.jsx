@@ -12,6 +12,7 @@ const PLUGIN = {
   incompatible: 'Update WechatPad to a version that supports Bot settings.', starting: 'WechatPad is starting…',
 }
 const providerName = provider => provider === 'weixin' ? t('WeChat robot') : 'WechatPad'
+const groupLabel = (chatId, label) => `${label && label !== chatId ? label : t('Group name unavailable')} · ${chatId}`
 
 export function WechatLinks({ target, eligible, editable = true }) {
   const [view, setView] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false)
@@ -61,17 +62,20 @@ export function WechatLinks({ target, eligible, editable = true }) {
         {connection?.policy === 'disabled' && <p className="bt-note">{t('This chat type is disabled in WeChat access settings.')}</p>}
         <label>{t(target.kind === 'room' ? 'WeChat group' : 'WeChat user')}<select aria-label={t(target.kind === 'room' ? 'WeChat group' : 'WeChat user')} value={choice} disabled={busy || !editable} onChange={event => setChoice(event.target.value)}>
           <option value="">{t('Select…')}</option>
-          {candidates.map(row => <option key={row.chatId} value={row.chatId} disabled={row.linkedElsewhere}>{row.label === row.chatId ? row.chatId : `${row.label} · ${row.chatId}`}{row.linkedElsewhere ? ` (${t('Linked elsewhere')})` : ''}</option>)}
+          {candidates.map(row => <option key={row.chatId} value={row.chatId} disabled={row.linkedElsewhere}>{target.kind === 'room' ? groupLabel(row.chatId, row.label) : row.label === row.chatId ? row.chatId : `${row.label} · ${row.chatId}`}{row.linkedElsewhere ? ` (${t('Linked elsewhere')})` : ''}</option>)}
           <option value="manual">{t('Enter a chat ID…')}</option>
         </select></label>
         {!candidates.length && <p className="bt-note">{t(target.kind === 'room' ? 'No groups discovered. Send a message in the WeChat group, then refresh.' : 'No users discovered. Send a private message to the selected WeChat connection, then refresh.')}</p>}
         {choice === 'manual' && <label>{t('WeChat chat ID')}<input aria-label={t('WeChat chat ID')} value={manualId} placeholder={target.kind === 'room' ? 'xxx@chatroom' : t('Private chat ID')} disabled={busy || !editable} onChange={event => setManualId(event.target.value)} /></label>}
         {chatId && !typeValid && <p className="bt-note" role="alert">{t(target.kind === 'room' ? 'Choose a group ID ending in @chatroom.' : 'Group IDs cannot be linked to a private Bot chat.')}</p>}
         <button type="button" className="bt-soft bt-soft-sm" disabled={busy || !editable || connection?.state !== 'ready' || connection?.policy === 'disabled' || !chatId || !typeValid || alreadyLinked} onClick={() => void update({ provider, chatId })}>{t('Link chat')}</button>
-        <div className="mek-wechat-existing">{view.links.map(row => <div className="mek-wechat-row" key={JSON.stringify([row.provider, row.chatId])}>
-          <span>{providerName(row.provider)} · {(view.chats.find(chat => chat.provider === row.provider && chat.chatId === row.chatId)?.label) || row.chatId}</span>
-          <button type="button" className="bt-soft bt-soft-sm" disabled={busy || !editable} aria-label={t('Unlink {id}', { id: row.chatId })} onClick={() => void update({ ...row, remove: true })}>{t('Unlink')}</button>
-        </div>)}</div>
+        <div className="mek-wechat-existing">{view.links.map(row => {
+          const label = view.chats.find(chat => chat.provider === row.provider && chat.chatId === row.chatId)?.label
+          return <div className="mek-wechat-row" key={JSON.stringify([row.provider, row.chatId])}>
+            <span>{providerName(row.provider)} · {target.kind === 'room' ? groupLabel(row.chatId, label) : label || row.chatId}</span>
+            <button type="button" className="bt-soft bt-soft-sm" disabled={busy || !editable} aria-label={t('Unlink {id}', { id: row.chatId })} onClick={() => void update({ ...row, remove: true })}>{t('Unlink')}</button>
+          </div>
+        })}</div>
         <p className="bt-note">{t('Links save immediately. Existing WeChat access rules still apply. Multiple chats linked here share visible replies.')}{connection?.requireMention ? ` ${t('Mention the WeChat account in group messages.')}` : ''}</p>
         {view.deliveryFailed && <p className="bt-error" role="alert">{t('A recent WeChat reply failed to send. Check the connection in WeChat settings.')}</p>}
       </>}
