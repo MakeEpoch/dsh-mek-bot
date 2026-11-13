@@ -2,9 +2,9 @@
 
 MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多 Bot 协作插件**。在现有 DeepSeek Harness 工作区中组织长期助手：由一个 Bot 接收需求，调用其他 Bot 分工处理，收集问题和结果，再审查、返工并向用户交付。
 
-本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.10**，已合并上游 **v0.2.7**（含此前版本）；逐版本的吸收情况见[上游合并记录](docs/fork-vs-upstream.md)。
+本项目只发布 DSH 插件，复用 DSH 的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.12**，已合并上游 **v0.2.7**（含此前版本）；逐版本的吸收情况见[上游合并记录](docs/fork-vs-upstream.md)。
 
-0.2.10 优先复用上游群聊、记忆、模型与输入能力，并在现有任务体系中吸收阶段概览思想；WechatPad 关联通过可选服务接入。源码及隔离验证不代表正式 DSH 已安装生效。
+0.2.12 修复停滞提醒误报：等待、阻塞与执行各用各的阈值，任务卡列出关不了的原因并支持手动收口浏览器交接；0.2.11 起优先复用上游群聊、记忆、模型与输入能力，并在现有任务体系中吸收阶段概览思想；WechatPad 关联通过可选服务接入。源码及隔离验证不代表正式 DSH 已安装生效。
 
 ![dsh-mek-bot 0.2.4：顶部 Bot 导航、任务摘要与 Bot 详情](docs/images/mek-bot-0.2.4.png)
 
@@ -165,7 +165,7 @@ cd ds-bot
 npm ci
 npm run build
 npm pack --ignore-scripts
-dsh plugin --profile web add -w ./dsh-mek-bot-0.2.10.tgz
+dsh plugin --profile web add -w ./dsh-mek-bot-0.2.12.tgz
 ```
 
 启用 bundle 后重启 DSH，不要同时启用原 `ds-bot` bundle。生产安装必须使用打包文件，禁止 `link:`、符号链接或直连开发源码。profile 保持 `autoInstallPeers: false`；宿主 API 由 DSH 加载器提供，不能安装第二份 Cordis、scope、tools 或 LLM 核心。
@@ -223,7 +223,7 @@ npm run lint
 
 ## 2026-11-05 上游复用与微信关联
 
-已吸收上游 v0.2.7 的群聊运行修复、记忆变更历史/单次恢复、新 Bot 默认模型、Enter 发送偏好及失败处理；选择性吸收 dev 的 DSH 0.2.2 调度兼容。包号 0.2.10 是下游版本，上游基线仍以 `.makeepoch/upstream.json` 为准。
+已吸收上游 v0.2.7 的群聊运行修复、记忆变更历史/单次恢复、新 Bot 默认模型、Enter 发送偏好及失败处理；选择性吸收 dev 的 DSH 0.2.2 调度兼容。包号 0.2.12 是下游版本，上游基线仍以 `.makeepoch/upstream.json` 为准。
 
 从上游 v0.3.2 选择性移植了浏览器脚本隔离和插件热重载恢复。插件热重载后，仍由 DSH 执行的 Bot 回合会恢复活动显示和团队工具，进行中的委派继续向原请求方回传结果。
 
