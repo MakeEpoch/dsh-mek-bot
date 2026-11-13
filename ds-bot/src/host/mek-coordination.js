@@ -27,6 +27,11 @@ const STALL_ESCALATE_MS = 60 * 60 * 1000
 // never be "closable on the board" but refused at finish.
 const BLOCKING_WORK = ['queued', 'running', 'waiting_decision', 'waiting_secret', 'waiting_approval', 'waiting_browser', 'failed', 'blocked', 'unknown']
 const WAITING_WORK = ['waiting_browser', 'waiting_decision', 'waiting_secret', 'waiting_approval']
+// One definition of "recovery closed this wait itself", covering both report shapes:
+// the automaticClosure record and the flat automatic/detectedBy flags that versions
+// before the unified writer persisted.
+const autoClosedBySystem = work => work.report?.automaticClosure !== undefined
+  || (work.report?.automatic === true && work.report?.detectedBy === 'system')
 const refuse = message => { throw Object.assign(new Error(message), { code: 'bot/refused' }) }
 const groupContext = value => /^\s*Members: the user\b/i.test(value ?? '')
 const normalizeInstruction = value => String(value ?? '').replace(/\r\n?/g, '\n').trim()
@@ -876,7 +881,7 @@ export function install(rt) {
     if (!work || !root || final(root)) refuse('Choose an open task with the waiting browser handoff.')
     // A wait that recovery already closed is still the owner's to settle: the
     // automatic note is a detected absence, not a decision about the work.
-    const automatic = work.status === 'blocked' && work.browserHold?.status === 'unavailable' && work.report?.automaticClosure !== undefined
+    const automatic = work.status === 'blocked' && work.browserHold?.status === 'unavailable' && autoClosedBySystem(work)
     if (work.status !== 'waiting_browser' && !automatic) refuse(`Work ${work.id} is not waiting for browser control (status ${work.status}).`)
     if (work.to === self) refuse('A worker cannot close its own browser wait; the task owner or the group administrator decides.')
     const room = work.room ? rt.roomOf(work.room) : undefined
@@ -1312,8 +1317,10 @@ export function install(rt) {
         ? `\nStale resource leases (identified only, never released here): ${leases.map(lease => `${lease.kind} ${lease.key} held by ${rt.botOf(lease.botId)?.name ?? lease.botId} (${lease.status})`).join('; ')}.`
         : ''
       const summary = `Task ${root.id} has had no closable state for ${Math.floor(age / 60000)} min: ${blockerText(crossed)}.${leaseText}`
-      prepare(root.id, { fromId: root.owner, toId: root.owner, role: 'reply', text:
-        `${summary}\nThis is a stall reminder, not new work.${level === 2 ? ' It has stayed unresolved for an hour or more.' : ''} Resolve, revise or close each item: close_browser_wait closes a browser wait, supplement_bot_report records a missing report, revise_bot_task asks for a correction, and cancel_bot_task ends an abandoned scope.` })
+      // The owner's chat is the user's dialog: a stall is a conclusion, not a
+      // progress message, so it reaches the owner through the task panel attention
+      // and team activity, and the affected group gets one quiet post. No durable
+      // text is delivered into the owner's own conversation.
       const rooms = [...new Set(currentWorks(root).map(work => work.room ?? work.fromRoom).filter(id => id && rt.roomOf(id)?.admin === root.owner))]
       for (const roomId of rooms) {
         if (root.stallNotice.rooms.includes(roomId)) continue
@@ -1368,10 +1375,19 @@ export function install(rt) {
         work.outcome = 'blocked'
         // Automatic detection appends and marks itself; it never overwrites a result
         // that was already delivered, and it never reads as a human verification.
-        work.report = priorReport
-          ? { ...priorReport, automaticClosure: { detectedBy: 'system', at: Date.now(), summary } }
-          : { status: 'blocked', automatic: true, detectedBy: 'system', summary, artifacts: [],
-            evidence: 'Detected automatically from the live handoff handle and the Bot list. The target page was not observed, external effects were not rechecked, and no browser action was replayed.', sourceSessionId: work.browserHold.sessionId }
+        // Both shapes carry the same automaticClosure record, so closures and older
+        // saved states agree on what the system did.
+        work.report = {
+          ...(priorReport ?? {}),
+          status: 'blocked',
+          automatic: true,
+          detectedBy: 'system',
+          summary: priorReport?.summary ?? summary,
+          evidence: priorReport?.evidence ?? 'Detected automatically from the live handoff handle and the Bot list. The target page was not observed, external effects were not rechecked, and no browser action was replayed.',
+          artifacts: priorReport?.artifacts ?? [],
+          sourceSessionId: work.browserHold.sessionId,
+          automaticClosure: { detectedBy: 'system', at: Date.now(), summary, ...(priorReport ? { priorReport } : {}) },
+        }
         const source = rt.workAsker(work.id)
         if (source) rt.mekAnswerSender(work.browserHold.sessionId, source, next)
         else { work.status = 'blocked'; work.result = next; await enqueue(root.id, { toId: root.owner, role: 'reply', replyTo: work.id, text: `Task ${root.id}: ${next}` }) }
