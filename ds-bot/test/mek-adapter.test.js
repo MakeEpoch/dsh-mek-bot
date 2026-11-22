@@ -47,7 +47,7 @@ test('the parent DSH gets one native Bot launcher and no outer Agent shortcut', 
   client.apply({ effect: () => () => {}, slots: { inject: (_slot, work) => work(), register: (seat, component) => registrations.push({ seat, component }) } })
   assert.deepEqual(registrations.map(({ seat }) => seat.name), ['main', 'sidebar.panellist'])
   assert.equal(registrations[1].seat.label(), 'Bot')
-  const frame = registrations[0].component()
+  const frame = registrations[0].component({})
   assert.equal(typeof frame.type, 'function')
   assert.notEqual(frame.type, 'iframe')
   assert.equal(registrations.some(({ seat }) => seat.id === 'mek-agent'), false)

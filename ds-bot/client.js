@@ -22749,9 +22749,6 @@ function GroupChat({ sessionId, team }) {
 
 // src/client/mek/native-question.jsx
 var import_react64 = __toESM(require("react"), 1);
-var empty = /* @__PURE__ */ new Map();
-var absent = { subscribe: () => () => {
-}, getSnapshot: () => empty };
 var noCard = { subscribe: () => () => {
 }, getSnapshot: () => null };
 function NativeQuestionCard({ pending }) {
@@ -22760,10 +22757,8 @@ function NativeQuestionCard({ pending }) {
   if (Array.isArray(pending.review)) return pending.questions.map((question) => /* @__PURE__ */ import_react64.default.createElement(SettledQuestion, { key: question.id, question, answer: pending.review.find((answer) => answer.id === question.id) ?? { selected: [] } }));
   return /* @__PURE__ */ import_react64.default.createElement(QuestionCard, { matched: pending });
 }
-function NativeQuestion({ ctx, sessionId }) {
-  const source = ctx.get?.("uiSession")?.sessionStatus ?? absent;
-  const statuses = (0, import_react64.useSyncExternalStore)(source.subscribe, source.getSnapshot);
-  const pending = statuses.get(sessionId)?.pendingInteraction;
+function NativeQuestion({ useSessionStatus, sessionId }) {
+  const pending = useSessionStatus((statuses) => statuses.get(sessionId)?.pendingInteraction);
   if (!pending || !["question", "plan-review"].includes(pending.kind) || !Array.isArray(pending.questions)) return null;
   return /* @__PURE__ */ import_react64.default.createElement(NativeQuestionCard, { key: `${sessionId}:${pending.key}`, pending });
 }
@@ -23251,7 +23246,7 @@ var SESSION_QUEUE_CSS = `
 // src/client/mek/view.jsx
 var import_react71 = __toESM(require("react"), 1);
 var STYLES = TASK_PROGRESS_CSS + TURN_ERROR_CSS + SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS2 + HANDOFF_CSS + SIDE_CSS + app_default;
-function TeamView({ ctx, requests, viewport }) {
+function TeamView({ ctx, requests, useSessionStatus, viewport }) {
   const team = (0, import_react71.useMemo)(() => {
     const value = createTeam();
     value.taskInbox = createTaskInbox();
@@ -23331,9 +23326,9 @@ function TeamView({ ctx, requests, viewport }) {
     }
   };
   const themed = themeCss(allThemes()[prefs?.theme] ?? allThemes().deepseek, prefs?.accent);
-  return /* @__PURE__ */ import_react71.default.createElement(import_react71.default.Fragment, null, /* @__PURE__ */ import_react71.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react71.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react71.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react71.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react71.default.createElement(import_react71.default.Fragment, { key: shown }, /* @__PURE__ */ import_react71.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react71.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react71.default.createElement(TaskAttention, { team, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react71.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react71.default.createElement(Chat, { sessionId: shown, team }, /* @__PURE__ */ import_react71.default.createElement(NativeQuestion, { ctx, sessionId: shown })))), /* @__PURE__ */ import_react71.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react71.default.createElement(ErrorToast, { ...views })));
+  return /* @__PURE__ */ import_react71.default.createElement(import_react71.default.Fragment, null, /* @__PURE__ */ import_react71.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react71.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react71.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react71.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react71.default.createElement(import_react71.default.Fragment, { key: shown }, /* @__PURE__ */ import_react71.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react71.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react71.default.createElement(TaskAttention, { team, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react71.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react71.default.createElement(Chat, { sessionId: shown, team }, useSessionStatus && /* @__PURE__ */ import_react71.default.createElement(NativeQuestion, { useSessionStatus, sessionId: shown })))), /* @__PURE__ */ import_react71.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react71.default.createElement(ErrorToast, { ...views })));
 }
-function NativeBot({ ctx, requests }) {
+function NativeBot({ ctx, requests, useSessionStatus }) {
   const root = (0, import_react71.useRef)(null);
   const [ready, setReady] = (0, import_react71.useState)(false);
   const [viewport, setViewport] = (0, import_react71.useState)(0);
@@ -23356,7 +23351,7 @@ function NativeBot({ ctx, requests }) {
       release();
     };
   }, []);
-  return /* @__PURE__ */ import_react71.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react71.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + COMPACT_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + WECHAT_LINKS_CSS + SESSION_QUEUE_CSS)), ready && /* @__PURE__ */ import_react71.default.createElement(TeamView, { ctx, requests, viewport }));
+  return /* @__PURE__ */ import_react71.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react71.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + COMPACT_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + WECHAT_LINKS_CSS + SESSION_QUEUE_CSS)), ready && /* @__PURE__ */ import_react71.default.createElement(TeamView, { ctx, requests, useSessionStatus, viewport }));
 }
 
 // src/client/approval-notices.js
@@ -23480,7 +23475,7 @@ function apply(ctx) {
   }));
   const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react72.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react72.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react72.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
   ctx.slots.inject("main", () => {
-    ctx.slots.register({ name: "main", key: PANEL }, () => /* @__PURE__ */ import_react72.default.createElement(NativeBot, { ctx, requests }));
+    ctx.slots.register({ name: "main", key: PANEL }, ({ useSessionStatus }) => /* @__PURE__ */ import_react72.default.createElement(NativeBot, { ctx, requests, useSessionStatus }));
     ctx.effect(() => rememberPanel(ctx.layout, PANEL));
   });
   ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));

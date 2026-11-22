@@ -169,7 +169,7 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 
 - B17：发送消息后检查当前单聊末尾的思考状态，再进入工具执行；状态只保留一条，位于 `[data-chat-running]`，无新增持久消息。切换到空闲 Bot 时无串状态，返回执行 Bot 可继续显示；结束或停止后移除。覆盖纯文本流式让位规则、已滚到末尾自动跟随、上翻历史不强制滚动、窄屏可见性。
 - B20：群聊发送分步长任务，核对末尾头像、动作和用时与本群成员工作源一致。成员让出发言位后状态继续更新；多成员各一行，轮次内不重复。切换私聊/其他群无串状态，完成/停止移除，历史不增加动作消息；在尾部跟随，上翻保持位置；宽屏、390px、详情开关均检查。审批只显示本群请求。
-- B18：分别触发 `ask_user`、交互 `show_view`（选项及表单），即使历史中没有对应工具行也能看到待回答卡。核对选项与字段、回答和关闭、失败保留输入并可重试、成功恢复执行、刷新恢复、Bot 切换隔离；收起任务不能隐藏请求。对公开 `uiSession.sessionStatus` 的 question/plan-review carrier 验证原始问题 ID、选项、批量答复、关闭及只读 review；不得转用 Bot 提问端点或伪造主会话。未公开 carrier 的宿主请求保持未验证。
+- B18：分别触发 `ask_user`、交互 `show_view`（选项及表单），即使历史中没有对应工具行也能看到待回答卡。核对选项与字段、回答和关闭、失败保留输入并可重试、成功恢复执行、刷新恢复、Bot 切换隔离；收起任务不能隐藏请求。对 `main` 插槽公开的 `useSessionStatus` 中的 question/plan-review carrier 验证原始问题 ID、选项、批量答复、关闭及只读 review；不得转用 Bot 提问端点或伪造主会话。确认缺少 `useSessionStatus` 时可打开 Bot 私聊和输入框，插槽提供 hook 后显示当前请求，hook 移除后清除卡片并释放订阅。未公开 carrier 的宿主请求保持未验证。
 
 ### 待办、任务及未读状态（B16）
 
@@ -599,3 +599,8 @@ Bot `30545e8`、WechatPad `0259900` 已快进并推送各自 MakeEpoch main。�
 - 用户要求：停滞提醒不再向负责人私聊投递文本；只留群内 quiet 消息与团队动态/attention。负责人私聊即用户对话框，Echo 明确不要过程噪音。
 - 回归：`test/mek-coordination.test.js` **64 项全通过**，新增：无 priorReport 的自动收口 → `close_browser_wait` 成功 → `finish` 可过；有 priorReport 自动收口仍可用；worker 仍不能自关；触发停滞时 owner 会话不新增消息、群内一条、团队动态一条、重复扫描不再发；原按 kind 阈值回归仍全绿。
 - 本轮只提 PR，未安装：线上仍是 0.2.12（不含此修复），重装会中断所有 Bot 回合，需 Echo 再授权。
+
+## 2026-11-22 Bot 主面板会话状态修复
+
+- 在隔离 Web profile 中，原版 0.2.13 在 DSH 0.2.3-alpha.2 复现 `uiSession.sessionStatus` 注入错误。修复包在 DSH 0.2.3-alpha.2 和 0.2.2-alpha.2、Chrome 156.0.8078.79、Node 24.14.1 下均可打开私聊、发送消息并完成 Bot 多选提问，浏览器无主面板异常。
+- 修复包 SHA-256 为 `e58e85412c02dbe53a7cd8794651ef3860a52e701d53cd856dd3629c3cbe7506`，安装副本 `client.js` 与源码构建产物哈希一致（`e3ea4e20c98289c1a82207e16c3401b0573ab75ee47e95b1f2322d6d0b5b9b8a`）。组件夹具验证状态 hook 缺失、出现和移除，以及原生 question/plan-review 的渲染和回调。真实浏览器用本地模拟模型验证 Bot 自有提问流程。当前 DSH 安装未更新。
