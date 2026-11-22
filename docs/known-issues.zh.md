@@ -1,5 +1,7 @@
 # 已知问题
 
+> 上游 DS Bot 历史参考。当前插件的范围和安装方式见 [dsh-mek-bot](../README.md)。
+
 [English](known-issues.md) | 中文
 
 ## 还没发出的消息里，「@名字」显示成文件
@@ -87,7 +89,7 @@ libghostty-vt.so: GLIBC_2.27 not found
 
 **原因：** DeepSeek Harness 自带的原生库（包括 `libghostty-vt.so`）是按比 CentOS 7 更新的 glibc 符号编译的。DS Bot 是插件，没法重编 DSH 的库，所以没有适配 glibc 2.17 的版本可装。可以用 `ldd --version` 查看本机版本。
 
-**怎么处理：** 改用 Docker 镜像——容器里有自己的、更新的 glibc，宿主 glibc 不再起决定作用。见 [`docker/`](../docker/README.md)（英文）：构建或拉取镜像、发布端口，然后用局域网内任意浏览器打开 UI。注意这几点：
+**怎么处理：** 改用 Docker 镜像——容器里有自己的、更新的 glibc，宿主 glibc 不再起决定作用。见 [上游 Docker 说明](https://github.com/Fei2411/DS-Bot/tree/main/docker)（英文）：构建或拉取镜像、发布端口，然后用局域网内任意浏览器打开 UI。注意这几点：
 
 - 容器自带 DSH 和配套原生库。别把宿主机的 `libghostty-vt.so` 复制或挂载进容器，混用会破坏它。
 - 需要能跑 Debian Bookworm 镜像的 Docker（或 Podman）。CentOS 7 自带的内核和 Docker 偏旧，如果 Docker 本身就跑不起来，换 Podman 或更新版 Docker。这个组合没有实机验证过——镜像本身是在现代宿主机上由 CI 测过的。

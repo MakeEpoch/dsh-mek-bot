@@ -116,18 +116,17 @@ for (const file of files) {
 
 // Package checks: the license and the fields that npm and DSH read.
 if (!files.includes('LICENSE')) add(MUST, 'license', 'LICENSE', 0, 'no LICENSE at the root')
-if (!files.includes('ds-bot/package.json')) add(MUST, 'plugin-folder', '.', 0, 'no ds-bot/package.json')
+if (!files.includes('package.json')) add(MUST, 'package', 'package.json', 0, 'no package.json at the root')
 else {
-  const pkg = JSON.parse(readFileSync(join(root, 'ds-bot/package.json'), 'utf8'))
-  const expectedName = files.includes('.makeepoch/upstream.json') ? 'dsh-mek-bot' : 'ds-bot'
-  if (pkg.name !== expectedName) add(MUST, 'package', 'ds-bot/package.json', 0, `name is "${pkg.name}", expected "${expectedName}"`)
-  if (!files.includes('ds-bot/LICENSE')) add(MUST, 'package', 'ds-bot/LICENSE', 0, 'the package has no LICENSE file')
-  if (!(pkg.files ?? []).includes('LICENSE')) add(MUST, 'package', 'ds-bot/package.json', 0, '"files" does not list LICENSE')
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+  const expectedName = 'dsh-mek-bot'
+  if (pkg.name !== expectedName) add(MUST, 'package', 'package.json', 0, `name is "${pkg.name}", expected "${expectedName}"`)
+  if (!(pkg.files ?? []).includes('LICENSE')) add(MUST, 'package', 'package.json', 0, '"files" does not list LICENSE')
   for (const field of ['repository', 'homepage', 'bugs']) {
-    if (!pkg[field]) add(MUST, 'package', 'ds-bot/package.json', 0, `no "${field}" field`)
+    if (!pkg[field]) add(MUST, 'package', 'package.json', 0, `no "${field}" field`)
   }
   for (const [name, range] of Object.entries(pkg.peerDependencies ?? {})) {
-    if (range !== '*') add(KEEP, 'package', 'ds-bot/package.json', 0, `peer ${name} is "${range}", not "*"`)
+    if (range !== '*') add(KEEP, 'package', 'package.json', 0, `peer ${name} is "${range}", not "*"`)
   }
 }
 for (const name of ['README.md', 'README.zh.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'AGENTS.md', '.gitignore']) {

@@ -6,7 +6,7 @@
   "verifiedDsh": "0.2.2-rc.1",
   "sourceDirectory": "ds-bot",
   "uiEntry": "app/ui/src/app.js",
-  "downstreamEntry": "ds-bot/src/client/mek/index.jsx",
+  "downstreamEntry": "src/client/mek/index.jsx",
   "integration": "native-react-components",
   "selectedDevCommit": "1f5b21a3c5c7733b9e167af89c55d83a82fed281",
   "selectedDevChanges": [

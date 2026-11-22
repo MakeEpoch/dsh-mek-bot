@@ -1,5 +1,7 @@
 # DS Bot 的愿景
 
+> 上游 DS Bot 历史参考。当前插件的范围和安装方式见 [dsh-mek-bot](../README.md)。
+
 [English](vision.md) | 中文
 
 本文写 DS Bot 要做成什么、为什么这样做。功能怎么用，见 [README](../README.zh.md)；已定的具体设计，见 [docs/plans/](plans/)；怎么参与开发，见 [CONTRIBUTING](../CONTRIBUTING.zh.md)。

@@ -1,10 +1,10 @@
 # dsh-mek-bot
 
-MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多 Bot 协作界面**。同一个 DeepSeek Harness 工作区可以用原生界面管理会话，也可以在 Bot 面板按长期助手和群聊组织会话、委派、审查与交付。
+**dsh-mek-bot 是 DeepSeek Harness（DSH）里组织对话和团队协作的另一种界面。** 本项目派生自 [DS-Bot](https://github.com/Fei2411/DS-Bot)，大量复用其开源代码，包括长期 Bot、会话、记忆、群聊、委派和聊天组件。原作版权和 Apache-2.0 许可见 [NOTICE](NOTICE) 与 [LICENSE](LICENSE)。
 
-本项目以 DSH 插件交付，复用 DSH 的模型、Session、工具、权限和自动化。评估 DS-Bot 后续变化时，以背后的设计目标是否适用于 DSH 和 MEK 为准。当前插件版本为 **0.2.13**，已合并上游 **v0.2.7**（含此前版本）；逐版本的吸收情况见[上游合并记录](docs/fork-vs-upstream.md)。
+上游 DS-Bot 是以 DSH 为运行底座的独立 Bot 产品，提供自己的应用和工作流，也提供 DSH 插件入口。dsh-mek-bot 安装进已有 DSH 工作区，通过原生 Bot 面板组织长期助手和群聊，沿用该工作区的模型、Session、工具、权限和自动化。当前插件版本为 **0.2.13**。
 
-0.2.13 修复自动收口后负责人无法关闭交接、并停止向负责人私聊投递停滞提醒；0.2.12 修复停滞提醒误报：等待、阻塞与执行各用各的阈值，任务卡列出关不了的原因并支持手动收口浏览器交接；0.2.11 起优先复用上游群聊、记忆、模型与输入能力，并在现有任务体系中吸收阶段概览思想；WechatPad 关联通过可选服务接入。源码及隔离验证不代表正式 DSH 已安装生效。
+0.2.13 修复自动收口后负责人无法关闭交接，并停止向负责人私聊投递停滞提醒。0.2.12 修复停滞提醒误报，为等待、阻塞和执行分别设定阈值，并支持手动收口浏览器交接。0.2.11 起在团队任务中加入阶段概览，通过可选 WechatPad 服务接入微信。
 
 ![dsh-mek-bot 0.2.4：顶部 Bot 导航、任务摘要与 Bot 详情](docs/images/mek-bot-0.2.4.png)
 
@@ -19,7 +19,21 @@ MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多
 - **团队运营**：集中查看任务和重要动态，配置执行策略、共享摘要、项目事实与可复用流程。
 - **融入现有 DSH**：保留宿主导航及其他插件，Bot 界面在自己的面板内渲染；模型、密钥和授权继续使用已有配置。
 
-长期身份、记忆、群聊、Bot 间通信、浏览器和基础文档能力来自上游。本项目重点增加插件共存方式、固定任务归属、决策回流、结构化验收和团队运营；不把上游原有功能都归为 fork 新增。
+## 工作原理
+
+**Bot 是长期身份，DSH Session 是一次对话或一段工作使用的执行上下文。** 同一个 Bot 有自己的私聊，可以在多个群里分别工作。上下文需要换段时，插件把同一个 Bot 或群聊指向新的 Session，旧段仍可查阅。
+
+1. **打开 Bot 面板。** 插件通过 DSH 的原生槽位注册侧栏入口和主面板。顶部会话列表根据 Bot 或群聊定位当前 Session，面板通过 Bot API 发送消息、读取状态并接收更新。见[原生界面入口](src/client/mek/index.jsx)。
+2. **在 DSH 中执行。** Bot 的模型、工具调用、权限确认和会话生命周期由 DSH 处理。插件提供 Bot 的角色、记忆和团队关系，并在团队 Session 内注册协作工具。聊天记录由 DSH 保存，队伍、Bot 身份以及派工和验收关系保存在插件的团队状态中。见[运行时入口](mek.js)和[集成边界](docs/makeepoch-integration.md)。
+3. **沿原路交付。** 用户最初联系的 Bot 持有主任务。它可以通过 `message_bot` 让其他 Bot 在各自的 DSH Session 中执行。执行中的问题、结果和证据回到负责人，负责人可以答疑、返工或验收，最后在原对话中向用户交付。见[任务协调实现](src/host/mek-coordination.js)。
+
+```mermaid
+flowchart LR
+  User["用户 · Bot 面板"] -->|提出任务| Owner["负责人 Bot · DSH Session"]
+  Owner -->|委派| Worker["执行 Bot · DSH Session"]
+  Worker -->|问题、结果和证据| Owner
+  Owner -->|验收后交付| User
+```
 
 ## 与上游有什么不同
 
@@ -29,7 +43,7 @@ MakeEpoch 基于 [DS-Bot](https://github.com/Fei2411/DS-Bot) 开发的 **DSH 多
 
 | 方面 | 上游 DS-Bot | 本项目 |
 |---|---|---|
-| 产品形态 | 提供独立桌面、移动端及 DSH 插件 | 只交付 DSH 插件；保留的 `app/`、`mobile/` 是共享源码及上游参考 |
+| 产品形态 | 以 DSH 为运行底座的独立 Bot 产品，也提供 DSH 插件入口 | 已有 DSH 工作区内的 Bot 协作界面，以单个 DSH 插件交付 |
 | 导航布局 | Bot 模式的全局界面与 Bot 侧栏 | DSH 左侧只加一个 Bot 入口，Bot、群聊和可选 Agent 放在顶部导航 |
 | 详情面板 | 配合上游 Bot 侧栏布局 | 再次点击当前对话切换 Bot 详情；宽屏并排，窄屏在 Bot 面板内覆盖聊天 |
 | 宿主共存 | 上游客户端入口管理全局 Bot 界面 | 原生 React 组件接入公开 slots，CSS、弹窗和坐标限定在 Bot 面板内；无 iframe、无第二套 DSH |
@@ -89,7 +103,7 @@ Bot 详情中的“当前会话权限”读取 DSH 实际权限；点击“在 D
 
 任务卡直接列出“关不了的原因”并点名具体编号：待补报告、待接受的结果、未答问题、未确认投递、阻塞/失败、等待授权或凭据。等待浏览器交接单独显示已等分钟数，任何情况下都不会被显示成执行中。拒绝信息同样点名具体 work、问题或投递编号，`accept_bot_work` 与 `finish_bot_task` 与看板使用同一份未决清单，不会出现“看板说能关、验收仍被拒”。
 
-停滞阈值固定写在 `ds-bot/src/host/mek-coordination.js` 顶部常量中，调整时须同步更新本文与 UI 测试记录：
+停滞阈值固定写在 `src/host/mek-coordination.js` 顶部常量中，调整时须同步更新本文与 UI 测试记录：
 
 - 等待浏览器交接、等待决策/授权/凭据超过 **10 分钟**：标记为停滞；
 - 阻塞、失败、结果待核对与未确认投递超过 **2 分钟**：记录为停滞（给人工留反应窗口，不零秒触发）；
@@ -162,17 +176,22 @@ Bot 详情中的“当前会话权限”读取 DSH 实际权限；点击“在 D
 
 ## 安装
 
-本轮隔离集成验证使用 DSH **0.2.2-rc.1**、Node.js 24 和 Chromium；单元兼容检查仍使用 `dev/harness` 的 **0.2.2-alpha.2**。浏览器需要支持 CSS `@scope`。
+仓库根目录就是插件包。使用 DSH 插件管理器添加 `github:MakeEpoch/dsh-mek-bot#main`，也可以在终端安装。
 
 ```sh
-cd ds-bot
+dsh plugin --profile web add -w 'github:MakeEpoch/dsh-mek-bot#main'
+```
+
+需要从本地源码构建时，在仓库根目录执行以下命令。
+
+```sh
 npm ci
 npm run build
 npm pack --ignore-scripts
 dsh plugin --profile web add -w ./dsh-mek-bot-0.2.13.tgz
 ```
 
-启用 bundle 后重启 DSH，不要同时启用原 `ds-bot` bundle。生产安装必须使用打包文件，禁止 `link:`、符号链接或直连开发源码。profile 保持 `autoInstallPeers: false`；宿主 API 由 DSH 加载器提供，不能安装第二份 Cordis、scope、tools 或 LLM 核心。
+profile 保持 `autoInstallPeers: false`，由 DSH 提供宿主 API。同一 profile 只启用一个 Bot bundle。浏览器需要支持 CSS `@scope`。
 
 浏览器功能随包提供可选 Playwright 依赖；启用前需本机 Chromium/Chrome。Linux 示例（按实际安装路径调整）：
 
@@ -201,10 +220,11 @@ dsh plugin --profile web add -w ./dsh-mek-bot-0.2.13.tgz
 
 ## 开发与文档维护
 
-保留上游目录、Apache 许可证和公开 Git 历史，基线见 [.makeepoch/upstream.json](.makeepoch/upstream.json)。插件入口是 `ds-bot/mek.js`，原生界面位于 `ds-bot/src/client/mek/`，任务协调和团队运营位于 `ds-bot/src/host/mek-*.js`。保留的上游入口不安装本项目协调扩展。
+插件入口是根目录的 `mek.js`。原生界面位于 `src/client/mek/`，从上游应用提取的共享聊天组件位于 `src/client/bot-view/`，任务协调和团队运营位于 `src/host/mek-*.js`。上游源码基线见 [.makeepoch/upstream.json](.makeepoch/upstream.json)。
+
+后续会继续参考 DS-Bot 解决问题的思路，并选择性移植适合 MEK 的实现。评估时先看它解决的问题，再看能否复用 DSH 的公开能力，以及是否符合现有协作流程。历次合并、移植和验证结果见[上游变更记录](docs/fork-vs-upstream.md)。
 
 ```sh
-cd ds-bot
 npm ci
 npm run harness
 npm run build
@@ -213,13 +233,13 @@ node scripts/build-client.mjs --check
 npm run lint
 ```
 
-项目介绍、当前特性和上下游差异统一维护在本中文版 README；`ds-bot/README.md` 是安装包内的同步副本，`README.zh.md` 仅保留兼容链接。新增功能或改变交互、权限、持久化及恢复行为，必须在同一改动中更新这里及相关集成/设计文档；界面变化同步更新 UI 测试矩阵，合并上游则更新版本记录。
+安装包直接包含本 README，`README.zh.md` 保留语言入口链接。功能、交互、权限或持久化行为变化时同步更新相关文档，界面变化同步更新 UI 测试矩阵。
 
 - [上游版本与合并记录](docs/fork-vs-upstream.md)：每个版本上游改了什么、本项目采用什么、保留什么及验证状态。
 - [集成边界](docs/makeepoch-integration.md)：宿主职责、适配位置、运行及恢复约束。
 - [任务所有权设计](docs/plans/2026-10-30-mek-task-ownership.md)、[团队运营设计](docs/plans/2026-10-30-mek-team-operations.md)：底层机制与契约。
 - [UI 测试方案](docs/dev/mek-ui-testing.md)：组件、真实浏览器、隔离 DSH 和安装包的验证层次。
-- [上游原始说明](README.upstream.zh.md)：保留上游介绍，不作为本项目功能与验收声明。
+- [DS-Bot 官方仓库](https://github.com/Fei2411/DS-Bot)
 
 ## 许可证
 

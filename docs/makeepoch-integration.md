@@ -4,9 +4,9 @@ This downstream reuses Fei2411/DS-Bot. The exact baseline is pinned in [upstream
 
 ## Native UI
 
-`ds-bot/src/client/mek/index.jsx` registers one `sidebar.panellist` entry and one `main` pane, using the public slots API. There is no outer Agent shortcut, iframe wrapper, second DSH application or second plugin load.
+`src/client/mek/index.jsx` registers one `sidebar.panellist` entry and one `main` pane, using the public slots API. There is no outer Agent shortcut, iframe wrapper, second DSH application or second plugin load.
 
-`mek/view.jsx` composes the existing `TeamSidebar`, `HeaderPill`, `Chat`, `Overlays` and settings components, using `app/ui/src/team.js`'s existing state/feed controller. Bot/group/new/settings forms stay at their upstream paths. The original global-shell takeover entry `src/client/index.js` is not invoked.
+`mek/view.jsx` composes the existing `TeamSidebar`, `HeaderPill`, `Chat`, `Overlays` and settings components, using `src/client/bot-view/team.js`'s existing state/feed controller. Bot/group/new/settings forms stay at their upstream paths. The original global-shell takeover entry `src/client/index.js` is not invoked.
 
 The native build binds upstream view modules to local DOM/window facades and a scene-local portal helper. CSS uses `@scope (.mek-bot-scene)`; root selectors are mapped without changing class names. Geometry and pointer coordinates are relative to the pane. No browser global, prototype, DSH service or another plugin is replaced. Child effect cleanup remains safe after the containing pane has detached, and owned listeners are removed. Dynamic details-panel styles retain their scope and CSSOM style rule.
 
@@ -24,7 +24,7 @@ Small UI seams export existing Composer/GroupReplies/GroupMessage components and
 
 ## Host and installation
 
-`ds-bot/mek.js` wraps upstream `index.js`. Team state defaults to `DSH_HOME/mek-bot`. `team-registration.js` uses DSH 0.2.2's tool admission condition for team sessions; ordinary DSH sessions do not receive team tools. Optional browser tools use the same seam. `autoGreet: false` avoids automatic model greetings, and downstream automatic update checking is disabled.
+`mek.js` wraps upstream `index.js`. Team state defaults to `DSH_HOME/mek-bot`. `team-registration.js` uses DSH 0.2.2's tool admission condition for team sessions; ordinary DSH sessions do not receive team tools. Optional browser tools use the same seam. `autoGreet: false` avoids automatic model greetings, and downstream automatic update checking is disabled.
 
 During an in-place plugin reload, the runtime rebuilds activity from the live DSH agent registry and restores surviving turn records from `inflight.json`. Owned agents regain their core and downstream tools after extension setup. The surviving turn keeps its original delegation route, and a later request gets its own reply.
 
@@ -64,17 +64,17 @@ DSH file queries (`read`, `grep`, `glob` and the editor's `view`) do not acquire
 
 The MEK adapter admits the DSH-registered `subagent_codex` in a Main Bot's current private Session. DSH owns the tool, its permissions, and delivery of the completion notice to the exact parent. MEK reads the parent from the scoped lifecycle event, exposes live activity and sends a parent-scoped stop for the selected child. Conversation rollover waits while Codex is running so DSH can deliver the result to the originating Session. A plugin reload can recover activity for the same live DSH Agent. A host restart does not resume a native Codex run. File operations inside the external Codex process use the provider's permission mode and run outside the MEK tool-call lease hooks.
 
-## Merge and verify upstream
+## Evaluate and verify upstream ideas
 
-Keep `upstream` pointing to `https://github.com/Fei2411/DS-Bot.git` and `origin` to MakeEpoch. Fetch upstream, create an update branch from downstream main, merge the desired commit and resolve metadata, the small API/export seams and native build bindings. Update the pinned commit. Preserve upstream ancestry and source locations; do not replace them with a copied client implementation.
+Keep `upstream` pointing to `https://github.com/Fei2411/DS-Bot.git` and `origin` to MakeEpoch. Review the goals behind upstream changes and check whether they fit MEK’s role inside DSH. Prefer a public host capability when it covers the same use case. Record adopted designs and keep source attribution in the repository.
 
-Run `npm ci`, `npm run harness`, build, unit tests, generated-client check and lint from `ds-bot/`. For host changes, run model selection, delegation and group replies through `dev/mek-smoke.mjs` against a separate `.dsh-test-*` profile and bundled mock model. Verify native UI: create Bot, Agent entry, collapse/expand, details open/close, group history and replies, settings, and repeated transitions to DSH panels. Check for no Bot wrapper iframe, no parent-body style/data leakage and no component exceptions. Stop the test services afterward.
+Run `npm ci`, `npm run harness`, build, unit tests, generated-client check and lint at the repository root. For host changes, run model selection, delegation and group replies through `dev/mek-smoke.mjs` against a separate `.dsh-test-*` profile and bundled mock model. Verify native UI: create Bot, Agent entry, collapse/expand, details open/close, group history and replies, settings, and repeated transitions to DSH panels. Check for no Bot wrapper iframe, no parent-body style/data leakage and no component exceptions. Stop the test services afterward.
 
-Original README files remain as `README.upstream*.md`. Inherited desktop/release CI is manual. `.github/workflows/makeepoch.yml` checks this plugin against DSH 0.2.2-alpha.2. Screenshots contain only local mock-model conversations. Apache-2.0 and attribution are preserved.
+The [upstream repository](https://github.com/Fei2411/DS-Bot) maintains its own README and release workflows. `.github/workflows/makeepoch.yml` checks this plugin against DSH 0.2.2-alpha.2. Screenshots contain only local mock-model conversations. Apache-2.0 and attribution are preserved.
 
 ## Documentation and UI acceptance
 
-Every feature, changed user flow, capability restriction and upstream adaptation updates its documentation in the same change. Maintain current features and differences in the single Chinese [README](../README.md), synchronize its packaged copy, and keep old language entries as compatibility links. Maintain upstream changes and adoption in the [per-version merge records and documentation matrix](fork-vs-upstream.md), plus affected design/integration contracts. Visible behavior changes also update the [UI test plan](dev/mek-ui-testing.md).
+Every feature, changed user flow, capability restriction and upstream adaptation updates its documentation in the same change. Maintain current features and differences in the single Chinese [README](../README.md), package it directly, and keep the old language entry as a compatibility link. Maintain upstream changes and adoption in the [per-version merge records and documentation matrix](fork-vs-upstream.md), plus affected design/integration contracts. Visible behavior changes also update the [UI test plan](dev/mek-ui-testing.md).
 
 The UI plan distinguishes component checks, real-browser fixtures and isolated DSH/package acceptance. A fixture result does not establish slots, authentication, persistence or coexistence inside DSH; an upstream merge and release candidate require the applicable DSH integration checks. Record the actual source/bundle identity, executed cases, screenshots, failures and unknowns. Current CI does not execute the complete browser matrix. Documentation-only changes use link, source and root/package copy review without rerunning model/UI suites.
 

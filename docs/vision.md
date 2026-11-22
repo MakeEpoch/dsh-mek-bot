@@ -1,5 +1,7 @@
 # The vision of DS Bot
 
+> Historical DS Bot upstream reference. For the current plugin, see [dsh-mek-bot](../README.md).
+
 English | [中文](vision.zh.md)
 
 This file says what DS Bot is meant to be and why. For how to use it, see the [README](../README.md); for the designs that are decided, see [docs/plans/](plans/) (written in Chinese); for how to take part, see [CONTRIBUTING](../CONTRIBUTING.md).

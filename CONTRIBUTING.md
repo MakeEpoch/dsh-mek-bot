@@ -1,24 +1,20 @@
-# Contributing to DS Bot
+# Contributing to dsh-mek-bot
 
 English | [中文](CONTRIBUTING.zh.md)
 
 Thank you for helping. This file explains how the team works, how to set up the plugin, how to test a change and which rules a change must follow. For what the plugin does and how users install it, see [README.md](README.md).
 
-## MakeEpoch downstream scope
+## MakeEpoch plugin
 
-This repository ships the `dsh-mek-bot` native DSH plugin. Read [project overview and differences](README.md), [version merge records and documentation rules](docs/fork-vs-upstream.md), [integration boundaries](docs/makeepoch-integration.md) and [UI testing](docs/dev/mek-ui-testing.md) first. The inherited instructions below also describe upstream desktop/mobile workflows; they do not change this fork's release target or native navigation.
-
-New features, changed flows, capability restrictions and upstream adaptations must update the relevant documents in the same PR: the single Chinese README for current features/differences (with its packaged copy synchronized and old language entries kept as links), affected integration/design notes, per-version adoption records for upstream merges, and the UI test matrix for visible changes. Remove stale instructions and state verification gaps explicitly. Documentation is part of completion, not a later follow-up. Documentation-only edits need link/source/root-package consistency review rather than model or browser test runs.
-
-UI changes need the applicable automated checks and browser evidence from the test plan. An upstream merge additionally needs an isolated DSH integration pass. Label component tests, browser fixtures, DSH integration and installed-package validation separately; attach their versions, cases and evidence. Existing CI does not run the full browser/DSH matrix.
+This repository ships the native DSH plugin `dsh-mek-bot` from its root. See the [README](README.md), [integration notes](docs/makeepoch-integration.md) and [UI test plan](docs/dev/mek-ui-testing.md). Update the relevant documentation with each user-facing change and record the actual test environment.
 
 ## Who can open pull requests
 
-Collaborators of this repository push branches here and open pull requests into `dev` (see [How we work](#how-we-work)). For now, only collaborators can open pull requests. If you are not a collaborator, please open an issue for a bug (see [Report a problem](#report-a-problem)) or use [Discussions](https://github.com/Fei2411/DS-Bot/discussions) for a question or an idea.
+Collaborators of this repository push branches here and open pull requests into `dev` (see [How we work](#how-we-work)). For now, only collaborators can open pull requests. If you are not a collaborator, please open an issue for a bug (see [Report a problem](#report-a-problem)) or use [Discussions](https://github.com/MakeEpoch/dsh-mek-bot/discussions) for a question or an idea.
 
 ## The rules that matter most
 
-1. **Build on DSH; never patch it.** The Bot features are a DSH plugin: use the plugin APIs that DSH documents (Cordis services, the plugin client entry, profile patches). The desktop app starts DSH only through the entry points that DSH documents (`@deepseek-ai/dsh/profile-boot`, the `dsh` command). Do not patch DeepSeek Harness, and do not depend on files inside a DSH install. When a feature needs something that DSH does not offer, open an issue here first; the fix can belong in DSH.
+1. **Build on DSH; never patch it.** The Bot features are a DSH plugin: use the plugin APIs that DSH documents (Cordis services, the plugin client entry, profile patches). Do not patch DeepSeek Harness, and do not depend on files inside a DSH install. When a feature needs something that DSH does not offer, open an issue here first; the fix can belong in DSH.
 2. **Bots run in DSH Sessions.** A Bot keeps its identity while its work runs in DSH Sessions: one for its own chat, one for each group, a fresh one when the context fills up. Every turn goes through the normal DSH agent loop, tools and model routes. Do not add a second agent runtime.
 3. **No real secrets anywhere.** Do not commit API keys, tokens, cookies, `DSH_HOME` folders, logs or screenshots with personal data. The tests and the test bench use a scripted mock model and need no key.
 4. **Only original material.** Do not copy code, text, icons, logos or other graphics from other products or websites. Code under a license compatible with Apache 2.0 is the only exception: say where it comes from and add its notice to a `NOTICE` file.
@@ -73,97 +69,34 @@ Keep one pull request to one issue. Split a large change into several pull reque
 
 ### Merge conflicts
 
-- **`ds-bot/client.js`**: never resolve it by hand. Resolve the conflicts in `ds-bot/src/client/`, run `npm run build` in `ds-bot/` and commit the new `client.js`.
+- **`client.js`**: never resolve it by hand. Resolve the conflicts in `src/client/`, run `npm run build` from the repository root and commit the new `client.js`.
 - **`CHANGELOG.md`**: pull requests do not change it, so it should not conflict. If it does, keep both sides.
 
-### Releases (maintainer)
+### Releases
 
-1. In a pull request into `dev`, set the version in `ds-bot/package.json` and write the `CHANGELOG.md` section from the Changelog sentences of the merged pull requests.
-2. Open a pull request from `dev` into `main` titled `release: vX.Y.Z`. List every `Fixes #<number>` of the release in its description, so that these issues close when it is merged.
-3. Before you merge it, run the [release checklist](docs/dev/release-checklist.md) (in Chinese) on a real Windows machine, and on macOS when the change touches it, and post the result in the pull request. Merge it with a merge commit and publish a GitHub release `vX.Y.Z` on `main`, with "Set as the latest release" turned off: the workflow marks it latest itself once the installers, `SHA256SUMS.txt` and the download table are attached. The Release workflow checks that the tag matches the version and is on `main`, runs the checks and publishes the package to npm (a pre-release version under the npm tag `next`). Do not run `npm publish` by hand.
-4. For a hotfix, start `fix/hot-<name>` from `main`, open the pull request into `main`, release a patch version, then merge `main` into `dev`.
+Run the [plugin release checklist](docs/dev/release-checklist.md) with a clean DSH profile before publishing a package.
 
-## Set up
+## Set up and test
 
-You need:
-
-- Node.js `22.19` or later (or `24` and later).
-- Git.
-- For the test bench only: pnpm `11` and a checkout of DeepSeek Harness at the DSH version that the plugin is tested with.
+From the root of `MakeEpoch/dsh-mek-bot`, with Node.js 24:
 
 ```sh
-git clone https://github.com/Fei2411/DS-Bot.git ds-bot-repo
-cd ds-bot-repo/ds-bot
-
-# The plugin's own build tool (esbuild only).
 npm ci
-
-# The DSH packages that the unit tests and the linter load, from npm, into dev/harness/.
 npm run harness
+npm run build
+npm test
+node scripts/build-client.mjs --check
+npm run lint
 ```
 
-For the test bench, add the DeepSeek Harness checkout next to the plugin folder (this folder is ignored by Git):
-
-```sh
-cd ..
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-git -C deepseek-harness checkout dsh-v0.2.1-rc.5
-(cd deepseek-harness && pnpm install)
-```
-
-If your DeepSeek Harness checkout is somewhere else, set `DSH_HARNESS` to its path. `DSH_HARNESS` also takes the place of `dev/harness/` for the unit tests and the linter.
-
-The `@deepseek-ai/*` packages are peer dependencies: in a real install, the DSH profile supplies them. `ds-bot/.npmrc` keeps npm from installing them into the plugin folder.
+For an integration smoke test, install the DSH CLI and pnpm and run `npm run check -- --only smoke`. It uses a test profile, the packed plugin and a local mock model. Use the [UI test plan](docs/dev/mek-ui-testing.md) for actual browser interactions. The host provides the `@deepseek-ai/*` peer dependencies during a normal plugin install.
 
 ## Layout
 
-| Path | What it is |
-|---|---|
-| `ds-bot/index.js`, `ds-bot/src/host/` | The server side: Bot roster and store, tools, turns and delivery, group chats, conversation parts and the search index, images, the Bot browser bridge, the `api/bot` channel |
-| `ds-bot/src/client/` | The browser side: sidebar, chat, panels and dialogs, themes, characters, the Bot browser panel |
-| `ds-bot/client.js` | Generated from `src/client/` by `scripts/build-client.mjs`. It is committed, so that Git installs need no build step |
-| `ds-bot/web-search.js` | The `auto` web-search provider. It does not depend on the Bot team code |
-| `ds-bot/cordis.patch.yml` | The profile patch that the plugin brings |
-| `ds-bot/test/` | Unit tests and fixtures |
-| `ds-bot/dev/` | The DSH packages for the unit tests (`harness/`), the mock model, the test bench, the smoke test, the character generator, the Desktop scripts for Linux, and two tools for real models: the steward evaluation and a logging pass-through |
-
-## Test a change
-
-Run these in `ds-bot/`:
-
-```sh
-npm run build                          # src/client → client.js
-npm test                               # unit tests; they also fail if client.js is stale
-node scripts/build-client.mjs --check  # client.js matches src/client
-npm run lint                           # oxlint
-```
-
-CI runs the same three checks on every pull request, on Linux and Windows. It also scans the tracked files for keys, tokens, personal paths and e-mail addresses, and for material that must stay local. To run the scan yourself, from the repository root:
-
-```sh
-mkdir -p /tmp/ds-bot-tree && git archive HEAD | tar -x -C /tmp/ds-bot-tree && node scripts/scan.mjs /tmp/ds-bot-tree
-```
-
-A "must fix" finding fails CI; "can stay" findings are for reading. The branch rules require the single check **Test result**, which passes only when all the checks pass.
-
-For a change to the server side (`index.js`, `src/host/`), also run the smoke test. It starts the mock model and a DSH Web with the plugin linked from your checkout, and walks through the main flows (Bots, group chats, conversation parts, condensing, settings). `CONTEXT_WINDOW` and `CHECK_RATIO` give the mock models a small window, so a few long replies reach the check line:
-
-```sh
-CONTEXT_WINDOW=100000 CHECK_RATIO=0.45 dev/bench.sh smoke 3096 8796 reset && node dev/smoke.mjs smoke 3096
-dev/bench.sh smoke 3096 8796 stop
-```
-
-To try the plugin by hand, start a bench and open the address that it prints:
-
-```sh
-dev/bench.sh dev 3081 8771 reset    # mock model + DSH Web; data in ../.dsh-test-dev
-```
-
-The mock model answers a fixed set of commands, so a bench costs no tokens. The commands are listed at the top of `dev/mock-llm.mjs`. Bench data stays in `.dsh-test-<name>/` next to the plugin folder and never touches your own `~/.dsh`.
-
-For a change to the context steward or its prompts (`src/host/steward.js`), also check it on a real model. `dev/steward-eval.mjs` runs its decisions on fixed conversation endings, and `dev/llm-tap.mjs` logs every call a real bench makes. Both cost tokens and explain their use at the top.
-
-For a change to the Bot browser, check it in DSH Desktop. On Linux, the scripts in `dev/desktop-linux/` run DSH Desktop under Xvfb; each script explains its use at the top.
+- `mek.js` and `cordis.patch.yml` are the DSH plugin entry and bundle patch.
+- `src/host/` contains the Bot runtime, team tools and DSH integration.
+- `src/client/` contains the native Bot UI and shared chat components. `npm run build` regenerates the tracked `client.js` from this source.
+- `test/` and `dev/` contain unit tests, DSH fixtures and the isolated mock bench.
 
 ## Write a change
 
@@ -191,7 +124,7 @@ DS Bot removes API keys, tokens, saved secrets and your home folder from its dia
 
 For a security problem, do not open a public issue. Use **Report a vulnerability** on the repository's **Security** tab.
 
-Issues are for bug reports. Questions, ideas and feature requests belong in [Discussions](https://github.com/Fei2411/DS-Bot/discussions). An idea that the maintainer accepts becomes an issue.
+Issues are for bug reports. Questions, ideas and feature requests belong in [Discussions](https://github.com/MakeEpoch/dsh-mek-bot/discussions). An idea that the maintainer accepts becomes an issue.
 
 ## License
 

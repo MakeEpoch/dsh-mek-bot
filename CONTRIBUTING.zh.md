@@ -1,20 +1,16 @@
-# 参与 DS Bot 开发
+# 参与 dsh-mek-bot 开发
 
 [English](CONTRIBUTING.md) | 中文
 
 感谢参与。本文说明团队怎么协作、怎么搭环境、怎么测试改动，以及改动必须遵守的规则。插件做什么、用户怎么安装，见 [README.md](README.md)。
 
-## MakeEpoch 下游范围
+## MakeEpoch 插件
 
-本仓库交付 `dsh-mek-bot` 原生 DSH 插件。先阅读[项目介绍与差异](README.md)、[版本合并记录与文档维护要求](docs/fork-vs-upstream.md)、[集成边界](docs/makeepoch-integration.md)和 [UI 测试方案](docs/dev/mek-ui-testing.md)。下文保留了上游桌面端和移动端的工作流说明，它们不改变本 fork 的发布目标和原生导航方式。
-
-新增功能、调整使用流程、收窄能力或适配上游时，必须在同一 PR 更新对应文档：中文版 README 中的当前特性与差异、受影响的集成与设计说明；包内 README 同步主文档，旧语言入口保持跳转；上游合并更新逐版本吸收记录，界面行为变化更新 UI 测试矩阵。删除过期说明，明确未验证项。文档是完工条件，不留到后续补写。纯文档变更检查链接、代码依据和根/包内副本一致性，无需重新运行模型或浏览器测试。
-
-UI 改动需要执行测试方案中的相关自动检查及浏览器验证；合并上游还需要隔离 DSH 集成验收。组件测试、浏览器夹具、DSH 集成和安装包验收分别记录版本、用例及证据。现有 CI 尚未覆盖完整的浏览器和 DSH 矩阵。
+本仓库以根目录交付原生 DSH 插件 `dsh-mek-bot`。产品定位、集成和测试分别见 [README](README.md)、[集成说明](docs/makeepoch-integration.md)和 [UI 测试方案](docs/dev/mek-ui-testing.md)。用户可见行为有变化时同步更新对应文档，并记录实际测试环境。
 
 ## 谁可以提 Pull Request
 
-本仓库的协作者直接在这里推分支，向 `dev` 提 Pull Request（见[协作方式](#协作方式)）。目前只有协作者能提 Pull Request。如果你不是协作者，发现 bug 请开 Issue（见[报告问题](#报告问题)），提问或建议请到 [Discussions](https://github.com/Fei2411/DS-Bot/discussions)。
+本仓库的协作者直接在这里推分支，向 `dev` 提 Pull Request（见[协作方式](#协作方式)）。目前只有协作者能提 Pull Request。如果你不是协作者，发现 bug 请开 Issue（见[报告问题](#报告问题)），提问或建议请到 [Discussions](https://github.com/MakeEpoch/dsh-mek-bot/discussions)。
 
 ## 最重要的规则
 
@@ -73,97 +69,34 @@ UI 改动需要执行测试方案中的相关自动检查及浏览器验证；�
 
 ### 合并冲突
 
-- **`ds-bot/client.js`**：不要手工解决。先解决 `ds-bot/src/client/` 里的冲突，再在 `ds-bot/` 里运行 `npm run build`，提交新生成的 `client.js`。
+- **`client.js`**：不要手工解决。先解决 `src/client/` 里的冲突，再在仓库根目录 里运行 `npm run build`，提交新生成的 `client.js`。
 - **`CHANGELOG.md`**：Pull Request 不改它，所以不应该冲突。如果冲突了，两边都保留。
 
-### 发版（维护者）
+### 发版
 
-1. 向 `dev` 提一个 Pull Request：修改 `ds-bot/package.json` 里的版本号，根据已合并 Pull Request 的 Changelog 句子写 `CHANGELOG.md` 的这一版。
-2. 提一个从 `dev` 到 `main` 的 Pull Request，标题为 `release: vX.Y.Z`。在描述里列出这一版所有的 `Fixes #<号>`，合并时这些 Issue 会一起关闭。
-3. 合并前在 Windows 真机上做一遍[发版前真机检查](docs/dev/release-checklist.md)，改动涉及 macOS 时在 macOS 上也做一遍，结果贴在这个 PR 里。用 merge commit 合并，在 `main` 上发布 GitHub Release `vX.Y.Z`，发布时不勾「Set as the latest release」：安装包、`SHA256SUMS.txt` 和下载表都传完后，工作流会自己把它标为最新。Release 工作流会检查 tag 与版本号一致、且在 `main` 上，跑完检查后把包发到 npm（预发布版本发到 npm 的 `next` 标签）。不要手动 `npm publish`。
-4. 热修：从 `main` 切 `fix/hot-<短名>`，向 `main` 提 Pull Request，发一个补丁版本，再把 `main` 合回 `dev`。
+发布前用隔离 DSH profile 执行[插件发版检查](docs/dev/release-checklist.md)。
 
-## 搭建环境
+## 搭建环境和测试
 
-需要：
-
-- Node.js `22.19` 或更高（或 `24` 及以上）。
-- Git。
-- 仅测试台需要：pnpm `11`，以及插件测试所用 DSH 版本的 DeepSeek Harness 源码。
+使用 Node.js 24，在 `MakeEpoch/dsh-mek-bot` 仓库根目录执行。
 
 ```sh
-git clone https://github.com/Fei2411/DS-Bot.git ds-bot-repo
-cd ds-bot-repo/ds-bot
-
-# 插件自己的构建工具（只有 esbuild）。
 npm ci
-
-# 单元测试和 lint 要加载的 DSH 包，从 npm 装进 dev/harness/。
 npm run harness
+npm run build
+npm test
+node scripts/build-client.mjs --check
+npm run lint
 ```
 
-测试台需要把 DeepSeek Harness 源码放在插件目录旁边（这个目录被 Git 忽略）：
-
-```sh
-cd ..
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-git -C deepseek-harness checkout dsh-v0.2.1-rc.5
-(cd deepseek-harness && pnpm install)
-```
-
-如果 DeepSeek Harness 源码放在别处，把 `DSH_HARNESS` 设为它的路径。`DSH_HARNESS` 也会代替 `dev/harness/`，供单元测试和 lint 使用。
-
-`@deepseek-ai/*` 包是 peer 依赖：真实安装时由 DSH 的 profile 提供。`ds-bot/.npmrc` 阻止 npm 把它们装进插件目录。
+安装 DSH CLI 和 pnpm 后，`npm run check -- --only smoke` 会使用打好的插件、独立 profile 和本地模拟模型进行冒烟检查。浏览器交互见 [UI 测试方案](docs/dev/mek-ui-testing.md)。正常运行时，`@deepseek-ai/*` 对等依赖由 DSH 宿主提供。
 
 ## 目录结构
 
-| 路径 | 内容 |
-|---|---|
-| `ds-bot/index.js`、`ds-bot/src/host/` | 服务端：Bot 名册与存储、工具、回合与投递、群聊、对话分段与搜索索引、图片、Bot 浏览器桥接、`api/bot` 通道 |
-| `ds-bot/src/client/` | 浏览器端：侧栏、聊天、面板与对话框、主题、角色、Bot 浏览器面板 |
-| `ds-bot/client.js` | 由 `scripts/build-client.mjs` 从 `src/client/` 生成。它被提交进仓库，这样用 Git 安装时不需要构建 |
-| `ds-bot/web-search.js` | `auto` 网页搜索提供方。不依赖 Bot 团队代码 |
-| `ds-bot/cordis.patch.yml` | 插件带的 profile patch |
-| `ds-bot/test/` | 单元测试和测试数据 |
-| `ds-bot/dev/` | 单元测试用的 DSH 包（`harness/`）、模拟模型、测试台、冒烟测试、角色生成器、Linux 上的 Desktop 脚本，以及两个用真实模型的工具：上下文管家评测和日志转发 |
-
-## 测试改动
-
-在 `ds-bot/` 里运行：
-
-```sh
-npm run build                          # src/client → client.js
-npm test                               # 单元测试；client.js 过期时也会失败
-node scripts/build-client.mjs --check  # client.js 与 src/client 一致
-npm run lint                           # oxlint
-```
-
-CI 在每个 Pull Request 上，在 Linux 和 Windows 上跑同样的三项检查。它还会扫描入库的文件，查找密钥、token、个人路径和邮箱，以及只应留在本地的材料。想自己扫描，在仓库根目录运行：
-
-```sh
-mkdir -p /tmp/ds-bot-tree && git archive HEAD | tar -x -C /tmp/ds-bot-tree && node scripts/scan.mjs /tmp/ds-bot-tree
-```
-
-「must fix」的结果会让 CI 失败；「can stay」的结果仅供阅读。分支规则只要求一项检查 **Test result**，所有检查都通过它才通过。
-
-改服务端（`index.js`、`src/host/`）时，还要跑冒烟测试。它启动模拟模型和一个链接到你本地插件的 DSH Web，走一遍主要流程（Bot、群聊、对话分段、压缩、设置）。`CONTEXT_WINDOW` 和 `CHECK_RATIO` 让模拟模型的上下文窗口变小，几条长回复就能到达检查线：
-
-```sh
-CONTEXT_WINDOW=100000 CHECK_RATIO=0.45 dev/bench.sh smoke 3096 8796 reset && node dev/smoke.mjs smoke 3096
-dev/bench.sh smoke 3096 8796 stop
-```
-
-想手动试用插件，启动一个测试台，打开它打印的地址：
-
-```sh
-dev/bench.sh dev 3081 8771 reset    # 模拟模型 + DSH Web；数据在 ../.dsh-test-dev
-```
-
-模拟模型只回应一组固定命令，所以测试台不花 token。命令列在 `dev/mock-llm.mjs` 开头。测试台数据放在插件目录旁边的 `.dsh-test-<名字>/`，不会碰你自己的 `~/.dsh`。
-
-改上下文管家或它的提示词（`src/host/steward.js`）时，还要用真实模型检查。`dev/steward-eval.mjs` 在固定的对话结尾上跑它的决策，`dev/llm-tap.mjs` 记录真实测试台的每次调用。两者都花 token，用法写在文件开头。
-
-改 Bot 浏览器时，要在 DSH Desktop 里检查。在 Linux 上，`dev/desktop-linux/` 里的脚本用 Xvfb 运行 DSH Desktop；每个脚本的用法写在开头。
+- `mek.js` 和 `cordis.patch.yml` 分别是插件入口和 DSH 组合包配置。
+- `src/host/` 存放 Bot 运行时、团队工具和 DSH 集成。
+- `src/client/` 存放原生 Bot 界面和共享聊天组件。使用 `npm run build` 生成需要提交的 `client.js`。
+- `test/` 和 `dev/` 存放单元测试、DSH 测试夹具和隔离冒烟脚本。
 
 ## 写改动
 
@@ -191,7 +124,7 @@ DS Bot 会从诊断信息里去掉 API key、token、保存的密钥和你的用
 
 安全问题不要开公开 Issue。请在仓库的 **Security** 页使用 **Report a vulnerability**。
 
-Issue 只用来报告 bug。提问、想法和功能建议请发到 [Discussions](https://github.com/Fei2411/DS-Bot/discussions)。维护者认可的想法会开成 Issue。
+Issue 只用来报告 bug。提问、想法和功能建议请发到 [Discussions](https://github.com/MakeEpoch/dsh-mek-bot/discussions)。维护者认可的想法会开成 Issue。
 
 ## 许可
 

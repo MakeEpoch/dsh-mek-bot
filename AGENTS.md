@@ -4,21 +4,18 @@ Instructions for AI coding agents that work on this repository. Human contributo
 
 ## MakeEpoch fork: read first
 
-This checkout ships **dsh-mek-bot, a native DSH plugin**, not the upstream standalone application. The sections below retain upstream context; for downstream product shape, integration, merge and acceptance decisions, follow [project overview and differences](README.md), [version merge records and documentation rules](docs/fork-vs-upstream.md), [integration boundaries](docs/makeepoch-integration.md) and the [UI test plan](docs/dev/mek-ui-testing.md).
+This checkout ships **dsh-mek-bot, a native DSH plugin**, not the upstream standalone application. For product shape, integration and acceptance decisions, follow [project overview and differences](README.md), [version merge records and documentation rules](docs/fork-vs-upstream.md), [integration boundaries](docs/makeepoch-integration.md) and the [UI test plan](docs/dev/mek-ui-testing.md).
 
-- Keep one native Bot launcher, a top conversation list and scene-local UI. DSH owns its sidebar, ordinary sessions, settings and scheduling. Retained `app/` and `mobile/` code is shared source/reference, not a downstream release target.
-- Preserve downstream task ownership, review, navigation restoration, team operations and shared-feed behavior during upstream merges. Classify each upstream capability as reused, adapted, omitted or pending verification; do not equate upstream release notes with fork acceptance.
-- **Every new feature, changed user flow, capability restriction or upstream adaptation must update its applicable documentation in the same change.** Maintain the current feature inventory and upstream differences in the single Chinese `README.md`, synchronize its packaged `ds-bot/README.md` copy, and keep `README.zh.md` files as compatibility links. Record upstream changes and adoption per version in `docs/fork-vs-upstream.md`; update integration/design notes when contracts change and the UI test matrix when visible behavior changes. Remove obsolete descriptions. A feature is not done while its documentation describes the old behavior.
+- Keep one native Bot launcher, a top conversation list and scene-local UI. DSH owns its sidebar, ordinary sessions, settings and scheduling. Shared upstream UI used by the plugin lives in `src/client/bot-view/`.
+- Preserve downstream task ownership, review, navigation restoration, team operations and shared-feed behavior when evaluating upstream changes. Evaluate the design ideas against this plugin’s product goals and host APIs. Record the applied design and observed verification.
+- **Every new feature, changed user flow, capability restriction or upstream adaptation must update its applicable documentation in the same change.** Maintain the current feature inventory and upstream differences in the single Chinese `README.md`, which is packaged directly, and keep `README.zh.md` as a compatibility link. Record upstream changes and adoption per version in `docs/fork-vs-upstream.md`; update integration/design notes when contracts change and the UI test matrix when visible behavior changes. Remove obsolete descriptions. A feature is not done while its documentation describes the old behavior.
 - UI changes require relevant automated checks plus real-browser evidence under the UI test plan. Upstream merges also require an isolated DSH integration pass. Record the exact tested source/bundle, environment, skipped cases and remaining unknowns. A fixture pass is not a DSH installation or release pass.
 - For the MakeEpoch fork, merge completed changes into local `main` once verification passes or after a successful authorized deployment. Verify that `main` contains the resulting commits. Follow the user's instructions for any push or deployment.
-- For documentation-only changes, check links, commands against source, root/package copy consistency and factual status. Do not rerun model/UI suites unless the documentation work exposes a behavior change that needs validation.
+- For documentation-only changes, check links, commands against source, packaged documentation and factual status. Do not rerun model/UI suites unless the documentation work exposes a behavior change that needs validation.
 
 ## What this project is
 
-DS Bot is a team of long-lived Bots, built on DeepSeek Harness (DSH). It has two parts:
-
-- `ds-bot/`: the Bot features, written as a DSH plugin. The plugin runs in DSH Desktop, in DSH Web and in the desktop app.
-- `app/`: the desktop app for Windows, macOS and Linux. It runs a pinned DSH with the `ds-bot` plugin, in its own profile and its own `DSH_HOME`, and imports an existing team from the user's DSH.
+dsh-mek-bot is a native DSH interface for teams of long-lived Bots. The repository root is the installable plugin package. It draws heavily on DS Bot’s runtime and UI code.
 
 The Bot team:
 
@@ -30,15 +27,15 @@ The Bot team:
 
 ## Hard rules
 
-1. **Build on DSH; never patch it.** Bot features use the documented plugin APIs. The desktop app starts DSH only through its documented entry points (`@deepseek-ai/dsh/profile-boot`, the `dsh` CLI). Never patch DeepSeek Harness or depend on files inside a DSH install. If something is missing in DSH, stop and say so; do not work around it with a patch.
-2. **No secrets.** Never write, print or commit API keys, tokens, cookies or `DSH_HOME` contents. Use the mock model (`ds-bot/dev/mock-llm.mjs`) for tests; it needs no key.
+1. **Build on DSH; never patch it.** Bot features use the documented plugin APIs. Never patch DeepSeek Harness or depend on files inside a DSH install. If something is missing in DSH, stop and say so; do not work around it with a patch.
+2. **No secrets.** Never write, print or commit API keys, tokens, cookies or `DSH_HOME` contents. Use the mock model (`dev/mock-llm.mjs`) for tests; it needs no key.
 3. **Only original material.** Do not copy code, text, icons, logos or graphics from other products or websites. Code under a license compatible with Apache 2.0 is the only exception: say where it comes from and add its notice to the `NOTICE` file.
-4. **`client.js` is generated.** Change `ds-bot/src/client/`, then run `npm run build` and commit both files. Never edit `client.js` by hand.
-5. **Do not touch the user's own DSH data.** The desktop app keeps its data in its own `DSH_HOME`; its import only reads `~/.dsh` and never writes there. The test bench keeps its data in `.dsh-test-<name>/`. Never point a test at `~/.dsh`, at the desktop app's data or at a DSH that the user runs.
+4. **`client.js` is generated.** Change `src/client/`, then run `npm run build` and commit both files. Never edit `client.js` by hand.
+5. **Do not touch the user's own DSH data.** The test bench keeps its data in `.dsh-test-<name>/`. Never point a test at `~/.dsh`, at the desktop app's data or at a DSH that the user runs.
 
 ## Commands
 
-Run in `ds-bot/`. The unit tests and the linter load the `@deepseek-ai/*` packages from `dev/harness/`, which `npm run harness` installs from npm at the DSH version in `dev/harness/package.json`. `DSH_HARNESS` points them at another install or at a DeepSeek Harness checkout instead. The test bench needs a checkout at `../deepseek-harness` (or `DSH_HARNESS`), at the DSH version in the README.
+Run at the repository root. The unit tests and the linter load the `@deepseek-ai/*` packages from `dev/harness/`, which `npm run harness` installs from npm at the DSH version in `dev/harness/package.json`. `DSH_HARNESS` points them at another install or at a DeepSeek Harness checkout instead. The isolated Web test bench uses `dsh` on PATH or the `DSH_CLI` override.
 
 ```sh
 npm ci                                 # build tool only (esbuild)
@@ -47,8 +44,7 @@ npm run build                          # src/client → client.js
 npm test                               # unit tests; also fail if client.js is stale
 node scripts/build-client.mjs --check  # client.js matches src/client
 npm run lint                           # oxlint
-CONTEXT_WINDOW=100000 CHECK_RATIO=0.45 dev/bench.sh smoke 3096 8796 reset && node dev/smoke.mjs smoke 3096   # smoke test
-dev/bench.sh smoke 3096 8796 stop
+npm run check -- --only smoke         # isolated DSH Web with a local mock
 ```
 
 A change is done when `npm test`, the `--check` and `npm run lint` pass; CI runs them on every pull request. Run the smoke test as well for changes to `index.js` or `src/host/`. Use a free port for each bench, and stop every bench and process that you started.
@@ -68,11 +64,10 @@ The upstream contribution workflow is in [CONTRIBUTING.md](CONTRIBUTING.md#how-w
 
 ## Layout
 
-- `ds-bot/index.js` and `ds-bot/src/host/`: the server side (roster and store, tools, turns and delivery, groups, conversation parts and the search index, images, the browser bridge, the `api/bot` channel).
-- `ds-bot/src/client/`: the browser side (sidebar, chat, panels, themes, characters, the Bot browser panel).
-- `ds-bot/web-search.js`: the `auto` web-search provider, independent of the Bot team code.
-- `ds-bot/test/`: unit tests and fixtures. `ds-bot/dev/`: the DSH packages for the tests (`harness/`), mock model, test bench, smoke test, character generator, Desktop scripts for Linux.
-- `app/`: the desktop app (Electron main process and window, first-run setup and import, installer and updates).
+- `index.js` and `src/host/`: the server side (roster and store, tools, turns and delivery, groups, conversation parts and the search index, images, the browser bridge, the `api/bot` channel).
+- `src/client/`: the browser side (sidebar, chat, panels, themes, characters, the Bot browser panel).
+- `web-search.js`: the `auto` web-search provider, independent of the Bot team code.
+- `test/`: unit tests and fixtures. `dev/`: the DSH packages for the tests (`harness/`), mock model, test bench, smoke test and character generator.
 
 ## Style
 
@@ -80,4 +75,4 @@ The upstream contribution workflow is in [CONTRIBUTING.md](CONTRIBUTING.md#how-w
 - Write a comment only when the reason is not clear from the code: a hidden constraint, an invariant, a workaround. Do not describe what the code does.
 - Commit messages in English, imperative subject, the reason in the body. Keep commits small.
 - The person who asked for the change is the commit author. Do not set an AI agent or bot as author or committer, and do not add `Co-authored-by` lines for one.
-- User-facing text in the plugin is English. Project documentation uses one Chinese README as the source of truth; synchronize the packaged copy and retain the old README.zh.md links. Do not create a parallel English project overview.
+- User-facing text in the plugin is English. Project documentation uses one Chinese README as the source of truth; the package uses that same file and retains the README.zh.md link. Do not create a parallel English project overview.

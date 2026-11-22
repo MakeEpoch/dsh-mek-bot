@@ -19,7 +19,7 @@ Fixes #
 
 ## How I checked it / 怎么验证的
 
-- [ ] `npm test` (in `ds-bot/`)
+- [ ] `npm test`
 - [ ] `node scripts/build-client.mjs --check`
 - [ ] `npm run lint`
 - [ ] Smoke test, for changes to `index.js` or `src/host/` / 改了 `index.js` 或 `src/host/` 时跑冒烟测试

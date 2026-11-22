@@ -1,0 +1,93 @@
+{
+  "name": "dsh-mek-bot",
+  "version": "0.2.13",
+  "description": "Native DS-Bot components inside DSH with a collapsible Bot sidebar and team Agent entry",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "deepseek",
+    "bot",
+    "multi-agent",
+    "agents"
+  ],
+  "homepage": "https://github.com/MakeEpoch/dsh-mek-bot#readme",
+  "bugs": {
+    "url": "https://github.com/MakeEpoch/dsh-mek-bot/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MakeEpoch/dsh-mek-bot.git"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "mek.js",
+  "exports": {
+    ".": "./mek.js",
+    "./client": "./client.js",
+    "./web-search": "./web-search.js",
+    "./package.json": "./package.json",
+    "./upstream": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "src/host/",
+    "src/shared/",
+    "src/office/",
+    "client.js",
+    "office.js",
+    "web-search.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "mek.js",
+    "NOTICE",
+    "README.zh.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "test": "node --import ./test/harness-resolve.mjs --test \"test/*.test.js\"",
+    "lint": "node scripts/lint.mjs",
+    "harness": "npm install --prefix dev/harness --legacy-peer-deps=false --no-package-lock --no-fund --no-audit",
+    "check": "sh dev/check.sh"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-scope": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/dsh-web": "*"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "devDependencies": {
+    "@xmldom/xmldom": "0.9.12",
+    "esbuild": "0.28.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-web": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "playwright": "1.59.1"
+  },
+  "dependencies": {
+    "deep-view": "0.1.0"
+  }
+}

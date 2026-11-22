@@ -1,5 +1,7 @@
 # Known issues
 
+> Historical DS Bot upstream reference. For the current plugin, see [dsh-mek-bot](../README.md).
+
 English | [中文](known-issues.zh.md)
 
 ## "@Name" shows as a file in a message that is not sent yet
@@ -87,7 +89,7 @@ libghostty-vt.so: GLIBC_2.27 not found
 
 **Why:** DeepSeek Harness ships native libraries, including `libghostty-vt.so`, built against newer glibc symbols than CentOS 7 provides. DS Bot is a plugin and cannot rebuild DSH's libraries, so there is no glibc-2.17 build to install. Check your version with `ldd --version`.
 
-**What to do:** run the Docker image instead — the container has its own, newer glibc, so the host's glibc no longer decides. See [`docker/`](../docker/README.md): build or pull the image, publish the port, and open the UI from any browser on the LAN. Keep these points in mind:
+**What to do:** run the Docker image instead — the container has its own, newer glibc, so the host's glibc no longer decides. See [upstream Docker instructions](https://github.com/Fei2411/DS-Bot/tree/main/docker): build or pull the image, publish the port, and open the UI from any browser on the LAN. Keep these points in mind:
 
 - The container brings its own DSH and its own native libraries. Do not copy or mount the host's `libghostty-vt.so` into the container — mixing them breaks it.
 - The container needs a Docker (or Podman) new enough to run a Debian Bookworm image. CentOS 7's stock kernel and Docker are old; if Docker itself fails, Podman or a newer Docker engine is the route. This exact combination is untested — the image itself is covered by CI on a modern host.

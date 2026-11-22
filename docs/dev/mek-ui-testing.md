@@ -20,7 +20,7 @@
 
 ### A. 自动组件与生命周期检查
 
-从仓库的 `ds-bot/` 目录执行。依赖已安装时无需重复安装；首次准备使用 `npm ci`、`npm run harness`。
+从仓库根目录执行。依赖已安装时无需重复安装；首次准备使用 `npm ci`、`npm run harness`。
 
 ```sh
 npm run build
@@ -59,7 +59,7 @@ npm run lint
 
 ### 身份和依赖核对
 
-1. 从 `.makeepoch/upstream.json` 记录上游 commit；从 `ds-bot/package.json` 记录插件版本；从 `ds-bot/dev/harness/package.json` 读取 DSH pin。以当前文件为准，不直接照搬旧截图或上游 README 的版本。
+1. 从 `.makeepoch/upstream.json` 记录上游 commit；从根目录的 `package.json` 记录插件版本；从 `dev/harness/package.json` 读取 DSH pin。以当前文件为准，不直接照搬旧截图或上游 README 的版本。
 2. 检查测试所用 DSH 实际版本与 pin 一致，记录 Node、Chrome/Chromium、React 版本与操作系统。`DSH_HARNESS` 若指向别处，也记录其位置及版本。
 3. 使用本地脚本模型和假数据。外部浏览器、文件、连接器用本地夹具；没有能力时验证明确的不可用状态，并标记真实能力流程未验证。
 4. 选择空闲 web/mock 端口，例如 3186/8786；不要占用正式服务端口 3080。所有测试数据、日志、浏览器 profile 均留在独立测试目录。
@@ -68,12 +68,12 @@ npm run lint
 
 以下是手动搭建步骤，需有可工作的本地 DSH CLI、pnpm 和依赖。它不是已经实现的自动测试脚本，本次仅核对命令及配置入口，未重新启动整套 DSH。
 
-在仓库 `ds-bot/` 目录中：
+在仓库根目录执行以下命令。
 
 ```sh
 export BOT_UI_REPO="$(git rev-parse --show-toplevel)"
 export BOT_UI_HOME="$(mktemp -d "$BOT_UI_REPO/.dsh-test-ui-XXXXXX")"
-export BOT_UI_DSH="$BOT_UI_REPO/ds-bot/dev/harness/node_modules/.bin/dsh"
+export BOT_UI_DSH="$BOT_UI_REPO/dev/harness/node_modules/.bin/dsh"
 npm run build
 npm pack --ignore-scripts --pack-destination "$BOT_UI_HOME"
 export BOT_UI_PACKAGE="$BOT_UI_HOME/dsh-mek-bot-$(node -p "require('./package.json').version").tgz"
@@ -98,7 +98,7 @@ DSH_HOME="$BOT_UI_HOME" "$BOT_UI_DSH" plugin --profile web add -w "$BOT_UI_PACKA
 在另一个终端中设置与上面**相同**的 `BOT_UI_REPO`、`BOT_UI_HOME`，前台启动 mock：
 
 ```sh
-cd "$BOT_UI_REPO/ds-bot"
+cd "$BOT_UI_REPO"
 MOCK_PORT=8786 MOCK_LOG="$BOT_UI_HOME/mock.jsonl" MOCK_LOG_TOOLS=1 MEK_MOCK_COORDINATION=1 \
   node dev/mock-llm.mjs "$BOT_UI_HOME"
 ```
@@ -114,7 +114,7 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 
 `mock-key` 仅是本地 mock 的占位值。在本机私下打开启动日志中的认证 URL，不把 URL 中的 token、cookie、完整认证日志提交到仓库或贴入报告。确认模型路由指向本地 mock 后再发消息；不能连接时先诊断 profile、模型路由和本地端口，不改用真实付费模型凑结果。
 
-上游 `dev/bench.sh` 仍按 `ds-bot` bundle 与 `id: bot` 配置。未经下游适配及入口核对，不得将它的一次成功启动写成原生插件验收。`dev/mek-smoke.mjs`、`mek-coordination-smoke.mjs`、`mek-team-smoke.mjs`、`mek-workflow-smoke.mjs` 提供业务检查，但不负责创建这个原生 UI 环境；使用前读取各脚本参数和所需场景，不能把 API 冒烟当成点击验收。
+`npm run check -- --only smoke` 可用根目录打包的插件和本地模拟模型运行隔离 Web 冒烟检查。`dev/mek-smoke.mjs`、`mek-coordination-smoke.mjs`、`mek-team-smoke.mjs`、`mek-workflow-smoke.mjs` 提供业务检查，但不负责创建这个原生 UI 环境；使用前读取各脚本参数和所需场景，不能把 API 冒烟当成点击验收。
 
 任务 owner 使用运行会话标识；冒烟断言应使用 Bot 的 `sessionId`（没有时回退 `id`），不能将 Bot 身份 ID 与会话 ID 混用。不要额外保存带 token 的浏览器启动 URL；测试认证只使用隔离环境正常提供的入口，日志留在本地。
 
@@ -306,7 +306,7 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 - 纠正与限制：最初 mock 未识别管理员复核消息和合并工具消息，流程停住；修正脚本后接续原任务完成，未把失败轮算成完整通过。Chrome 窄屏截图两次发生 CDP 超时，未取得有效窄屏图片；布局依据实际 DOM 几何核对，未把截图失败记为通过。此会话没有启用 console 捕获。真实浏览器的个人视图、管理员交接、完整审批/凭据交互、Desktop、完整主题/浏览器矩阵及真实模型规划能力仍未验收，相关状态分支目前由自动回归覆盖。
 - 首版尚缺规则时间/内容编辑、未知结果完整自助对账、已完成主任务重新打开、来源消息一键跳转及任意外部条件。完整目标和实施范围见[设计方案](../plans/2026-11-03-mek-conversation-tasks.md#19-首版实施记录2026-11-03)。没有修改用户正式 DSH、真实模型配置或外部账号，也未发布本轮包。
 
-复验命令：先按本文件建立隔离 mock DSH，再运行 `node ds-bot/dev/mek-todo-smoke.mjs .dsh-test-todos-20261103 3193 seed`、`run` 和 `schedule`（后两个命令替换最后一个参数）。该脚本仅接受 `.dsh-test-*` 目录；不得指向正式 profile。原始认证日志和 profile 均不提交。
+复验命令：先按本文件建立隔离 mock DSH，再运行 `node dev/mek-todo-smoke.mjs .dsh-test-todos-20261103 3193 seed`、`run` 和 `schedule`（后两个命令替换最后一个参数）。该脚本仅接受 `.dsh-test-*` 目录；不得指向正式 profile。原始认证日志和 profile 均不提交。
 
 测试标签已关闭；隔离 web/mock 进程已退出，3193/8793 端口已确认关闭。最后另行通过文档相对链接、根/包内 README 一致性、生成一致性和 92 个文件的源码/归档/安装复核。
 

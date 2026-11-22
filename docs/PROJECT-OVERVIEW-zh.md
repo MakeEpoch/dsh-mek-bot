@@ -1,5 +1,7 @@
 # dsh-mek-bot 项目说明
 
+> 上游 DS Bot 历史参考。当前插件的范围和安装方式见 [dsh-mek-bot](../README.md)。
+
 > 整理日期：2026-11-04
 > 面向：需要理解这个项目是什么、为什么这样做的协作者
 > 依据：仓库 README、docs/vision.zh.md、AGENTS.md 与实际源码（170 个 js 文件，约 4.3 万行）
