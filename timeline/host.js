@@ -1,20 +1,4 @@
 // Generated from timeline/src by npm run build.
-// timeline/src/error.ts
-import { HarnessError } from "@deepseek-ai/dsh-error";
-var TimelineError = class extends HarnessError {
-  constructor(message, code = "TIMELINE_INVALID_ARGUMENT", options) {
-    super(message, code, options);
-  }
-};
-function parseArgument(schema2, value, field) {
-  const parsed = schema2.safeParse(value);
-  if (parsed.success) return parsed.data;
-  const detail = parsed.error.issues.slice(0, 1).map(
-    ({ path, message }) => ` ${[field, ...path].join(".")}: ${message}`
-  ).join("");
-  throw new TimelineError(`Invalid Timeline argument.${detail}`, "TIMELINE_INVALID_ARGUMENT", { cause: parsed.error });
-}
-
 // timeline/src/config.ts
 import Schema from "@deepseek-ai/schemastery";
 
@@ -1099,6 +1083,22 @@ function taskReceipt(tree, tasks, patches, at) {
       after: measures.get(task2.id)?.progress ?? task2.done[0] / task2.done[1]
     }))
   };
+}
+
+// timeline/src/error.ts
+import { HarnessError } from "@deepseek-ai/dsh-error";
+var TimelineError = class extends HarnessError {
+  constructor(message, code = "TIMELINE_INVALID_ARGUMENT", options) {
+    super(message, code, options);
+  }
+};
+function parseArgument(schema2, value, field) {
+  const parsed = schema2.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const detail = parsed.error.issues.slice(0, 1).map(
+    ({ path, message }) => ` ${[field, ...path].join(".")}: ${message}`
+  ).join("");
+  throw new TimelineError(`Invalid Timeline argument.${detail}`, "TIMELINE_INVALID_ARGUMENT", { cause: parsed.error });
 }
 
 // timeline/src/tools.ts
@@ -3216,9 +3216,18 @@ function installCommand(ctx, storage) {
   });
 }
 
+// timeline/src/activation.ts
+var TIMELINE_ACTIVATION_CHANNEL = "/mek-timeline";
+var TIMELINE_ACTIVATION_METHOD = "activation";
+var TIMELINE_CONFLICTS = {
+  official: "@deepseek-ai/dsh-timeline",
+  standalone: "@magolor/dsh-timeline"
+};
+
 // timeline/src/index.ts
 var name = "timeline";
 var inject = [
+  "loader",
   "agents",
   "sessions",
   "sessionProjections",
@@ -3227,14 +3236,18 @@ var inject = [
   "systemPrompt"
 ];
 async function apply(ctx, input) {
-  const officialEnabled = [...ctx.get("loader")?.entries() ?? []].some(
-    (entry) => !entry.disabled && entry.options.name.replace(/^cordis:/u, "") === "@deepseek-ai/dsh-timeline"
-  );
-  if (officialEnabled) throw new TimelineError("Disable the official Timeline entry before enabling MEK Timeline.", "TIMELINE_PLUGIN_CONFLICT");
-  const standalone = [...ctx.get("loader")?.entries() ?? []].some(
-    (entry) => !entry.disabled && entry.options.name.replace(/^cordis:/u, "") === "@magolor/dsh-timeline"
-  );
-  if (standalone) throw new TimelineError("Disable the standalone Timeline plugin before enabling experimental Timeline.", "TIMELINE_PLUGIN_CONFLICT");
+  const packages = new Set([...ctx.loader.entries()].filter((entry) => !entry.disabled).map((entry) => entry.options.name.replace(/^cordis:/u, "")));
+  const activation = packages.has(TIMELINE_CONFLICTS.official) ? "official" : packages.has(TIMELINE_CONFLICTS.standalone) ? "standalone" : "active";
+  ctx.inject(["connection", "webServer"], (scope) => {
+    scope.connection.rpc.handle(TIMELINE_ACTIVATION_CHANNEL, (method) => {
+      if (method === TIMELINE_ACTIVATION_METHOD) return { ok: true, value: activation };
+      return { ok: false, error: { code: "timeline/unknown-method", message: "Unknown MEK Timeline method.", details: {} } };
+    });
+  });
+  if (activation !== "active") {
+    ctx.logger.info("MEK Timeline is waiting for %s to be disabled. Turn it off, then restart DSH to switch.", TIMELINE_CONFLICTS[activation]);
+    return;
+  }
   let browserLanguage;
   const config = liveConfig(input, () => {
     const locale = ctx.get("settings")?.describe({ redactSecrets: true }).find((item) => item.ns === "locale");

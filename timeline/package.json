@@ -1,14 +1,18 @@
 {
   "name": "dsh-mek-bot-timeline",
-  "version": "0.2.3-alpha.2",
-  "description": "DSH Timeline for the MEK Bot combination package",
+  "version": "0.2.15",
+  "description": "Task trees and progress reports for MEK Bot chats and groups.",
   "type": "module",
   "license": "MIT",
   "icon": "./icon.svg",
+  "engines": { "dsh": ">=0.2.3-alpha.2 <0.3.0" },
   "exports": {
     ".": "./host.js",
-    "./client": "./client.js"
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
+  "files": ["host.js", "client.js", "icon.svg", "locale/", "LICENSE", "docs/THIRD_PARTY_NOTICES.md"],
   "dsh": {
     "client": {
       "platform": "web",

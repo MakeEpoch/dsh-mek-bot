@@ -63,15 +63,18 @@ function TeamView({ ctx, requests, useSessionStatus, nativeTasks, viewport }) {
   actions.sessionPermission = ctx.sessions.retain ? sessionId => <SessionPermissions key={sessionId} ctx={ctx} sessionId={sessionId} /> : undefined
   const timeline = useSyncExternalStore(nativeTasks.subscribe, nativeTasks.getSnapshot)
   const embeddedTimeline = useSyncExternalStore(nativeTasks.embedded.subscribe, nativeTasks.embedded.getSnapshot)
+  const TimelineConflict = useSyncExternalStore(nativeTasks.conflict.subscribe, nativeTasks.conflict.getSnapshot)
   actions.taskTabLabel = embeddedTimeline ? 'Timeline' : undefined
   actions.TaskPanel = useMemo(() => function TaskPanel({ sessionId, bucket }) {
     const roster = hooks.useRoster(value => value)
     const bot = roster.byId[sessionId]
     const room = roster.roomsById[sessionId]
     if (bucket === 'todos' && embeddedTimeline && (room || bot)) return <EmbeddedTodoPanel owner={room ?? bot} group={Boolean(room)} timeline={embeddedTimeline} ctx={ctx} />
-    if (bucket === 'todos' && bot && !room && timeline) return <NativeTodoPanel bot={bot} timeline={timeline} ctx={ctx} />
-    return <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} bucket={bucket} includeGroupPlans={Boolean(room && embeddedTimeline)} />
-  }, [team, ctx, hooks, timeline, embeddedTimeline])
+    const panel = bucket === 'todos' && bot && !room && timeline
+      ? <NativeTodoPanel bot={bot} timeline={timeline} ctx={ctx} />
+      : <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} bucket={bucket} includeGroupPlans={Boolean(room && embeddedTimeline)} />
+    return bucket === 'todos' && TimelineConflict ? <><TimelineConflict />{panel}</> : panel
+  }, [team, ctx, hooks, timeline, embeddedTimeline, TimelineConflict])
   actions.WechatLinks = useMemo(() => function Links(props) { return <WechatLinks {...props} editable={!team.roster.getSnapshot().readOnly} /> }, [team])
   actions.Queue = useMemo(() => function Queue({ sessionId }) {
     const roster = useSyncExternalStore(team.roster.subscribe, team.roster.getSnapshot)

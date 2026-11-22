@@ -42,7 +42,11 @@ Uninstalling leaves team state and DSH history in place. Native visual scoping i
 
 ### Native personal plans
 
-The optional `mek-timeline` entry ships with the Bot package and is disabled by default. It is built from the MIT-licensed DSH Timeline `0.2.3-alpha.2` package. `timeline/src/client/Embedded.tsx` retains the chosen Session and renders the fork's native `TimelinePanel` using the same projection and request handlers as the ordinary DSH sidebar. The session binding is released on switch or unmount. A private target uses its private parts; a group target uses the group Session and `ownParts`. Fork activation and coexistence with the official package are documented in [configuration](configuration.md#启用-bot-内嵌时间线).
+The root package registers Bot and `dsh-mek-bot-timeline` by package name. The Timeline workspace is a bundled dependency at the same version, so the release archive installs both components and takes its display metadata from the named package. Build an archive from a source checkout to include that dependency. Timeline starts by default on a compatible DSH profile. It is built from the MIT-licensed DSH Timeline `0.2.3-alpha.2`.
+
+On startup with official or standalone Timeline enabled, MEK Timeline serves an activation status for the switch prompt. It leaves the shared projection, tools, native tab registrations and edit channel with the existing plugin. The browser waits for that status before mounting the Timeline UI or showing the prompt. The switch is applied on restart. See [configuration](configuration.md#启用-bot-内嵌时间线).
+
+`timeline/src/client/Embedded.tsx` retains the chosen Session and renders the fork's native `TimelinePanel` using the same projection and request handlers as the ordinary DSH sidebar. The session binding is released on switch or unmount. A private target uses its private parts. A group target uses the group Session and `ownParts`.
 
 The fork resolves Timeline tool calls from a group administrator's current member Session to the group's own Session. It refuses member and stale-member writes. Group delegation, dependencies, result reporting and acceptance use the existing coordination tools. The group Tasks tab also holds existing plans and schedule rules. The fork keeps DSH's `plugin:timeline/*` records, projection name and request channel for compatibility with existing trees. Only one Timeline backend may own the channel on a profile.
 

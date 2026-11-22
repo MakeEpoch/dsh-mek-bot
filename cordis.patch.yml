@@ -2,5 +2,4 @@
   - id: mek-bot
     name: dsh-mek-bot
   - id: mek-timeline
-    name: ./timeline/host.js
-    disabled: true
+    name: dsh-mek-bot-timeline

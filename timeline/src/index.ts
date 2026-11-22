@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-settings'
-import { TimelineError } from './error.ts'
+import type {} from '@deepseek-ai/dsh-client-connection'
 import { Config, liveConfig } from './config.ts'
 import type { PluginConfig } from './config.ts'
 import { registerProjection } from './projection.ts'
@@ -12,6 +12,8 @@ import { TimelineStorage } from './storage.ts'
 import type { OutputLanguage } from './policy.ts'
 import { installCommand } from './command.ts'
 import { installDelegation, planningOwner } from './delegation.ts'
+import { TIMELINE_ACTIVATION_CHANNEL, TIMELINE_ACTIVATION_METHOD, TIMELINE_CONFLICTS } from './activation.ts'
+import type { TimelineActivation } from './activation.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -22,6 +24,7 @@ declare module '@deepseek-ai/cordis' {
 export { Config }
 export const name = 'timeline'
 export const inject = [
+  'loader',
   'agents',
   'sessions',
   'sessionProjections',
@@ -36,14 +39,19 @@ export const inject = [
  * @param input Loader-owned Timeline settings.
  */
 export async function apply(ctx: Context, input: PluginConfig): Promise<void> {
-  const officialEnabled = [...(ctx.get('loader')?.entries() ?? [])].some(
-    entry => !entry.disabled && entry.options.name.replace(/^cordis:/u, '') === '@deepseek-ai/dsh-timeline',
-  )
-  if (officialEnabled) throw new TimelineError('Disable the official Timeline entry before enabling MEK Timeline.', 'TIMELINE_PLUGIN_CONFLICT')
-  const standalone = [...(ctx.get('loader')?.entries() ?? [])].some(
-    entry => !entry.disabled && entry.options.name.replace(/^cordis:/u, '') === '@magolor/dsh-timeline',
-  )
-  if (standalone) throw new TimelineError('Disable the standalone Timeline plugin before enabling experimental Timeline.', 'TIMELINE_PLUGIN_CONFLICT')
+  const packages = new Set([...ctx.loader.entries()].filter(entry => !entry.disabled).map(entry => entry.options.name.replace(/^cordis:/u, '')))
+  const activation: TimelineActivation = packages.has(TIMELINE_CONFLICTS.official) ? 'official'
+    : packages.has(TIMELINE_CONFLICTS.standalone) ? 'standalone' : 'active'
+  ctx.inject(['connection', 'webServer'], scope => {
+    scope.connection.rpc.handle(TIMELINE_ACTIVATION_CHANNEL, method => {
+      if (method === TIMELINE_ACTIVATION_METHOD) return { ok: true, value: activation }
+      return { ok: false, error: { code: 'timeline/unknown-method', message: 'Unknown MEK Timeline method.', details: {} } }
+    })
+  })
+  if (activation !== 'active') {
+    ctx.logger.info('MEK Timeline is waiting for %s to be disabled. Turn it off, then restart DSH to switch.', TIMELINE_CONFLICTS[activation])
+    return
+  }
   let browserLanguage: OutputLanguage | undefined
   const config = liveConfig(input, () => {
     const locale = ctx.get('settings')?.describe({ redactSecrets: true }).find(item => item.ns === 'locale')

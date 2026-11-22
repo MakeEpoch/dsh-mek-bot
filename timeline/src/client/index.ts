@@ -33,6 +33,9 @@ import { startMinuteClock } from './clock.ts'
 import type { Config } from '../config.ts'
 import { createTaskRequester } from './actions.ts'
 import { TIMELINE_CHANNEL, TIMELINE_LOCALE } from '../protocol.ts'
+import { TIMELINE_ACTIVATION_CHANNEL, TIMELINE_ACTIVATION_METHOD } from '../activation.ts'
+import type { TimelineActivation } from '../activation.ts'
+import { showConflict } from './Conflict.tsx'
 
 // Leave the conversation visible when the sidebar would take over a narrow window.
 const SIDEBAR_AUTO_OPEN_QUERY = '(width > 768px)'
@@ -48,11 +51,42 @@ export const inject = [
   'sessions',
 ]
 
+export function apply(ctx: Context): void {
+  const connection = ctx.get('connection') as ConnectionHandle
+  ctx.effect(() => {
+    const controller = new AbortController()
+    let activation: TimelineActivation | undefined
+    let mounted: ReturnType<Context['plugin']> | undefined
+    let pending = Promise.resolve()
+    const check = () => {
+      if (connection.state.getSnapshot() !== 'connected') return
+      pending = pending.then(async () => {
+        if (controller.signal.aborted || connection.state.getSnapshot() !== 'connected') return
+        const result = await connection.rpc.call(TIMELINE_ACTIVATION_CHANNEL, TIMELINE_ACTIVATION_METHOD, null, controller.signal)
+        if (controller.signal.aborted || connection.state.getSnapshot() !== 'connected') return
+        if (!result.ok) throw new Error(result.error.message)
+        const next = result.value
+        if (next !== 'active' && next !== 'official' && next !== 'standalone') throw new Error('Unknown MEK Timeline activation state.')
+        if (next === activation) return
+        await mounted?.dispose()
+        if (controller.signal.aborted) return
+        mounted = ctx.plugin(next === 'active' ? startTimeline : scope => showConflict(scope, next))
+        activation = next
+      }).catch((error: unknown) => {
+        if (!controller.signal.aborted) ctx.logger.warn('Could not check MEK Timeline activation: %s', String(error))
+      })
+    }
+    const stop = connection.state.subscribe(check)
+    check()
+    return () => { stop(); controller.abort() }
+  }, 'timeline: check activation')
+}
+
 /**
  * Register Timeline's plugin settings, right sidebar, and composer strip.
  * @param ctx Client context.
  */
-export function apply(ctx: Context): void {
+function startTimeline(ctx: Context): void {
   const id = 'dsh-mek-bot-timeline'
   const clock = createSnapshotStore(minuteAt(Date.now()))
   const selection = createSnapshotStore<SessionId | null>(null)
@@ -121,11 +155,11 @@ export function apply(ctx: Context): void {
       TaskCard,
     ),
   )
-  ctx.slots.inject('plugins.bundle.config', () =>
+  ctx.slots.inject('plugins.row.config', () =>
     ctx.slots.register(
       {
-        name: 'plugins.bundle.config',
-        key: id,
+        name: 'plugins.row.config',
+        key: `dsh-mek-bot#${TIMELINE_CONFIG_ID}`,
         locale: 'timeline',
         store: createSettingsStore(),
         inject: (): SettingsInjected => ({

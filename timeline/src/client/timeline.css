@@ -1,4 +1,7 @@
 /* Use Harness semantic tokens across themes. */
+.mek-timeline-conflict{margin:0 0 14px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:var(--dsw-radius-md);color:var(--dsw-alias-label-primary)}
+.mek-timeline-conflict p{margin:6px 0;color:var(--dsw-alias-label-secondary)}
+.mek-timeline-conflict button{margin-top:4px}
 .timeline-tool-update{container-type:inline-size;container-name:timeline-card;color:var(--dsw-alias-label-primary);font-size:var(--dsh-content-font-size,13px);line-height:1.5}
 .timeline-tool-update *{box-sizing:border-box}
 .timeline-tool-summary{display:flex;align-items:center;gap:8px;min-width:0;margin-inline-start:8px;color:var(--dsw-alias-label-secondary)}

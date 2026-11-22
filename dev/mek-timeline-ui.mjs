@@ -4,7 +4,7 @@ import { basename, join } from 'node:path'
 import { chromium } from 'playwright'
 
 const [home, port, phase, output] = process.argv.slice(2)
-assert.ok(home && basename(home).startsWith('.dsh-test-') && port && ['seed', 'verify'].includes(phase))
+assert.ok(home && basename(home).startsWith('.dsh-test-') && port && ['fresh', 'seed', 'verify'].includes(phase))
 const base = `http://127.0.0.1:${port}`
 const launch = readFileSync(join(home, 'web.log'), 'utf8').split(/\s+/).find(value => value.startsWith(`${base}/?token=`))
 assert.ok(launch, 'Isolated DSH startup URL is available')
@@ -20,7 +20,7 @@ try {
   const stock = '@deepseek-ai/dsh-timeline'
   const fork = 'dsh-mek-bot-timeline'
   const modules = await page.evaluate(() => window.__DSH_BOOT__.entries.map(({ id }) => id).filter(id => id.includes('timeline')))
-  assert.deepEqual(modules, [phase === 'seed' ? stock : fork])
+  assert.deepEqual(modules.sort(), phase === 'seed' ? [stock, fork].sort() : [fork])
   const launcher = page.getByRole('button', { name: 'Bot', exact: true })
   const welcome = page.getByRole('button', { name: /^(Continue|继续)$/ })
   await Promise.race([welcome.waitFor({ timeout: 12000 }).then(() => welcome.click()), launcher.click({ trial: true, timeout: 12000 })])
@@ -39,6 +39,12 @@ try {
     await input.press('Enter')
     await chat.getByText('Timeline fixture saved', { exact: true }).waitFor({ timeout: 20000 })
   }
+  const openBundle = async () => {
+    await page.getByRole('button', { name: 'Plugins', exact: true }).click()
+    await page.getByText('dsh-mek-bot', { exact: true }).first().click()
+    await page.getByText('MEK Timeline', { exact: true }).waitFor({ timeout: 8000 })
+    await page.getByText('dsh-mek-bot-timeline', { exact: true }).waitFor({ timeout: 8000 })
+  }
   const api = async (endpoint, payload = {}) => {
     const response = await page.request.post(`${base}/api/bot`, { data: { endpoint, payload } })
     const result = await response.json()
@@ -46,9 +52,29 @@ try {
     return result.value
   }
   if (phase === 'seed') {
+    await scene.locator('.mek-team-tools').getByRole('button', { name: /^(Tasks|任务)$/ }).click()
+    await scene.getByRole('tab', { name: /^(To-dos|待办)$/ }).click()
+    const conflict = scene.locator('.mek-timeline-conflict')
+    await conflict.getByText('Official Timeline is enabled', { exact: true }).waitFor({ timeout: 12000 }).catch(error => {
+      throw new Error([error.message, ...errors].join('\n'))
+    })
+    assert.equal(await pane.count(), 0)
     await send('TIMELINE_SMOKE_PRIVATE')
+    if (output) await conflict.screenshot({ path: join(output, 'official-switch.png') })
+    await openBundle()
+    await page.locator('.mek-timeline-conflict').getByText('Official Timeline is enabled', { exact: true }).waitFor()
     assert.deepEqual(errors, [])
-    console.log('Official Timeline saved a private task.')
+    console.log('Official Timeline stayed active, saved a private task, and MEK prompted for a switch.')
+  } else if (phase === 'fresh') {
+    await send('TIMELINE_SMOKE_PRIVATE')
+    await openTimeline()
+    await pane.getByText('PRIVATE Timeline item', { exact: true }).waitFor()
+    assert.equal(await scene.locator('.mek-timeline-conflict').count(), 0)
+    if (output) await pane.screenshot({ path: join(output, 'fresh-embedded.png') })
+    await openBundle()
+    if (output) await page.screenshot({ path: join(output, 'named-components.png') })
+    assert.deepEqual(errors, [])
+    console.log('MEK Timeline started by default and saved a private task inside Bot.')
   } else {
     await openTimeline()
     await pane.getByText('PRIVATE Timeline item', { exact: true }).waitFor()

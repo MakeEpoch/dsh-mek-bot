@@ -6,20 +6,20 @@
 
 ## 安装
 
-先在 DSH 中配置至少一个可用模型。然后在插件管理器添加 `github:MakeEpoch/dsh-mek-bot#main`，或在终端安装到 Web profile。
+先在 DSH 中配置至少一个可用模型，然后从 [GitHub Releases](https://github.com/MakeEpoch/dsh-mek-bot/releases) 下载 `dsh-mek-bot-<版本>.tgz`。在下载目录运行安装命令，将占位文件名换成实际文件名。
 
 ```sh
-dsh plugin --profile web add -w 'github:MakeEpoch/dsh-mek-bot#main'
+dsh plugin --profile web add -w './dsh-mek-bot-<版本>.tgz'
 ```
 
 同一 profile 只启用一个 Bot 组合包，并将 `autoInstallPeers` 保持为 `false`，由 DSH 提供宿主依赖。
 
-组合包内含可选的 [MEK Timeline](docs/configuration.md#启用-bot-内嵌时间线)。启用后，私聊和群聊可在 Bot 右侧打开原生时间线。
+从 `0.2.15` 起，组合包同时安装 Bot 和 [MEK Timeline](docs/configuration.md#启用-bot-内嵌时间线)。启用组合包后，私聊和群聊可在 Bot 右侧打开时间线。已启用官方 Timeline 的 profile 会显示切换提示。
 
 <details>
 <summary>从本地源码构建和安装</summary>
 
-在仓库根目录运行。
+在仓库根目录构建并打包。`npm ci` 会链接同仓库的 Timeline 组件，`npm pack` 将两个具名组件一起装入发行包。
 
 ```sh
 npm ci

@@ -8,6 +8,11 @@ const text = (en, zh) => language().startsWith('zh') ? zh : en
 export function createNativeTasks(ctx) {
   const availability = createSource(null)
   availability.embedded = createSource(null)
+  availability.conflict = createSource(null)
+  ctx.inject(['mekTimelineConflict'], ({ mekTimelineConflict }) => {
+    availability.conflict.set(() => mekTimelineConflict)
+    return () => availability.conflict.set(null)
+  })
   ctx.inject(['mekTimelinePanel', 'workspaces'], ({ mekTimelinePanel, workspaces }) => {
     availability.embedded.set({
       Panel: mekTimelinePanel,

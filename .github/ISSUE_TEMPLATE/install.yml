@@ -16,7 +16,7 @@ body:
     id: source
     attributes:
       label: Installation source / 安装来源
-      placeholder: github:MakeEpoch/dsh-mek-bot#main
+      placeholder: dsh-mek-bot-0.2.15.tgz
     validations:
       required: true
   - type: input

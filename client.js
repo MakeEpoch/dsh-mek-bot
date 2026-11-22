@@ -22964,6 +22964,11 @@ var text4 = (en, zh) => language().startsWith("zh") ? zh : en;
 function createNativeTasks(ctx) {
   const availability = createSource(null);
   availability.embedded = createSource(null);
+  availability.conflict = createSource(null);
+  ctx.inject(["mekTimelineConflict"], ({ mekTimelineConflict }) => {
+    availability.conflict.set(() => mekTimelineConflict);
+    return () => availability.conflict.set(null);
+  });
   ctx.inject(["mekTimelinePanel", "workspaces"], ({ mekTimelinePanel, workspaces }) => {
     availability.embedded.set({
       Panel: mekTimelinePanel,
@@ -23396,15 +23401,16 @@ function TeamView({ ctx, requests, useSessionStatus, nativeTasks, viewport }) {
   actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react72.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
   const timeline = (0, import_react72.useSyncExternalStore)(nativeTasks.subscribe, nativeTasks.getSnapshot);
   const embeddedTimeline = (0, import_react72.useSyncExternalStore)(nativeTasks.embedded.subscribe, nativeTasks.embedded.getSnapshot);
+  const TimelineConflict = (0, import_react72.useSyncExternalStore)(nativeTasks.conflict.subscribe, nativeTasks.conflict.getSnapshot);
   actions.taskTabLabel = embeddedTimeline ? "Timeline" : void 0;
   actions.TaskPanel = (0, import_react72.useMemo)(() => function TaskPanel({ sessionId, bucket }) {
     const roster2 = hooks.useRoster((value) => value);
     const bot = roster2.byId[sessionId];
     const room2 = roster2.roomsById[sessionId];
     if (bucket === "todos" && embeddedTimeline && (room2 || bot)) return /* @__PURE__ */ import_react72.default.createElement(EmbeddedTodoPanel, { owner: room2 ?? bot, group: Boolean(room2), timeline: embeddedTimeline, ctx });
-    if (bucket === "todos" && bot && !room2 && timeline) return /* @__PURE__ */ import_react72.default.createElement(NativeTodoPanel, { bot, timeline, ctx });
-    return /* @__PURE__ */ import_react72.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket, includeGroupPlans: Boolean(room2 && embeddedTimeline) });
-  }, [team, ctx, hooks, timeline, embeddedTimeline]);
+    const panel = bucket === "todos" && bot && !room2 && timeline ? /* @__PURE__ */ import_react72.default.createElement(NativeTodoPanel, { bot, timeline, ctx }) : /* @__PURE__ */ import_react72.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket, includeGroupPlans: Boolean(room2 && embeddedTimeline) });
+    return bucket === "todos" && TimelineConflict ? /* @__PURE__ */ import_react72.default.createElement(import_react72.default.Fragment, null, /* @__PURE__ */ import_react72.default.createElement(TimelineConflict, null), panel) : panel;
+  }, [team, ctx, hooks, timeline, embeddedTimeline, TimelineConflict]);
   actions.WechatLinks = (0, import_react72.useMemo)(() => function Links(props) {
     return /* @__PURE__ */ import_react72.default.createElement(WechatLinks, { ...props, editable: !team.roster.getSnapshot().readOnly });
   }, [team]);
