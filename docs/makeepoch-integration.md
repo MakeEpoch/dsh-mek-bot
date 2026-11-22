@@ -74,7 +74,7 @@ The [upstream repository](https://github.com/Fei2411/DS-Bot) maintains its own R
 
 ## Documentation and UI acceptance
 
-Every feature, changed user flow, capability restriction and upstream adaptation updates its documentation in the same change. Maintain current features and differences in the single Chinese [README](../README.md), package it directly, and keep the old language entry as a compatibility link. Maintain upstream changes and adoption in the [per-version merge records and documentation matrix](fork-vs-upstream.md), plus affected design/integration contracts. Visible behavior changes also update the [UI test plan](dev/mek-ui-testing.md).
+Update documentation with every feature, changed flow, capability restriction and upstream adaptation. Keep the Chinese [README](../README.md) focused on install and quick start. Maintain behavior and differences in the linked guides. Record upstream changes and adoption in the [per-version merge records](fork-vs-upstream.md). Visible behavior changes also update the [UI test plan](dev/mek-ui-testing.md).
 
 The UI plan distinguishes component checks, real-browser fixtures and isolated DSH/package acceptance. A fixture result does not establish slots, authentication, persistence or coexistence inside DSH; an upstream merge and release candidate require the applicable DSH integration checks. Record the actual source/bundle identity, executed cases, screenshots, failures and unknowns. Current CI does not execute the complete browser matrix. Documentation-only changes use link, source and root/package copy review without rerunning model/UI suites.
 
