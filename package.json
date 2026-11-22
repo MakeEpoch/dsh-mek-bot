@@ -1,6 +1,6 @@
 {
   "name": "dsh-mek-bot",
-  "version": "0.2.15",
+  "version": "0.2.16",
   "workspaces": ["timeline"],
   "description": "A native DeepSeek Harness plugin for long-lived Bot teams, group chat, task delegation, and review. Built on DS-Bot.",
   "keywords": [
@@ -48,6 +48,7 @@
   ],
   "scripts": {
     "build": "node scripts/build-client.mjs",
+    "release:tag": "node scripts/create-release-tag.mjs",
     "test": "node --import ./test/harness-resolve.mjs --test \"test/*.test.js\"",
     "lint": "node scripts/lint.mjs",
     "harness": "npm install --prefix dev/harness --legacy-peer-deps=false --no-package-lock --no-fund --no-audit",
@@ -92,7 +93,7 @@
   },
   "dependencies": {
     "deep-view": "0.1.0",
-    "dsh-mek-bot-timeline": "0.2.15"
+    "dsh-mek-bot-timeline": "0.2.16"
   },
   "bundledDependencies": ["dsh-mek-bot-timeline"]
 }

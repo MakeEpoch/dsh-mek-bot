@@ -6,7 +6,13 @@
 
 ## 安装
 
-先在 DSH 中配置至少一个可用模型，然后从 [GitHub Releases](https://github.com/MakeEpoch/dsh-mek-bot/releases) 下载 `dsh-mek-bot-<版本>.tgz`。在下载目录运行安装命令，将占位文件名换成实际文件名。
+先在 DSH 中配置至少一个可用模型。从 `0.2.16` 起，可把 [GitHub Release](https://github.com/MakeEpoch/dsh-mek-bot/releases) 里的版本标签地址粘贴到 DSH 插件管理器，或在终端安装到 Web profile。
+
+```sh
+dsh plugin --profile web add -w 'github:MakeEpoch/dsh-mek-bot#mek-v<版本>'
+```
+
+也可以下载该版本的 `dsh-mek-bot-<版本>.tgz`，在下载目录运行安装命令。`0.2.15` 请使用这个入口。
 
 ```sh
 dsh plugin --profile web add -w './dsh-mek-bot-<版本>.tgz'

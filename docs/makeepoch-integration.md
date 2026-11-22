@@ -42,7 +42,7 @@ Uninstalling leaves team state and DSH history in place. Native visual scoping i
 
 ### Native personal plans
 
-The root package registers Bot and `dsh-mek-bot-timeline` by package name. The Timeline workspace is a bundled dependency at the same version, so the release archive installs both components and takes its display metadata from the named package. Build an archive from a source checkout to include that dependency. Timeline starts by default on a compatible DSH profile. It is built from the MIT-licensed DSH Timeline `0.2.3-alpha.2`.
+The root package registers Bot and `dsh-mek-bot-timeline` by package name. The Timeline workspace is a bundled dependency at the same version and provides its own display metadata. From 0.2.16, the GitHub version tag points at a child of the source commit containing the regular Timeline package files from the npm release archive. GitHub tag installs read that Git archive. The npm release archive and the tag therefore deliver the same named dependency. Build and validate both forms with the [release checklist](dev/release-checklist.md). Timeline starts by default on a compatible DSH profile and is built from the MIT-licensed DSH Timeline `0.2.3-alpha.2`.
 
 On startup with official or standalone Timeline enabled, MEK Timeline serves an activation status for the switch prompt. It leaves the shared projection, tools, native tab registrations and edit channel with the existing plugin. The browser waits for that status before mounting the Timeline UI or showing the prompt. The switch is applied on restart. See [configuration](configuration.md#启用-bot-内嵌时间线).
 
