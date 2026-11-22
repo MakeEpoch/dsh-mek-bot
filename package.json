@@ -1,6 +1,6 @@
 {
   "name": "dsh-mek-bot",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "description": "A native DeepSeek Harness plugin for long-lived Bot teams, group chat, task delegation, and review. Built on DS-Bot.",
   "keywords": [
     "dsh-plugin",
