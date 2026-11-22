@@ -89,9 +89,14 @@ const exports=win.moduleEntry.factory(name=>platform[name])
 const registrations=[]
 const effects=[]
 const hostSnapshot={byId:{},ids:[]};const list={getSnapshot:()=>hostSnapshot,subscribe:()=>()=>{}}
-exports.apply({get:name=>name==='uiSession'?{sessionStatus}:undefined,effect: create => effects.push(create()),slots:{inject:(_,work)=>work(),register:(seat,component)=>registrations.push({seat,component})},sessions:{list,refresh(){}},layout:{selectPanel(){}},uiWorkspace:{openSession(){}}})
+exports.apply({
+ get: name => name === 'uiSession' ? { get sessionStatus() { throw new Error('cannot get property "uiSession.sessionStatus" without inject') } } : undefined,
+ effect: create => effects.push(create()),slots:{inject:(_,work)=>work(),register:(seat,component)=>registrations.push({seat,component})},sessions:{list,refresh(){}},layout:{selectPanel(){}},uiWorkspace:{openSession(){}}
+})
 const main=registrations.find(row=>row.seat.name==='main')
 const root=createRoot(document.querySelector('#host'))
+const useSessionStatus=select=>select(React.useSyncExternalStore(sessionStatus.subscribe,sessionStatus.getSnapshot))
+const renderMain=props=>root.render(React.createElement(main.component,props))
 const originalError=console.error;console.error=logger.error
 const pause=()=>new Promise(resolve=>setTimeout(resolve,15))
 async function refresh() {
@@ -112,13 +117,14 @@ async function click(selector) {
 async function tab(name) {const node=[...document.querySelectorAll('.bt-tabs [role="tab"]')].find(node=>node.textContent===name);assert.ok(node,`Missing tab ${name}`);await act(async()=>{node.click();await pause()})}
 async function see() {await act(async()=>{for(const observer of [...intersections])observer.callback([...observer.targets].map(target=>({target,isIntersecting:true,intersectionRatio:1})));await pause()})}
 try {
- await act(async()=>{root.render(React.createElement(main.component));await pause()})
+ await act(async()=>{renderMain({});await pause()})
  assert.ok(document.querySelector('.mek-team-header [data-bot-id="main"]'))
  assert.equal(document.querySelector('.bt-leftcol,.bt-leftcol-foot,.bt-title-toggle'),null)
  assert.equal(document.querySelector('[data-bt-collapsing]'),null)
  // A navigation-only mount must not create either conversation-margin rule.
  assert.equal(document.querySelector('style[data-dsh-bot="chat-room"]'),null)
  await click('[data-bot-id="main"]')
+ assert.equal(document.querySelector('textarea').getAttribute('aria-label'),'Message Chief','the Bot pane works before uiSession is available')
  assert.equal(document.querySelector('.mek-team-center [data-bot-id="keep"]'),null,'unselected non-main Bots start folded')
  await act(async()=>{for(const controller of feedControllers)controller.enqueue(new TextEncoder().encode('event: message\ndata: '+JSON.stringify({sessionId:'keep',item:{kind:'bot',text:'A new result',time:Date.now()}})+'\n\n'));await pause()})
  assert.ok(document.querySelector('.mek-team-tools [aria-label="Bot list"] .mek-tab-dot'),'a folded Bot still exposes new message activity')
@@ -223,6 +229,15 @@ try {
  const nativeAnswers=[]
  let finishAnswer
  const pending={kind:'question',key:'native-fixture',questions:[{id:'first',question:'Native first?',options:[{label:'Original option'}]},{id:'second',question:'Native second?',multiSelect:true,options:[{label:'Exact second option'}]}],answer:async answer=>{nativeAnswers.push(answer);if(refuseNative)throw new Error('Native answer failed');await new Promise(resolve=>{finishAnswer=resolve})},dismiss:async()=>{}}
+ await publish(pending)
+ assert.equal(document.querySelector('.bt-native-question'),null,'the slot has not supplied a status hook')
+ await act(async()=>{renderMain({useSessionStatus})})
+ assert.ok(document.querySelector('.bt-native-question'),'the supplied hook displays the current question')
+ await act(async()=>{renderMain({})})
+ assert.equal(document.querySelector('.bt-native-question'),null,'unloading uiSession removes its card')
+ assert.equal(nativeListeners.size,0,'unloading uiSession releases its subscription')
+ assert.equal(document.querySelector('textarea').getAttribute('aria-label'),'Message Chief')
+ await act(async()=>{renderMain({useSessionStatus})})
  await publish(pending,'keep')
  assert.equal(document.querySelector('.bt-native-question'),null,'pending interactions are scoped to their Session')
  await publish(pending)

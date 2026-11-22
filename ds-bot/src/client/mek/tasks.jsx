@@ -20,6 +20,28 @@ const states = {
   needs_start: ['Needs an assignment', '未安排执行'],
 }
 export const taskStatus = value => label(...(states[value] ?? [value, value]))
+// Why a task cannot be closed right now. The host derives these from durable work,
+// so the card and finish_bot_task agree; the short id is what the owner needs to act.
+const blockerLabel = item => {
+  const id = String(item.id ?? '').slice(0, 8)
+  const waited = item.waitedMinutes === undefined ? '' : ` ${item.waitedMinutes} min`
+  const stalled = item.stalled ? label(' (stalled)', '（长时间无进展）') : ''
+  return ({
+    missing_report: label(`Report missing for ${id}`, `待补报告 ${id}`),
+    unaccepted: label(`Result awaits acceptance ${id}`, `待接受 ${id}`),
+    waiting_browser: label(`Waiting for browser control${waited} ${id}: the target page is unconfirmed; the owner can close this wait`, `等待浏览器交接${waited} ${id}：目标页面未确认，负责人可手动收口`),
+    waiting_decision: label(`Waiting for a decision${waited} ${id}`, `等待决策${waited} ${id}`),
+    waiting_secret: label(`Waiting for a secure credential${waited} ${id}`, `等待安全凭据${waited} ${id}`),
+    waiting_approval: label(`Waiting for approval${waited} ${id}`, `等待授权${waited} ${id}`),
+    running: label(`Running${stalled} ${id}`, `执行中${stalled} ${id}`),
+    queued: label(`Queued to start ${id}`, `排队待启动 ${id}`),
+    blocked: label(`Blocked by work ${id}`, `被 ${id} 阻塞`),
+    failed: label(`Failed work ${id}`, `失败任务 ${id}`),
+    unknown: label(`Outcome unknown for ${id}`, `结果待核对 ${id}`),
+    open_decision: label(`Question still open ${id}`, `仍有未答问题 ${id}`),
+    uncertain_delivery: label(`Delivery not confirmed ${id}`, `投递待确认 ${id}`),
+  })[item.kind] ?? `${item.kind} ${id}`
+}
 const foldsKey = 'mek-bot:task-list-folds'
 const savedFolds = () => {
   try {
@@ -97,6 +119,7 @@ export function TaskCard({ task, roster, team, ctx, compact = false, onChanged }
       <summary><span className={compact ? "mek-task-title" : undefined}>{compact ? task.title ?? task.summary : label('Team task', '团队任务')}</span><span>{taskStatus(task.status)}</span>{!compact && <span className="mek-task-preview">{task.title ?? task.summary}</span>}</summary>
       <div className="mek-task-body">
         {task.archiveReason && <p>{label('Reason for archiving: ', '归档原因：')}{task.archiveReason}</p>}
+        {(task.blockers ?? []).filter(item => item.kind !== 'criteria').map(item => <p key={`${item.kind}:${item.id}`} className="mek-task-blocker" data-kind={item.kind} role="status">{blockerLabel(item)}</p>)}
         {task.status === 'needs_report' && <p role="status">{label('Use the returned result and evidence to add a report.', '根据已返回的结果和证据补报告。')}</p>}
         {task.status === 'review' && <p role="status">{label('The results are ready for the owner to review and accept. The task is not still executing.', '结果已返回，等待负责人检查证据并验收。')}</p>}
         {(task.work ?? []).filter(item => item.status !== 'superseded').map(item => <div key={item.id} className="mek-task-step">

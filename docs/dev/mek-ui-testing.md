@@ -169,7 +169,7 @@ DEEPSEEK_BASE_URL=http://127.0.0.1:8786/v1 DEEPSEEK_API_KEY=mock-key \
 
 - B17：发送消息后检查当前单聊末尾的思考状态，再进入工具执行；状态只保留一条，位于 `[data-chat-running]`，无新增持久消息。切换到空闲 Bot 时无串状态，返回执行 Bot 可继续显示；结束或停止后移除。覆盖纯文本流式让位规则、已滚到末尾自动跟随、上翻历史不强制滚动、窄屏可见性。
 - B20：群聊发送分步长任务，核对末尾头像、动作和用时与本群成员工作源一致。成员让出发言位后状态继续更新；多成员各一行，轮次内不重复。切换私聊/其他群无串状态，完成/停止移除，历史不增加动作消息；在尾部跟随，上翻保持位置；宽屏、390px、详情开关均检查。审批只显示本群请求。
-- B18：分别触发 `ask_user`、交互 `show_view`（选项及表单），即使历史中没有对应工具行也能看到待回答卡。核对选项与字段、回答和关闭、失败保留输入并可重试、成功恢复执行、刷新恢复、Bot 切换隔离；收起任务不能隐藏请求。对公开 `uiSession.sessionStatus` 的 question/plan-review carrier 验证原始问题 ID、选项、批量答复、关闭及只读 review；不得转用 Bot 提问端点或伪造主会话。未公开 carrier 的宿主请求保持未验证。
+- B18：分别触发 `ask_user`、交互 `show_view`（选项及表单），即使历史中没有对应工具行也能看到待回答卡。核对选项与字段、回答和关闭、失败保留输入并可重试、成功恢复执行、刷新恢复、Bot 切换隔离；收起任务不能隐藏请求。对 `main` 插槽公开的 `useSessionStatus` 中的 question/plan-review carrier 验证原始问题 ID、选项、批量答复、关闭及只读 review；不得转用 Bot 提问端点或伪造主会话。确认缺少 `useSessionStatus` 时可打开 Bot 私聊和输入框，插槽提供 hook 后显示当前请求，hook 移除后清除卡片并释放订阅。未公开 carrier 的宿主请求保持未验证。
 
 ### 待办、任务及未读状态（B16）
 
@@ -573,3 +573,40 @@ Bot `30545e8`、WechatPad `0259900` 已快进并推送各自 MakeEpoch main。�
 
 - 新增回归覆盖同一成员连续派工只补新消息，以及投递失败后恢复使用原始消息范围。全量 1865 项，1863 通过、2 跳过。客户端生成一致性检查通过，lint 无错误。
 - 独立 DSH 0.2.2-rc.2、Node 24.14.1、本地脚本模型，候选包 SHA-256 为 `ed4a9209100451b2b961148a6ba7c04a7d668ac6a045030ac4aed18a7cc2c512`，三个变更的宿主模块与隔离安装逐字节一致。群管理员 → Tester → Coder → Tester → 群管理员验收通过，两名执行者的群历史位置均已持久化。本次为宿主投递变更，未调用真实模型或测量实际 token 用量。
+
+## 2026-11-13 任务停滞识别、手动收口与浏览器交接回收
+
+本轮只改插件 host/client 源码与测试，未安装、未重启、未部署；安装需用户授权，会中断所有 Bot 回合。
+
+- 设计边界：只用现有持久字段推导（状态、`createdAt`、`resultAt`、`root.updatedAt`、`browserHold.createdAt`），不新增任务状态机、不引入逐轮心跳。看板、`accept_bot_work`、`finish_bot_task` 与停滞提醒共用同一份未决清单（`BLOCKING_WORK` 加 `blockers()`），避免“看板说能关、验收仍被拒”。
+- 阈值已固定为常量并写入 README：等待浏览器交接/决策/授权/凭据 10 分钟标停滞；执行中 30 分钟无状态变化视为长时间无进展（粗粒度）；60 分钟升级为团队动态。调整时须同步 README 与本记录。
+- 浏览器交接：`waiting_browser` 在任何情况下不再显示成执行中（`root.status` 刚被保存为 running 也一样）。`recover()` 只认两种确定性缺失：控制句柄不再匹配、或该 Bot 已被删除；**worker 会话不在 live 表只标记“未确认”，不判失联**（空闲会话可能暂时不在该表，误判会把慢任务变成假空闲）。**没有页面存活探测**：句柄仍匹配时只按时间标 stale，看板显示已等分钟数与“目标页面未确认”，不声称页面已死。
+- 自动判定只**追加**说明并标注 `[System]`，不覆盖已交付的结果或报告；落点是“待人工收口”，不会写成完成或代替负责人验收。人工接管或负责人随后提交结果都走原有路径，不阻塞。
+- 手动出口：新增 `close_browser_wait`，只允许任务负责人或该群管理员；被卡住的执行 Bot 调用会被拒绝。它把该项记为 `abandoned`、保留已交付结果与先前报告（明确写“页面未确认、未重放任何浏览器动作”），之后 `finish_bot_task` 可正常验收；自动判定过的交接也允许用同一工具收口。它不释放、不接管、不导航浏览器。
+- 群内自监控：停滞任务不再向负责人会话投递 durable 文本（负责人私聊即用户对话框）；只写一条团队动态/attention 红点，并以群管理员身份写入该群持久记录（quiet，不选人、不新建任务）。去重按 blockersKey+level 不变。stale 或已过期的资源租约只在群提醒中列出，**绝不自动释放**。
+- 自动检查（本轮实际运行）：`npm run build` 通过；`test/mek-coordination.test.js` **61 项全通过**，新增 6 条回归：等待浏览器交接的看板状态与分钟数（含 `root.status=running` 的新鲜保存）、负责人收口后结果保留并可 finish、worker 不能自关、控制句柄缺失、worker 会话缺失、拒绝信息点名具体 work/问题编号、停滞提醒只发一次并含 stale 租约提示。`npm run lint`：0 错误、47 条既有警告。
+- 全量 `npm test` 当时为 1869 项：1866 通过、2 跳过、1 失败，失败项是 `mek-todo-schedules.test.js` 的 `invalid receipt timestamps never start work or prevent other receipts from being checked`。日志显示失败前 `mek-todos.js:173` 的 `safeText` 以“Stable request id may contain a credential”拒绝了定时回执提示词，属凭据扫描误判路径，与本轮改动文件无交集。**本轮会话在执行该对照前失去 shell 工具，未能隔离复现，故不把它算作已解决或已归因。**
+- 未验证：真实 DSH 安装、真实浏览器交接、真实群内提醒显示、team activity 升级在真实宿主的表现；`5d39aac2` 的真实数据只以同形状夹具（waiting_browser + 句柄仍匹配 + 30/61 分钟）回归，未读取或改写正式任务状态。安装命令与影响见交付报告。
+
+### 停滞提醒误报修正（2026-11-13，0.2.11 后续）
+
+- 问题：`stallScan` 原先对全部未决项共用 `WAITING_STALL_MS`（10 分钟），导致仍在正常执行、只是耗时超过 10 分钟的任务被报成“no closable state”。线上 `a7e3f122`、`a3c5a973` 各被误报一次，均已确认当时有活跃执行。
+- 修正：仅改这一处判定。按 kind 各用阈值——`waiting_browser/decision/secret/approval`、`missing_report`、`unaccepted`、`open_decision` 用 10 分钟；`running/queued` 用 30 分钟且要求任务行（`root.updatedAt`）同样超过该值；`blocked/failed/unknown/uncertain_delivery` 用 2 分钟短窗口。只有越过自身阈值的项参与提醒、`key` 与级别计算，提醒正文只列这些项，不再把仍在运行的任务列进去。
+- 回归：`a running task under 30 minutes is working, not stalled`、运行 31 分钟且任务行未更新会报、任务行刚更新不重报、`waiting_browser` 11 分钟会报、阻塞 1 分钟不报而 3 分钟报。
+- 自动检查：`test/mek-coordination.test.js` **63 项全通过**；全量 `npm test` **1871 项 / 1869 通过 / 0 失败 / 2 跳过**；`build --check` 通过；lint 0 错误、47 条既有警告。
+- 尚未安装到当前 DSH：线上仍是修复前的 0.2.11 构建，误报在重装前仍可能出现；重装与重启需用户再次授权。
+
+
+## 2026-11-13 自动收口标记统一与负责人私聊降噪
+
+- 缺陷（线上 0.2.12 复现）：`recover()` 自动收口浏览器交接时有两条写入分支，一条写 `automaticClosure`，另一条只写 `automatic:true/detectedBy:'system'`；`closeBrowserWait` 只认前者，导致无先前报告的自动收口 work 无法由负责人关闭，而 `blocked` 又会阻止 `finish_bot_task`。
+- 修正：两条分支统一写 `automaticClosure`（同时保留 `automatic/detectedBy` 便于读旧数据）；新增 `autoClosedBySystem(work)` 同时认两种形状，`close_browser_wait` 仍只允许任务负责人或群管理员，worker 不能自关；收口后落 `abandoned`、保留结果与先前报告，不代验收、不重放浏览器动作。
+- 用户要求：停滞提醒不再向负责人私聊投递文本；只留群内 quiet 消息与团队动态/attention。负责人私聊即用户对话框，Echo 明确不要过程噪音。
+- 回归：`test/mek-coordination.test.js` **64 项全通过**，新增：无 priorReport 的自动收口 → `close_browser_wait` 成功 → `finish` 可过；有 priorReport 自动收口仍可用；worker 仍不能自关；触发停滞时 owner 会话不新增消息、群内一条、团队动态一条、重复扫描不再发；原按 kind 阈值回归仍全绿。
+- 本轮只提 PR，未安装：线上仍是 0.2.12（不含此修复），重装会中断所有 Bot 回合，需 Echo 再授权。
+
+## 2026-11-22 Bot 主面板会话状态修复
+
+- 在隔离 Web profile 中，原版 0.2.13 在 DSH 0.2.3-alpha.2 复现 `uiSession.sessionStatus` 注入错误。修复包在 DSH 0.2.3-alpha.2 和 0.2.2-alpha.2、Chrome 156.0.8078.79、Node 24.14.1 下均可打开私聊、发送消息并完成 Bot 多选提问，浏览器无主面板异常。
+- 修复包 SHA-256 为 `e58e85412c02dbe53a7cd8794651ef3860a52e701d53cd856dd3629c3cbe7506`，安装副本 `client.js` 与源码构建产物哈希一致（`e3ea4e20c98289c1a82207e16c3401b0573ab75ee47e95b1f2322d6d0b5b9b8a`）。组件夹具验证状态 hook 缺失、出现和移除，以及原生 question/plan-review 的渲染和回调。真实浏览器用本地模拟模型验证 Bot 自有提问流程。当前 DSH 安装未更新。
+- 合并到本地 `main` 后，候选包 SHA-256 为 `67a59dc4ae95198b235aedf937c14008b5c23d23ff444a70bac65921e2cb4e26`，客户端哈希相同。在隔离 DSH 0.2.3-alpha.2 重跑浏览器流程通过，完整测试 1872 通过、2 跳过，构建一致性检查及 lint 通过。
