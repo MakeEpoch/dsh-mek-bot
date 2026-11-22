@@ -39,10 +39,17 @@
     "web-search.js",
     "cordis.patch.yml",
     "README.md",
+    "docs/configuration.md",
     "LICENSE",
     "mek.js",
     "NOTICE",
-    "README.zh.md"
+    "README.zh.md",
+    "timeline/host.js",
+    "timeline/client.js",
+    "timeline/package.json",
+    "timeline/LICENSE",
+    "timeline/icon.svg",
+    "timeline/docs/THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "node scripts/build-client.mjs",
@@ -68,6 +75,7 @@
   },
   "devDependencies": {
     "@xmldom/xmldom": "0.9.12",
+    "d3-time": "3.1.0",
     "esbuild": "0.28.2"
   },
   "peerDependenciesMeta": {

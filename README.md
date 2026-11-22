@@ -14,6 +14,8 @@ dsh plugin --profile web add -w 'github:MakeEpoch/dsh-mek-bot#main'
 
 同一 profile 只启用一个 Bot 组合包，并将 `autoInstallPeers` 保持为 `false`，由 DSH 提供宿主依赖。
 
+组合包内含可选的 [MEK Timeline](docs/configuration.md#启用-bot-内嵌时间线)。启用后，私聊和群聊可在 Bot 右侧打开原生时间线。
+
 <details>
 <summary>从本地源码构建和安装</summary>
 

@@ -11,6 +11,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
+import { bundleTimeline } from './build-timeline.mjs'
 
 const PLUGIN = dirname(dirname(fileURLToPath(import.meta.url)))
 const OUTPUT = join(PLUGIN, 'client.js')
@@ -92,16 +93,17 @@ export async function bundleOffice() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const next = await bundleClient()
   const office = await bundleOffice()
+  const timeline = await bundleTimeline(PLUGIN)
+  const outputs = [[OUTPUT, next], [OFFICE_OUTPUT, office], ...Object.entries(timeline).map(([file, content]) => [join(PLUGIN, file), content])]
   if (process.argv.includes('--check')) {
-    let current = null, currentOffice = null
-    try { current = readFileSync(OUTPUT, 'utf8') } catch { /* missing counts as stale */ }
-    try { currentOffice = readFileSync(OFFICE_OUTPUT, 'utf8') } catch { /* missing counts as stale */ }
-    if (current !== next || currentOffice !== office) {
-      console.error('client.js or office.js is stale: run `npm run build` from the repository root and commit the result')
+    const stale = outputs.filter(([file, content]) => {
+      try { return readFileSync(file, 'utf8') !== content } catch { return true }
+    })
+    if (stale.length > 0) {
+      console.error(`Generated files are stale: ${stale.map(([file]) => file).join(', ')}. Run npm run build.`)
       process.exit(1)
     }
   } else {
-    writeFileSync(OUTPUT, next)
-    writeFileSync(OFFICE_OUTPUT, office)
+    for (const [file, content] of outputs) writeFileSync(file, content)
   }
 }

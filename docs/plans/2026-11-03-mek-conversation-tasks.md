@@ -29,6 +29,20 @@
 
 本文进一步给出默认策略、数据关系和验收要求。并行数、重试预算继续服从已有执行策略；本文不新增一组必须由用户配置的参数。
 
+### 1.2 Bot 右侧的 DSH 原生时间线
+
+| 界面 | 时间线的归属 |
+|---|---|
+| Bot 私聊 | 该 Bot 的私聊 Session，历史段来自 Bot 的私聊分段 |
+| 群聊 | 群自身的 Session，历史段来自 `room.ownParts`，每个群只有一个共享入口 |
+
+右侧「时间线」默认显示当前段，用户可在原地切换这个私聊或群的历史段。任务树和报告保留在其所属 Session；归档段的恢复由用户显式触发。群成员通过已有派工流程回报，群管理员协调计划。创建群计划、回报进度和响应时间线操作时，应按任务归属解析群 Session，已存在的任务使用其原始 Session。成员执行 Session 沿用现有归属，群里统一从共享入口看进度。
+
+官方 Timeline `0.2.3-alpha.2` 注册在 DSH 的原生右侧栏。组合包内置派生版，将同一个原生面板用于 Bot 右侧，通过独立引用绑定到选中的 Session。启用方式见[配置指南](../configuration.md#启用-bot-内嵌时间线)。群管理员调用 Timeline 工具时，目标为群自身的当前 Session。已有群派工、依赖和验收继续走协作流程，已保存的群计划及定时规则可在「任务」中管理。
+
+- [上游 Timeline 客户端注册](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/experimental/timeline/src/client/index.ts)
+- [DSH Component Factory 与 scope](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/client/ui-slots/README.zh.md)
+
 ## 2. 当前能力与拟新增能力
 
 下表只说明上述源码基线中可定位的机制，不表示本设计的流程已经联通或通过验收。

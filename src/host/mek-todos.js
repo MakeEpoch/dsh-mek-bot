@@ -336,7 +336,15 @@ export function install(rt) {
     text: context => {
       const agent = context?.agent
       if (!rt.selfOf(agent?.id)) return ''
-      if (rt.groupOwners.has(agent.id) && hasNativeTimeline(agent)) return rules + '\nKeep this group plan in the MEK team tools.'
+      const member = rt.groupOwners.get(agent.id)
+      if (member && hasNativeTimeline(agent)) {
+        if (ctx.get?.('mekTimelineShared')) {
+          return rt.roomOf(member.roomId)?.admin === member.botId
+            ? rules + '\nUse Timeline for shared checklists and progress. Timeline tools read and update the group Session. Use the existing MEK tools for formal delegation, dependencies and acceptance.'
+            : rules + '\nThe group administrator owns the shared Timeline. Report progress through the existing group assignment.'
+        }
+        return rules + '\nKeep this group plan in the MEK team tools.'
+      }
       return hasNativeTimeline(agent) ? nativeRules : rules
     },
   }), 'mek-bot: conversation to-dos')

@@ -25,13 +25,14 @@ function SeenEntry({ entry, inbox, children }) {
   }, [entry.key, fingerprint, inbox])
   return <div ref={ref} className="mek-inbox-entry" data-inbox-key={entry.key} data-unread={inbox?.unread(entry) || undefined}>{children}</div>
 }
-export function ConversationTaskPanel({ team, ctx, sessionId, bucket = 'tasks' }) {
+export function ConversationTaskPanel({ team, ctx, sessionId, bucket = 'tasks', includeGroupPlans = false }) {
   const roster = team.hooks.useRoster(value => value)
   const inbox = team.taskInbox
   useSyncExternalStore(inbox.subscribe, inbox.getSnapshot)
   const [creating, setCreating] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [limit, setLimit] = useState(8)
   const [endedOpen, setEndedOpen] = useState(false)
   const [attentionLimit, setAttentionLimit] = useState(8)
+  const [plansLimit, setPlansLimit] = useState(8)
   const sending = useRef(false)
   const view = conversationTasks(roster, sessionId)
   const entries = bucket === 'todos' ? view.plans : view.tasks
@@ -81,6 +82,7 @@ export function ConversationTaskPanel({ team, ctx, sessionId, bucket = 'tasks' }
     {!running.length && <p className="mek-task-empty">{text(bucket === 'todos' ? 'No future plans yet.' : 'No tasks in progress.', bucket === 'todos' ? '暂无未来计划。' : '暂无执行中的任务。')}</p>}
     {list(running, limit, setLimit)}
     {bucket === 'tasks' && <div className="mek-attention-tasks"><div className="mek-plan-heading"><div><strong>{text('Needs attention', '待处理')}</strong><span>{attention.length}</span></div></div>{list(attention, attentionLimit, setAttentionLimit)}</div>}
+    {includeGroupPlans && view.plans.length > 0 && <div className="mek-attention-tasks"><div className="mek-plan-heading"><div><strong>{text('Group plans and schedules', '群协作计划与定时')}</strong><span>{view.plans.length}</span></div></div>{list(view.plans, plansLimit, setPlansLimit)}</div>}
     {(bucket === 'tasks' || ended.length > 0) && <details className="mek-ended-tasks" onToggle={event => setEndedOpen(event.currentTarget.open)}><summary>{text('Ended', '已结束')} · {ended.length}</summary><div>{endedOpen && ended.map(render)}</div></details>}
   </section>
 }

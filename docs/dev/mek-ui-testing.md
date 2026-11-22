@@ -618,3 +618,10 @@ Bot `30545e8`、WechatPad `0259900` 已快进并推送各自 MakeEpoch main。�
 - DSH 和 Timeline 0.2.3-alpha.2、Chrome 156.0.8078.79、Node 24.14.1，隔离 Web profile 加载候选包。本地模拟模型从 Bot 私聊保存任务树，验证 MEK 可打开对应 Session 的原生 Timeline、刷新后仍可回读，以及更换工作目录换段后可显式恢复已归档旧段并回读同一条任务。原生自动化入口可打开 DSH 页面。私聊待办创建接口拒绝并行创建 MEK 记录。
 - 同一个隔离 Host 运行群待办冒烟，覆盖主任务、依赖派工、结构化回报、管理员检查和最终验收。全量测试 1873 通过、2 跳过，客户端一致性检查和 lint 通过。未启用 Timeline 的路径由现有组件用例覆盖。
 - 候选包 SHA-256 为 `e9b4f63e515a4e36940f51de9a3d044c34152f7c3db7792b3b88b5410400d663`，安装客户端与构建一致（`dc9b1a35c46d35d94b7dfa2f7bc54713264a2cd9879be491ad627aee361e3d76`）。隔离验证使用本地模拟模型和桌面宽度，未改动正式 DSH 安装或已有任务记录。
+
+## 2026-11-22 Bot 与 MEK Timeline 组合包
+
+- DSH `0.2.3-alpha.2`、Chrome `156.0.8078.79`、Node `24.14.1`。隔离 Web profile 使用 `npm pack --ignore-scripts` 候选包 `06751a41b9873d79`、本地模拟模型和 `dev/mek-timeline-ui.mjs`。先启用官方 Timeline 创建私聊计划，再在同一 profile 配置里停用官方并启用 `mek-timeline`，保留两份包。
+- `--dump-config` 确认两个 ID 中只有 fork 启用，浏览器也仅加载 fork 的客户端模块。验证私聊右侧回读原有任务、任务树与报告切换、刷新后从群会话打开空的共享时间线、群管理员创建计划、在群和私聊间切换无串数据。整个流程在 Bot 内完成。
+- 最终打包补入启用指南，归档 SHA-256 为 `a592c7ab21df5fe1470ba3debb2c5be5f6e6d69cfe1d8552eee721c7e74e7e87`，运行文件与浏览器验收包一致。默认关闭 Timeline 的隔离 profile 通过模型选择、Bot 委派和群回复冒烟。
+- 单元测试 1874 通过、2 跳过，生成产物检查及 lint 通过。定时报告实际生成、历史段恢复和每个 Timeline 写入按钮尚未在该组合包中逐项做浏览器回归。

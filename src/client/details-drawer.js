@@ -295,7 +295,7 @@ export function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, ro
     tabs.length > 1 ? h('div', { key: 'tabs', ref: glide.box, className: 'bt-tabs', role: 'tablist', 'data-move': side },
       h('span', { ref: glide.thumb, className: 'bt-thumb', 'aria-hidden': true }),
       tabs.map(key => h('button', { key, type: 'button', role: 'tab', className: 'bt-tab', 'aria-selected': tab === key, 'data-unread': actions.taskUnread?.(sessionId, key) || undefined,
-        onClick: () => { setTab(key); if (TaskPanel) actions.showDetails(sessionId, key) } }, t(TAB_LABELS[key]), actions.taskUnread?.(sessionId, key) ? h('span', { className: 'mek-tab-dot', 'aria-hidden': true, title: t('New activity') }) : null))) : null,
+        onClick: () => { setTab(key); if (TaskPanel) actions.showDetails(sessionId, key) } }, t((key === 'todos' && actions.taskTabLabel) || TAB_LABELS[key]), actions.taskUnread?.(sessionId, key) ? h('span', { className: 'mek-tab-dot', 'aria-hidden': true, title: t('New activity') }) : null))) : null,
     h('div', { key: `body:${tab}`, className: `bt-drawer-body${['todos', 'tasks'].includes(tab) ? ' mek-task-drawer' : ''}`, 'data-move': move },
       errorLine,
       tab === 'details' ? identity : null,

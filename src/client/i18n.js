@@ -302,6 +302,7 @@ const ZH = {
   Details: '详情',
   Tasks: '任务',
   'To-dos': '待办',
+  'Timeline': '时间线',
   'New activity': '有新内容',
   'Unread tasks': '有未读任务',
   Browser: '浏览器',

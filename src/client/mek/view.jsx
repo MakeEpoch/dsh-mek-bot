@@ -40,7 +40,7 @@ import { SessionPermissions, PERMISSION_CSS } from './permissions.jsx'
 import { TODO_CSS, TASK_PROGRESS_CSS } from './todos.jsx'
 import { TODO_SCHEDULE_CSS } from './todo-schedules.jsx'
 import { ConversationTaskPanel, TASK_PANEL_CSS } from './task-panel.jsx'
-import { NativeTodoPanel, NATIVE_TASK_CSS } from './native-tasks.jsx'
+import { EmbeddedTodoPanel, NativeTodoPanel, NATIVE_TASK_CSS } from './native-tasks.jsx'
 import { createTaskInbox } from './task-inbox.js'
 import { WechatLinks, WECHAT_LINKS_CSS } from './wechat-links.jsx'
 import { SessionQueue, SESSION_QUEUE_CSS } from './session-queue.jsx'
@@ -62,12 +62,16 @@ function TeamView({ ctx, requests, useSessionStatus, nativeTasks, viewport }) {
   const { hooks, actions } = team
   actions.sessionPermission = ctx.sessions.retain ? sessionId => <SessionPermissions key={sessionId} ctx={ctx} sessionId={sessionId} /> : undefined
   const timeline = useSyncExternalStore(nativeTasks.subscribe, nativeTasks.getSnapshot)
+  const embeddedTimeline = useSyncExternalStore(nativeTasks.embedded.subscribe, nativeTasks.embedded.getSnapshot)
+  actions.taskTabLabel = embeddedTimeline ? 'Timeline' : undefined
   actions.TaskPanel = useMemo(() => function TaskPanel({ sessionId, bucket }) {
     const roster = hooks.useRoster(value => value)
     const bot = roster.byId[sessionId]
-    if (bucket === 'todos' && bot && !roster.roomsById[sessionId] && timeline) return <NativeTodoPanel bot={bot} timeline={timeline} ctx={ctx} />
-    return <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} bucket={bucket} />
-  }, [team, ctx, hooks, timeline])
+    const room = roster.roomsById[sessionId]
+    if (bucket === 'todos' && embeddedTimeline && (room || bot)) return <EmbeddedTodoPanel owner={room ?? bot} group={Boolean(room)} timeline={embeddedTimeline} ctx={ctx} />
+    if (bucket === 'todos' && bot && !room && timeline) return <NativeTodoPanel bot={bot} timeline={timeline} ctx={ctx} />
+    return <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} bucket={bucket} includeGroupPlans={Boolean(room && embeddedTimeline)} />
+  }, [team, ctx, hooks, timeline, embeddedTimeline])
   actions.WechatLinks = useMemo(() => function Links(props) { return <WechatLinks {...props} editable={!team.roster.getSnapshot().readOnly} /> }, [team])
   actions.Queue = useMemo(() => function Queue({ sessionId }) {
     const roster = useSyncExternalStore(team.roster.subscribe, team.roster.getSnapshot)
@@ -78,6 +82,9 @@ function TeamView({ ctx, requests, useSessionStatus, nativeTasks, viewport }) {
   actions.taskUnread = (id, bucket) => {
     const snapshot = team.roster.getSnapshot()
     const target = snapshot.byId[id]?.id ?? snapshot.roomsById[id]?.id ?? id
+    if (embeddedTimeline && snapshot.roomsById[id] && bucket) {
+      return bucket === 'tasks' && (team.taskInbox.has(target, 'tasks') || team.taskInbox.has(target, 'todos'))
+    }
     return team.taskInbox.has(target, bucket)
   }
   const shown = hooks.useShown(value => value)

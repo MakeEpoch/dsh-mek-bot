@@ -32,3 +32,19 @@ Bot 详情中的“当前会话权限”读取 DSH 实际权限；点击“在 D
 ```
 
 服务重启会关闭进程内浏览器。登录资料保留在各 Bot 独立目录；等待交接的任务会明确转为阻塞并回报负责人，需确认后重开，不会自动重复网页操作。
+
+## 启用 Bot 内嵌时间线
+
+组合包内置从 `@deepseek-ai/dsh-timeline` `0.2.3-alpha.2` 派生的 MEK Timeline。该条目默认为关闭。用 DSH `0.2.3-alpha.2` 打开组合包时，可以在当前 profile 的 `cordis.patch.yml` 启用。`<DSH_HOME>/profiles/web/cordis.patch.yml` 对应默认 Web profile。
+
+如果 profile 同时配置了官方 Timeline，在同一份最终配置中停用官方并启用 MEK Timeline。两个包可以同时保留在安装列表中。`config` 如有需要应完整填写，可从该 profile 的官方 Timeline 设置复制。
+
+```yaml
+- id: timeline-experimental
+  name: '@deepseek-ai/dsh-timeline'
+  disabled: true
+- id: mek-timeline
+  disabled: false
+```
+
+只有组合包的 profile 写入第二项即可。`dsh --profile web --dump-config` 可检查最终配置。重启 profile 后，打开 Bot 右侧「时间线」。要切回官方版，在同一配置中关闭 `mek-timeline` 并恢复 `timeline-experimental`。两版沿用相同的 Timeline Session 记录格式。两个条目都启用时，MEK Timeline 会报告冲突。

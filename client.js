@@ -441,6 +441,7 @@ var ZH = {
   Details: "详情",
   Tasks: "任务",
   "To-dos": "待办",
+  "Timeline": "时间线",
   "New activity": "有新内容",
   "Unread tasks": "有未读任务",
   Browser: "浏览器",
@@ -19179,7 +19180,7 @@ function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, a
           setTab(key);
           if (TaskPanel) actions.showDetails(sessionId, key);
         }
-      }, t(TAB_LABELS[key]), actions.taskUnread?.(sessionId, key) ? (0, import_react52.createElement)("span", { className: "mek-tab-dot", "aria-hidden": true, title: t("New activity") }) : null))
+      }, t(key === "todos" && actions.taskTabLabel || TAB_LABELS[key]), actions.taskUnread?.(sessionId, key) ? (0, import_react52.createElement)("span", { className: "mek-tab-dot", "aria-hidden": true, title: t("New activity") }) : null))
     ) : null,
     (0, import_react52.createElement)(
       "div",
@@ -22892,13 +22893,14 @@ function SeenEntry({ entry, inbox, children }) {
   }, [entry.key, fingerprint, inbox]);
   return /* @__PURE__ */ import_react68.default.createElement("div", { ref, className: "mek-inbox-entry", "data-inbox-key": entry.key, "data-unread": inbox?.unread(entry) || void 0 }, children);
 }
-function ConversationTaskPanel({ team, ctx, sessionId, bucket = "tasks" }) {
+function ConversationTaskPanel({ team, ctx, sessionId, bucket = "tasks", includeGroupPlans = false }) {
   const roster = team.hooks.useRoster((value) => value);
   const inbox = team.taskInbox;
   (0, import_react68.useSyncExternalStore)(inbox.subscribe, inbox.getSnapshot);
   const [creating, setCreating] = (0, import_react68.useState)(false), [busy, setBusy] = (0, import_react68.useState)(false), [error, setError] = (0, import_react68.useState)(""), [limit, setLimit] = (0, import_react68.useState)(8);
   const [endedOpen, setEndedOpen] = (0, import_react68.useState)(false);
   const [attentionLimit, setAttentionLimit] = (0, import_react68.useState)(8);
+  const [plansLimit, setPlansLimit] = (0, import_react68.useState)(8);
   const sending = (0, import_react68.useRef)(false);
   const view = conversationTasks(roster, sessionId);
   const entries2 = bucket === "todos" ? view.plans : view.tasks;
@@ -22944,7 +22946,7 @@ ${check.evidence}`)].filter(Boolean).join("\n\n");
   const running = bucket === "todos" ? active : active.filter((entry) => taskBucket(entry) === "running");
   const attention = bucket === "tasks" ? active.filter((entry) => taskBucket(entry) === "attention") : [];
   const list = (items, visible, more) => /* @__PURE__ */ import_react68.default.createElement(import_react68.default.Fragment, null, /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-plan-list" }, items.slice(0, visible).map(render)), items.length > visible && /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-task-footer" }, /* @__PURE__ */ import_react68.default.createElement("button", { type: "button", className: "mek-task-more", onClick: () => more((value) => value + 8) }, text3("Show more", "显示更多"), " · ", items.length - visible)));
-  return /* @__PURE__ */ import_react68.default.createElement("section", { className: "mek-task-panel", "data-bucket": bucket, "aria-label": text3(bucket === "todos" ? "To-dos" : "Tasks", bucket === "todos" ? "待办" : "任务") }, /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-plan-heading" }, /* @__PURE__ */ import_react68.default.createElement("div", null, /* @__PURE__ */ import_react68.default.createElement("strong", null, text3(bucket === "todos" ? "Planned" : "In progress", bucket === "todos" ? "未来计划" : "执行中")), /* @__PURE__ */ import_react68.default.createElement("span", null, running.length)), bucket === "todos" && /* @__PURE__ */ import_react68.default.createElement("button", { type: "button", className: "mek-plan-add", "aria-expanded": creating, onClick: () => setCreating((value) => !value) }, text3("Add", "新增"))), creating && /* @__PURE__ */ import_react68.default.createElement(PlanForm, { target: view.target, available: roster.todoSchedules?.available, busy, save: mutate, close: () => setCreating(false) }), error && /* @__PURE__ */ import_react68.default.createElement("p", { role: "alert" }, error), !running.length && /* @__PURE__ */ import_react68.default.createElement("p", { className: "mek-task-empty" }, text3(bucket === "todos" ? "No future plans yet." : "No tasks in progress.", bucket === "todos" ? "暂无未来计划。" : "暂无执行中的任务。")), list(running, limit, setLimit), bucket === "tasks" && /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-attention-tasks" }, /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-plan-heading" }, /* @__PURE__ */ import_react68.default.createElement("div", null, /* @__PURE__ */ import_react68.default.createElement("strong", null, text3("Needs attention", "待处理")), /* @__PURE__ */ import_react68.default.createElement("span", null, attention.length))), list(attention, attentionLimit, setAttentionLimit)), (bucket === "tasks" || ended3.length > 0) && /* @__PURE__ */ import_react68.default.createElement("details", { className: "mek-ended-tasks", onToggle: (event) => setEndedOpen(event.currentTarget.open) }, /* @__PURE__ */ import_react68.default.createElement("summary", null, text3("Ended", "已结束"), " · ", ended3.length), /* @__PURE__ */ import_react68.default.createElement("div", null, endedOpen && ended3.map(render))));
+  return /* @__PURE__ */ import_react68.default.createElement("section", { className: "mek-task-panel", "data-bucket": bucket, "aria-label": text3(bucket === "todos" ? "To-dos" : "Tasks", bucket === "todos" ? "待办" : "任务") }, /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-plan-heading" }, /* @__PURE__ */ import_react68.default.createElement("div", null, /* @__PURE__ */ import_react68.default.createElement("strong", null, text3(bucket === "todos" ? "Planned" : "In progress", bucket === "todos" ? "未来计划" : "执行中")), /* @__PURE__ */ import_react68.default.createElement("span", null, running.length)), bucket === "todos" && /* @__PURE__ */ import_react68.default.createElement("button", { type: "button", className: "mek-plan-add", "aria-expanded": creating, onClick: () => setCreating((value) => !value) }, text3("Add", "新增"))), creating && /* @__PURE__ */ import_react68.default.createElement(PlanForm, { target: view.target, available: roster.todoSchedules?.available, busy, save: mutate, close: () => setCreating(false) }), error && /* @__PURE__ */ import_react68.default.createElement("p", { role: "alert" }, error), !running.length && /* @__PURE__ */ import_react68.default.createElement("p", { className: "mek-task-empty" }, text3(bucket === "todos" ? "No future plans yet." : "No tasks in progress.", bucket === "todos" ? "暂无未来计划。" : "暂无执行中的任务。")), list(running, limit, setLimit), bucket === "tasks" && /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-attention-tasks" }, /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-plan-heading" }, /* @__PURE__ */ import_react68.default.createElement("div", null, /* @__PURE__ */ import_react68.default.createElement("strong", null, text3("Needs attention", "待处理")), /* @__PURE__ */ import_react68.default.createElement("span", null, attention.length))), list(attention, attentionLimit, setAttentionLimit)), includeGroupPlans && view.plans.length > 0 && /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-attention-tasks" }, /* @__PURE__ */ import_react68.default.createElement("div", { className: "mek-plan-heading" }, /* @__PURE__ */ import_react68.default.createElement("div", null, /* @__PURE__ */ import_react68.default.createElement("strong", null, text3("Group plans and schedules", "群协作计划与定时")), /* @__PURE__ */ import_react68.default.createElement("span", null, view.plans.length))), list(view.plans, plansLimit, setPlansLimit)), (bucket === "tasks" || ended3.length > 0) && /* @__PURE__ */ import_react68.default.createElement("details", { className: "mek-ended-tasks", onToggle: (event) => setEndedOpen(event.currentTarget.open) }, /* @__PURE__ */ import_react68.default.createElement("summary", null, text3("Ended", "已结束"), " · ", ended3.length), /* @__PURE__ */ import_react68.default.createElement("div", null, endedOpen && ended3.map(render))));
 }
 var TASK_REVIEW_CSS = `
 .mek-attention-tasks{margin-top:20px;border-top:1px solid var(--bt-line);padding-top:8px}
@@ -22961,6 +22963,15 @@ var import_react69 = __toESM(require("react"), 1);
 var text4 = (en, zh) => language().startsWith("zh") ? zh : en;
 function createNativeTasks(ctx) {
   const availability = createSource(null);
+  availability.embedded = createSource(null);
+  ctx.inject(["mekTimelinePanel", "workspaces"], ({ mekTimelinePanel, workspaces }) => {
+    availability.embedded.set({
+      Panel: mekTimelinePanel,
+      subscribeArchives: (listener) => workspaces.list.subscribe(listener),
+      getArchives: () => workspaces.list.getSnapshot().archivedSessionIds
+    });
+    return () => availability.embedded.set(null);
+  });
   ctx.inject(["sidebarRight", "sidebarRightTabs", "workspaces"], (scope) => {
     const { sidebarRight, sidebarRightTabs, workspaces } = scope;
     if (!sidebarRight.mounted || !sidebarRightTabs.subscribe) return;
@@ -23007,6 +23018,30 @@ function createNativeTasks(ctx) {
     };
   });
   return availability;
+}
+function EmbeddedTodoPanel({ owner, group, timeline, ctx }) {
+  const current = currentPart(owner);
+  const earlier = (group ? owner.ownParts : owner.parts) ?? [];
+  const [selected, select] = (0, import_react69.useState)("");
+  const target = earlier.includes(selected) ? selected : current;
+  const archived = (0, import_react69.useSyncExternalStore)(timeline.subscribeArchives, timeline.getArchives)?.includes(target);
+  const [restoring, setRestoring] = (0, import_react69.useState)(false);
+  const [error, setError] = (0, import_react69.useState)("");
+  const restore = async () => {
+    setRestoring(true);
+    setError("");
+    try {
+      await ctx.uiWorkspace.unarchiveSession(target);
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setRestoring(false);
+    }
+  };
+  return /* @__PURE__ */ import_react69.default.createElement("section", { className: "mek-task-panel", "aria-label": text4("Timeline", "时间线") }, earlier.length > 0 && /* @__PURE__ */ import_react69.default.createElement("label", { className: "mek-native-task-session" }, text4("Conversation part", "会话段"), /* @__PURE__ */ import_react69.default.createElement("select", { value: selected, disabled: restoring, onChange: (event) => {
+    select(event.target.value);
+    setError("");
+  } }, /* @__PURE__ */ import_react69.default.createElement("option", { value: "" }, text4("Current part", "当前会话段")), earlier.map((id, index) => /* @__PURE__ */ import_react69.default.createElement("option", { key: id, value: id }, text4("Part", "会话段"), " ", index + 1)))), archived ? /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft", disabled: restoring, onClick: () => void restore() }, text4("Restore conversation part", "恢复会话段")) : /* @__PURE__ */ import_react69.default.createElement(timeline.Panel, { key: target, sessionId: target }), error && /* @__PURE__ */ import_react69.default.createElement("p", { role: "alert" }, error));
 }
 function NativeTodoPanel({ bot, timeline, ctx }) {
   const current = currentPart(bot);
@@ -23360,12 +23395,16 @@ function TeamView({ ctx, requests, useSessionStatus, nativeTasks, viewport }) {
   const { hooks, actions } = team;
   actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react72.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
   const timeline = (0, import_react72.useSyncExternalStore)(nativeTasks.subscribe, nativeTasks.getSnapshot);
+  const embeddedTimeline = (0, import_react72.useSyncExternalStore)(nativeTasks.embedded.subscribe, nativeTasks.embedded.getSnapshot);
+  actions.taskTabLabel = embeddedTimeline ? "Timeline" : void 0;
   actions.TaskPanel = (0, import_react72.useMemo)(() => function TaskPanel({ sessionId, bucket }) {
     const roster2 = hooks.useRoster((value) => value);
     const bot = roster2.byId[sessionId];
-    if (bucket === "todos" && bot && !roster2.roomsById[sessionId] && timeline) return /* @__PURE__ */ import_react72.default.createElement(NativeTodoPanel, { bot, timeline, ctx });
-    return /* @__PURE__ */ import_react72.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket });
-  }, [team, ctx, hooks, timeline]);
+    const room2 = roster2.roomsById[sessionId];
+    if (bucket === "todos" && embeddedTimeline && (room2 || bot)) return /* @__PURE__ */ import_react72.default.createElement(EmbeddedTodoPanel, { owner: room2 ?? bot, group: Boolean(room2), timeline: embeddedTimeline, ctx });
+    if (bucket === "todos" && bot && !room2 && timeline) return /* @__PURE__ */ import_react72.default.createElement(NativeTodoPanel, { bot, timeline, ctx });
+    return /* @__PURE__ */ import_react72.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket, includeGroupPlans: Boolean(room2 && embeddedTimeline) });
+  }, [team, ctx, hooks, timeline, embeddedTimeline]);
   actions.WechatLinks = (0, import_react72.useMemo)(() => function Links(props) {
     return /* @__PURE__ */ import_react72.default.createElement(WechatLinks, { ...props, editable: !team.roster.getSnapshot().readOnly });
   }, [team]);
@@ -23378,6 +23417,9 @@ function TeamView({ ctx, requests, useSessionStatus, nativeTasks, viewport }) {
   actions.taskUnread = (id, bucket) => {
     const snapshot = team.roster.getSnapshot();
     const target = snapshot.byId[id]?.id ?? snapshot.roomsById[id]?.id ?? id;
+    if (embeddedTimeline && snapshot.roomsById[id] && bucket) {
+      return bucket === "tasks" && (team.taskInbox.has(target, "tasks") || team.taskInbox.has(target, "todos"));
+    }
     return team.taskInbox.has(target, bucket);
   };
   const shown = hooks.useShown((value) => value);

@@ -140,6 +140,22 @@ function decide(body) {
   const me = /You are (.+?), a Bot on the user's team/.exec(system)?.[1] ?? 'Bot'
   const isMain = system.includes('You are the Main Bot')
   const isRelay = system.includes('# Group chat relay')
+  if (process.env.MEK_MOCK_TIMELINE === '1' && tools.has('timeline_tree') && last?.role === 'user') {
+    const request = textOf(last.content)
+    const command = request.includes('TIMELINE_SMOKE_GROUP') ? 'GROUP' : request.includes('TIMELINE_SMOKE_PRIVATE') ? 'PRIVATE' : undefined
+    if (command && !isResults(last)) return [tool('timeline_tree', { action: 'start', title: `${command} Timeline fixture` })]
+    if (isResults(last)) {
+      const call = messages.at(-2)?.content?.find?.(block => block.type === 'tool_use')
+      const result = blocks.find(block => block.type === 'tool_result')
+      const scope = /^(PRIVATE|GROUP) Timeline fixture$/.exec(call?.input?.title)?.[1]
+      if (scope && call.name === 'timeline_tree') return result.is_error
+        ? [text('Timeline fixture failed')]
+        : [tool('timeline_tasks', { tasks: [{ id: 'fixture', title: `${scope} Timeline item`, status: 'pending' }] })]
+      if (call?.name === 'timeline_tasks' && /^(PRIVATE|GROUP) Timeline item$/.test(call.input?.tasks?.[0]?.title)) {
+        return [text(result.is_error ? 'Timeline fixture failed' : 'Timeline fixture saved')]
+      }
+    }
+  }
   if (process.env.MEK_MOCK_LIVE_CONTROL === '1' && textOf(last?.content).includes('LIVE-BLOCK') && !textOf(last?.content).includes('Pause now fixture')) return Object.assign([text('Late fixture reply')], { delay: 60000 })
   if (process.env.MEK_MOCK_COORDINATOR === '1') {
     const response = coordinatorResponse({ messages, tools, me, isMain, text, tool, textOf })
