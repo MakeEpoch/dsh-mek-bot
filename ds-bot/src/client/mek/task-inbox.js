@@ -9,12 +9,13 @@ export function createTaskInbox(storage, events = globalThis.window) {
   let saved = read(), entries = new Map(), version = 0
   const publish = () => { version++; for (const listener of listeners) listener() }
   const persist = () => { try { storage?.setItem(KEY, JSON.stringify(saved)) } catch { broken = true } }
-  const update = roster => {
+  const update = (roster, nativeTodos = false) => {
     if (!roster.ready) return
     entries = new Map()
     for (const subject of [...roster.bots, ...roster.rooms]) {
       const view = conversationTasks(roster, subject.id)
-      for (const entry of [...view.plans, ...view.tasks]) entries.set(entry.key, entry)
+      const plans = nativeTodos && !roster.roomsById[subject.id] ? [] : view.plans
+      for (const entry of [...plans, ...view.tasks]) entries.set(entry.key, entry)
     }
     if (!saved) {
       // An upgrade is not a stream of new tasks. Baseline only this first view;

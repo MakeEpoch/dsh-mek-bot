@@ -45,9 +45,9 @@ var subscriptions = /* @__PURE__ */ new WeakMap();
 var listeners = /* @__PURE__ */ new Set();
 var inactiveRoot;
 var localBody = () => scene ?? (inactiveRoot ??= globalThis.document.createElement("div"));
-function scopeCss(text4) {
+function scopeCss(text5) {
   return `@scope (.mek-bot-scene) {
-${text4.replace(/\bhtml\s+body\b/g, ":scope").replace(/(?<![\w.\-#])(?:html|body)\b(?=[\s[{.:>,#])/g, ":scope").replace(/:root\b/g, ":scope")}
+${text5.replace(/\bhtml\s+body\b/g, ":scope").replace(/(?<![\w.\-#])(?:html|body)\b(?=[\s[{.:>,#])/g, ":scope").replace(/:root\b/g, ":scope")}
 }`;
 }
 function mountScene(element) {
@@ -1521,7 +1521,7 @@ var HOST_ZH = {
   "DS Bot is still loading this chat.": "DS Bot 还在加载这个对话。"
 };
 Object.assign(ZH, HOST_ZH);
-var fill = (text4, params) => params ? text4.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match) : text4;
+var fill = (text5, params) => params ? text5.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match) : text5;
 var service = null;
 var bound = null;
 function installLocale(locale) {
@@ -1572,15 +1572,15 @@ function noteClientError(where, error) {
   }
   const message = String(error?.message ?? error ?? "error").slice(0, 300);
   const code = typeof error?.code === "string" ? error.code : void 0;
-  const text4 = `${where}: ${message}`;
+  const text5 = `${where}: ${message}`;
   const now = Date.now();
   const last = entries.at(-1);
-  if (last && last.text === text4 && now - last.time < REPEAT_MS) {
+  if (last && last.text === text5 && now - last.time < REPEAT_MS) {
     last.time = now;
     last.count = (last.count ?? 1) + 1;
     return;
   }
-  entries.push({ time: now, level: "error", text: text4, ...code ? { code } : {} });
+  entries.push({ time: now, level: "error", text: text5, ...code ? { code } : {} });
   if (entries.length > MAX) entries.splice(0, entries.length - MAX);
 }
 var quietly = (where) => (error) => noteClientError(where, error);
@@ -1622,9 +1622,9 @@ var WHAT_MAX = 2e3;
 var PASTE_NOTE = "DS Bot copied the diagnostics to the clipboard. Paste them here.";
 var REST_NOTE = "The recent errors do not fit in the link. DS Bot copied the diagnostics to the clipboard: paste them below this line.";
 function issueUrl(base, { what = "", diagnostics }) {
-  const text4 = what.trim().slice(0, WHAT_MAX);
-  const title = text4.split("\n")[0].slice(0, 80);
-  const build = (body) => `${base}?${new URLSearchParams({ template: "bug.yml", ...title ? { title } : {}, ...text4 ? { what: text4 } : {}, diagnostics: body })}`;
+  const text5 = what.trim().slice(0, WHAT_MAX);
+  const title = text5.split("\n")[0].slice(0, 80);
+  const build = (body) => `${base}?${new URLSearchParams({ template: "bug.yml", ...title ? { title } : {}, ...text5 ? { what: text5 } : {}, diagnostics: body })}`;
   const full2 = build(diagnostics);
   if (full2.length <= URL_LIMIT) return { url: full2, inline: true };
   const facts = build(`${diagnostics.split("\n\n")[0]}
@@ -1721,31 +1721,31 @@ var speakerOf = (line) => line.botId !== void 0 && USER_NAMES.includes(String(li
 var NAME_GOES_ON = /^(?:[a-z0-9_\-/\\]|\.[a-z0-9_-])/i;
 var ADDRESS_BEFORE = /[a-z0-9_./]/i;
 var LITERAL = /```[\s\S]*?(?:```|$)|`[^`\n]*`|\[[^\]\n]*\]\([^)\s]*(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\)/g;
-var fitsAt = (text4, at, word) => text4.slice(at, at + word.length).toLowerCase() === word.toLowerCase() && !NAME_GOES_ON.test(text4.slice(at + word.length));
+var fitsAt = (text5, at, word) => text5.slice(at, at + word.length).toLowerCase() === word.toLowerCase() && !NAME_GOES_ON.test(text5.slice(at + word.length));
 var overlaps = (spans, start, end) => spans.some((span) => start < span.end && span.start < end);
 function nameProblem(name) {
-  const text4 = String(name ?? "").trim();
-  if (text4 === "") return "A Bot needs a name";
-  if (/[@`\r\n]/.test(text4)) return "A Bot name cannot contain @, ` or a line break";
-  if (ALL_WORDS.includes(text4.toLowerCase())) return `"${text4}" calls everyone in a group, so it cannot be a Bot name`;
-  if (USER_NAMES.includes(text4.toLowerCase())) return `"${text4}" stands for the user in a chat, so it cannot be a Bot name`;
+  const text5 = String(name ?? "").trim();
+  if (text5 === "") return "A Bot needs a name";
+  if (/[@`\r\n]/.test(text5)) return "A Bot name cannot contain @, ` or a line break";
+  if (ALL_WORDS.includes(text5.toLowerCase())) return `"${text5}" calls everyone in a group, so it cannot be a Bot name`;
+  if (USER_NAMES.includes(text5.toLowerCase())) return `"${text5}" stands for the user in a chat, so it cannot be a Bot name`;
   return void 0;
 }
-function referenceSpans(text4, labels = []) {
+function referenceSpans(text5, labels = []) {
   const spans = [];
   for (const label3 of [...labels].sort((a, b) => b.length - a.length)) {
     const mention = `@${label3}`;
-    for (let at = text4.indexOf(mention); at !== -1; at = text4.indexOf(mention, at + 1)) {
+    for (let at = text5.indexOf(mention); at !== -1; at = text5.indexOf(mention, at + 1)) {
       const end = at + mention.length;
-      if (at > 0 && ADDRESS_BEFORE.test(text4[at - 1]) || NAME_GOES_ON.test(text4.slice(end)) || overlaps(spans, at, end)) continue;
+      if (at > 0 && ADDRESS_BEFORE.test(text5[at - 1]) || NAME_GOES_ON.test(text5.slice(end)) || overlaps(spans, at, end)) continue;
       spans.push({ start: at, end, label: label3 });
       break;
     }
   }
   return spans.sort((a, b) => a.start - b.start);
 }
-function mentionSpans(text4, bots, { references = [] } = {}) {
-  const value = String(text4 ?? "");
+function mentionSpans(text5, bots, { references = [] } = {}) {
+  const value = String(text5 ?? "");
   const skip = [
     ...[...value.matchAll(LITERAL)].map((match) => ({ start: match.index, end: match.index + match[0].length })),
     ...referenceSpans(value, references)
@@ -1766,16 +1766,16 @@ function mentionSpans(text4, bots, { references = [] } = {}) {
 
 // src/client/text.js
 var MENTION_ORIGIN = "https://bots.local/";
-function linkMentions(text4, bots, selfId) {
-  if (!text4 || !text4.includes("@")) return text4;
+function linkMentions(text5, bots, selfId) {
+  if (!text5 || !text5.includes("@")) return text5;
   let out = "";
   let cursor = 0;
-  for (const span of mentionSpans(text4, bots)) {
+  for (const span of mentionSpans(text5, bots)) {
     if (!span.bot || span.bot.id === selfId) continue;
-    out += `${text4.slice(cursor, span.start)}[${text4.slice(span.start + 1, span.end).replace(/[[\]\\]/g, "\\$&")}](${MENTION_ORIGIN}${span.bot.id})`;
+    out += `${text5.slice(cursor, span.start)}[${text5.slice(span.start + 1, span.end).replace(/[[\]\\]/g, "\\$&")}](${MENTION_ORIGIN}${span.bot.id})`;
     cursor = span.end;
   }
-  return cursor === 0 ? text4 : out + text4.slice(cursor);
+  return cursor === 0 ? text5 : out + text5.slice(cursor);
 }
 function mentionTarget(event) {
   const anchor = event.target instanceof Element ? event.target.closest(`a[href^="${MENTION_ORIGIN}"]`) : null;
@@ -1820,9 +1820,9 @@ function elapsedLabel(ms) {
 var contentText = (content) => (content ?? []).filter((block) => block?.type === "text").map((block) => block.text).join("\n");
 var HEADER = /^\[(Message from|Reply from|Group chat|Group post from|Bot team setup|Handoff · part|Secret card)(?:[^\r\n]*\]\r?\n|[^\]\r\n]*\])/;
 var currentPart = (bot) => bot.sessionId ?? bot.id;
-function reminderPrompts(text4) {
-  const one = /^reminder_prompt_json: (.*)$/m.exec(text4);
-  const batch = /^reminders_json: (.*)$/m.exec(text4);
+function reminderPrompts(text5) {
+  const one = /^reminder_prompt_json: (.*)$/m.exec(text5);
+  const batch = /^reminders_json: (.*)$/m.exec(text5);
   try {
     const prompts = [...one ? [JSON.parse(one[1])] : [], ...batch ? JSON.parse(batch[1]).map((entry) => entry.reminder_prompt) : []];
     return prompts.filter((prompt) => typeof prompt === "string" && prompt.trim() !== "");
@@ -1830,19 +1830,19 @@ function reminderPrompts(text4) {
     return [];
   }
 }
-var stripHeader = (text4) => text4.replace(HEADER, "");
+var stripHeader = (text5) => text5.replace(HEADER, "");
 function latestMemoryChange(news, ids) {
   const at = (id) => news?.[id]?.seen ? news[id].at ?? 0 : 0;
   return ids.reduce((best, id) => at(id) > at(best) ? id : best, ids[0] ?? null);
 }
-function summaryBlocks(text4) {
+function summaryBlocks(text5) {
   const blocks = [];
   let paragraph = [];
   const flush = () => {
     if (paragraph.length > 0) blocks.push({ kind: "p", text: paragraph.join(" ") });
     paragraph = [];
   };
-  for (const raw of String(text4 ?? "").split("\n")) {
+  for (const raw of String(text5 ?? "").split("\n")) {
     const line = raw.trim().replace(/\*\*|__/g, "");
     const heading = /^#{1,6}\s+(.+)$/.exec(line);
     if (heading) {
@@ -1939,8 +1939,8 @@ function previewOf(list, id, hiddenTurns = []) {
   for (let index = outline.length - 1; index >= 0; index -= 1) {
     const entry = outline[index];
     if (hiddenTurns.includes(entry.turn)) continue;
-    const text4 = entry.response || entry.prompt || "";
-    if (text4 !== "") return stripHeader(text4).replace(/\s+/g, " ").trim();
+    const text5 = entry.response || entry.prompt || "";
+    if (text5 !== "") return stripHeader(text5).replace(/\s+/g, " ").trim();
   }
   return "";
 }
@@ -1963,8 +1963,8 @@ function usageOf(list, ids) {
 function percentText(part, whole) {
   if (part >= whole) return "100";
   for (let places = 0; places < 3; places += 1) {
-    const text4 = (part / whole * 100).toFixed(places);
-    if (Number(text4) < 100) return text4;
+    const text5 = (part / whole * 100).toFixed(places);
+    if (Number(text5) < 100) return text5;
   }
   return "99.99";
 }
@@ -2143,9 +2143,9 @@ var MAIN_LOOK = Object.freeze({ shape: "whale", color: "deepseek" });
 var CHARACTER_COLORS = ["black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray", "aurora"];
 var DEFAULT_COLORS = CHARACTER_COLORS.filter((color) => !["black", "gray", "brown"].includes(color) && !GRADIENTS[color]);
 var isColor = (color) => isHex(color) || Object.hasOwn(INKS, color);
-function fnv1a(text4) {
+function fnv1a(text5) {
   let value = 2166136261;
-  for (let index = 0; index < text4.length; index += 1) value = Math.imul(value ^ text4.charCodeAt(index), 16777619);
+  for (let index = 0; index < text5.length; index += 1) value = Math.imul(value ^ text5.charCodeAt(index), 16777619);
   return value >>> 0;
 }
 function defaultColor(id) {
@@ -2899,7 +2899,7 @@ function GoalPanel({ goal, view, room: room2, roster, actions, working }) {
   );
 }
 function GoalCompose({ room: room2, roster, actions }) {
-  const [text4, setText] = (0, import_react5.useState)("");
+  const [text5, setText] = (0, import_react5.useState)("");
   const [sending, setSending] = (0, import_react5.useState)(false);
   const admin = roster.byId?.[room2.admin]?.name ?? t("a Bot");
   const close = () => {
@@ -2907,7 +2907,7 @@ function GoalCompose({ room: room2, roster, actions }) {
     actions.closeGoal();
   };
   const submit = () => {
-    const brief = text4.trim();
+    const brief = text5.trim();
     if (brief === "" || sending) return;
     setSending(true);
     void Promise.resolve(actions.goalDraft(room2.id, brief)).then(
@@ -2929,7 +2929,7 @@ function GoalCompose({ room: room2, roster, actions }) {
       id: "bt-goal-brief",
       className: "bt-input bt-input-area bt-goal-input",
       rows: 2,
-      value: text4,
+      value: text5,
       onChange: (event) => {
         setText(event.target.value);
         const box = event.currentTarget;
@@ -2954,7 +2954,7 @@ function GoalCompose({ room: room2, roster, actions }) {
       "div",
       { className: "bt-goal-cbtns" },
       (0, import_react5.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: close }, t("Cancel")),
-      (0, import_react5.createElement)("button", { type: "button", className: "bt-send bt-soft-sm", disabled: text4.trim() === "" || sending, onClick: submit }, t("Start"))
+      (0, import_react5.createElement)("button", { type: "button", className: "bt-send bt-soft-sm", disabled: text5.trim() === "" || sending, onClick: submit }, t("Start"))
     )
   );
 }
@@ -3633,7 +3633,7 @@ var HANDOFF_CSS = `
 
 // node_modules/deep-view/src/react/ui.js
 var import_react10 = require("react");
-var FallbackMarkdown = ({ text: text4 }) => (0, import_react10.createElement)("span", null, String(text4 ?? ""));
+var FallbackMarkdown = ({ text: text5 }) => (0, import_react10.createElement)("span", null, String(text5 ?? ""));
 var ViewUi = (0, import_react10.createContext)({ t: (key) => key, Markdown: FallbackMarkdown });
 var useViewUi = () => (0, import_react10.useContext)(ViewUi);
 var lineIcon2 = (paths) => function LineIcon() {
@@ -3769,18 +3769,18 @@ function tokenize(source) {
     }
     if (char === '"' || char === "'") {
       let end = at + 1;
-      let text4 = "";
+      let text5 = "";
       while (end < source.length && source[end] !== char) {
         if (source[end] === "\\" && end + 1 < source.length) {
-          text4 += source[end + 1];
+          text5 += source[end + 1];
           end += 2;
           continue;
         }
-        text4 += source[end];
+        text5 += source[end];
         end += 1;
       }
       if (end >= source.length) fail(`unclosed string at ${at + 1}`);
-      tokens.push({ kind: "string", value: text4, at });
+      tokens.push({ kind: "string", value: text5, at });
       at = end + 1;
       continue;
     }
@@ -4188,8 +4188,8 @@ function checkTable(node, path, ctx) {
         ctx.formulas.push({ source: cells[column]["="], path: at, kind: "scalar" });
         continue;
       }
-      const text4 = cellText(cells[column]);
-      if (text4.length > MAX_CELL) return `${at}: ${text4.length} characters exceeds the limit of ${MAX_CELL}`;
+      const text5 = cellText(cells[column]);
+      if (text5.length > MAX_CELL) return `${at}: ${text5.length} characters exceeds the limit of ${MAX_CELL}`;
     }
   }
   return void 0;
@@ -4411,8 +4411,8 @@ function kindProblem(value, kind) {
 }
 function cellText(value) {
   if (typeof value === "string") return value;
-  const text4 = JSON.stringify(value);
-  return typeof text4 === "string" ? text4 : "";
+  const text5 = JSON.stringify(value);
+  return typeof text5 === "string" ? text5 : "";
 }
 var compiled = /* @__PURE__ */ new WeakMap();
 var treeOf = (formula) => {
@@ -4460,8 +4460,8 @@ function resolve(value, lookup, fallback = void 0) {
   return result.error === void 0 ? result.value : fallback;
 }
 var asText = (value) => value === void 0 || value === null ? "" : show(value);
-function clip(text4) {
-  const flat = String(text4).replace(/\s+/g, " ").trim();
+function clip(text5) {
+  const flat = String(text5).replace(/\s+/g, " ").trim();
   return flat.length <= SUMMARY_PART ? flat : flat.slice(0, SUMMARY_PART);
 }
 var choiceLabel = (node, value) => (Array.isArray(node.options) ? node.options : []).find((option) => choiceValue(option) === value)?.label ?? asText(value);
@@ -4605,11 +4605,11 @@ var PALETTE = ["var(--dv-accent)", "var(--dv-ink-tangerine)", "var(--dv-ink-gree
 var colorAt = (index) => PALETTE[index % PALETTE.length];
 var TICK = 10;
 var LABEL = 11;
-var textWidth = (text4, size) => [...String(text4)].reduce((sum, char) => sum + (char.charCodeAt(0) > 11904 ? size : size * 0.58), 0);
-var fit = (text4, room2, size) => {
-  if (textWidth(text4, size) <= room2) return text4;
+var textWidth = (text5, size) => [...String(text5)].reduce((sum, char) => sum + (char.charCodeAt(0) > 11904 ? size : size * 0.58), 0);
+var fit = (text5, room2, size) => {
+  if (textWidth(text5, size) <= room2) return text5;
   let out = "";
-  for (const char of String(text4)) {
+  for (const char of String(text5)) {
     if (textWidth(`${out}${char}…`, size) > room2) break;
     out += char;
   }
@@ -5519,8 +5519,8 @@ function WidgetNode({ node, ctx }) {
       );
     }
     case "text": {
-      const text4 = (0, import_react13.createElement)(ui2.Markdown, { text: asText(resolve(node.text, lookup, "")), labels: mdLabels(ui2), variant: "compact" });
-      return node.tone === "muted" ? (0, import_react13.createElement)("div", { className: "dv-view-muted" }, text4) : text4;
+      const text5 = (0, import_react13.createElement)(ui2.Markdown, { text: asText(resolve(node.text, lookup, "")), labels: mdLabels(ui2), variant: "compact" });
+      return node.tone === "muted" ? (0, import_react13.createElement)("div", { className: "dv-view-muted" }, text5) : text5;
     }
     case "metric":
       return (0, import_react13.createElement)(WidgetMetric, { node, lookup });
@@ -5959,13 +5959,13 @@ function viewAnswerText(view, answer) {
     });
     parts.push(...Object.entries(values.inputs).map(([key, value]) => `${labels.get(key) ?? key}=${value}`));
   }
-  const text4 = parts.join("; ");
-  return text4.length > 200 ? `${text4.slice(0, 200)}…` : text4;
+  const text5 = parts.join("; ");
+  return text5.length > 200 ? `${text5.slice(0, 200)}…` : text5;
 }
-function readViewReply(text4) {
+function readViewReply(text5) {
   let value;
   try {
-    value = JSON.parse(text4);
+    value = JSON.parse(text5);
   } catch {
     return void 0;
   }
@@ -5981,19 +5981,19 @@ function actionSummary(answer, view) {
   const values = answer?.values;
   if (!isRecord2(values)) return "(skipped)";
   const inputs = inputsSummary(view, values.inputs);
-  let text4;
-  if (Array.isArray(values.selected)) text4 = `selected: ${values.selected.join(", ")}`;
-  else if (typeof values.confirmed === "boolean") text4 = values.confirmed ? "confirmed" : "cancelled";
-  else if (isRecord2(values.fields)) text4 = Object.entries(values.fields).map(([key, value]) => `${key}: ${value}`).join("; ");
-  else if (inputs !== "") text4 = "";
-  else text4 = typeof answer.action === "string" && answer.action !== "" ? answer.action : "(skipped)";
-  if (inputs !== "") text4 = text4 === "" ? inputs : `${text4}; ${inputs}`;
-  if (text4 === "") text4 = "(empty)";
-  return text4.length > 500 ? text4.slice(0, 500) : text4;
+  let text5;
+  if (Array.isArray(values.selected)) text5 = `selected: ${values.selected.join(", ")}`;
+  else if (typeof values.confirmed === "boolean") text5 = values.confirmed ? "confirmed" : "cancelled";
+  else if (isRecord2(values.fields)) text5 = Object.entries(values.fields).map(([key, value]) => `${key}: ${value}`).join("; ");
+  else if (inputs !== "") text5 = "";
+  else text5 = typeof answer.action === "string" && answer.action !== "" ? answer.action : "(skipped)";
+  if (inputs !== "") text5 = text5 === "" ? inputs : `${text5}; ${inputs}`;
+  if (text5 === "") text5 = "(empty)";
+  return text5.length > 500 ? text5.slice(0, 500) : text5;
 }
-function viewReplyText(text4) {
-  const reply = readViewReply(text4);
-  if (reply === void 0) return text4;
+function viewReplyText(text5) {
+  const reply = readViewReply(text5);
+  if (reply === void 0) return text5;
   return reply.views.map((view) => {
     const answer = reply.answers.find((item) => item.id === view.id);
     return `${view.title === "" ? "[Answer to view card]" : `[Answer to view card] ${view.title}`}
@@ -6172,14 +6172,14 @@ function ScopeSwitch({ value, onChange, bot }) {
     "div",
     { className: "bt-secret-scope", role: "radiogroup", "aria-label": t("Who may use it") },
     (0, import_react16.createElement)("span", { className: "bt-secret-glide", "data-at": value === "all" ? 0 : 1, "aria-hidden": true }),
-    options.map(([id, text4]) => (0, import_react16.createElement)("button", {
+    options.map(([id, text5]) => (0, import_react16.createElement)("button", {
       key: id,
       type: "button",
       role: "radio",
       "aria-checked": value === id,
       className: "bt-secret-seg",
       onClick: () => onChange(id)
-    }, text4))
+    }, text5))
   );
 }
 function SecretHead({ bot, title, detail, name, onClose }) {
@@ -6274,10 +6274,10 @@ function SecretCard({ sessionId, bot, request, roster, actions, inline = false }
 }
 function SettledSecret({ bot, request, roster }) {
   const canceled = request.status === "canceled";
-  const text4 = canceled ? t("{bot} asked for {name}", { bot: bot.name, name: request.name }) : request.status === "allowed" ? t("Allowed {bot} to use {name}", { bot: bot.name, name: request.name }) : t("Saved {name}", { name: request.name });
+  const text5 = canceled ? t("{bot} asked for {name}", { bot: bot.name, name: request.name }) : request.status === "allowed" ? t("Allowed {bot} to use {name}", { bot: bot.name, name: request.name }) : t("Saved {name}", { name: request.name });
   return (0, import_react16.createElement)(
     "div",
-    { className: "bt-q bt-q-settled bt-secret bt-secret-done", role: "group", "aria-label": text4, "data-status": request.status },
+    { className: "bt-q bt-q-settled bt-secret bt-secret-done", role: "group", "aria-label": text5, "data-status": request.status },
     (0, import_react16.createElement)(
       "div",
       { className: "bt-q-head" },
@@ -6285,7 +6285,7 @@ function SettledSecret({ bot, request, roster }) {
       (0, import_react16.createElement)("div", { className: "bt-q-text" }, (0, import_react16.createElement)(
         "p",
         { className: "bt-q-title" },
-        text4,
+        text5,
         canceled ? null : (0, import_react16.createElement)("span", { className: "bt-secret-scope-tag" }, ` · ${scopeLabel(request.scope, roster)}`)
       )),
       canceled ? (0, import_react16.createElement)("span", { className: "bt-q-badge" }, t("Canceled")) : (0, import_react16.createElement)("span", { className: "bt-q-check bt-secret-check", title: t("Done") }, (0, import_react16.createElement)(CheckIcon))
@@ -6332,11 +6332,11 @@ function ScopeEditor({ secret, roster, onSave }) {
     (0, import_react16.createElement)(
       "div",
       { className: "bt-secret-radios", role: "radiogroup", "aria-label": t("Who may use {name}", { name: secret.name }) },
-      [["all", t("All Bots")], ["some", t("Chosen Bots")]].map(([id, text4]) => (0, import_react16.createElement)(
+      [["all", t("All Bots")], ["some", t("Chosen Bots")]].map(([id, text5]) => (0, import_react16.createElement)(
         "label",
         { key: id, className: "bt-secret-radio" },
         (0, import_react16.createElement)("input", { type: "radio", name: `scope-${secret.name}`, checked: mode === id, onChange: () => setMode(id) }),
-        text4
+        text5
       ))
     ),
     mode === "some" ? (0, import_react16.createElement)("div", { className: "bt-secret-bots" }, roster.bots.map((bot) => (0, import_react16.createElement)("button", {
@@ -6794,7 +6794,7 @@ function ModelChoiceDock({ sessionId, useRoster, actions }) {
       void actions.refreshModels?.();
     }).finally(() => setBusy(""));
   };
-  const text4 = lost ? t("{model} is not available anymore. Pick another model for me.", { model: bot.model.split("/").slice(1).join("/") }) : keyFor ? t("Hi, I'm {name}. I need a {provider} API key before I can start.", { name: bot.name, provider: keyFor.providerName ?? keyFor.provider }) : usable.length === 0 ? t("Hi, I'm {name}. I don't have a model yet. How do you want to set one up?", { name: bot.name }) : t("Hi, I'm {name}. Pick a model for me first. You can change it later in my details.", { name: bot.name });
+  const text5 = lost ? t("{model} is not available anymore. Pick another model for me.", { model: bot.model.split("/").slice(1).join("/") }) : keyFor ? t("Hi, I'm {name}. I need a {provider} API key before I can start.", { name: bot.name, provider: keyFor.providerName ?? keyFor.provider }) : usable.length === 0 ? t("Hi, I'm {name}. I don't have a model yet. How do you want to set one up?", { name: bot.name }) : t("Hi, I'm {name}. Pick a model for me first. You can change it later in my details.", { name: bot.name });
   const choices = usable.length === 0 ? setupChoices(actions).map(([label3, run2]) => (0, import_react17.createElement)("button", { key: label3, type: "button", className: "bt-model-chip", onClick: run2 }, label3)) : [
     ...groupModels(usable).map(([provider, list]) => (0, import_react17.createElement)(
       "div",
@@ -6826,7 +6826,7 @@ function ModelChoiceDock({ sessionId, useRoster, actions }) {
           "div",
           { className: "bt-msg-line" },
           (0, import_react17.createElement)(BotMark, { bot, size: 22 }),
-          (0, import_react17.createElement)("div", { className: "bt-bubble" }, text4)
+          (0, import_react17.createElement)("div", { className: "bt-bubble" }, text5)
         )
       )
     ),
@@ -7053,8 +7053,8 @@ function TechnicalDetails({ facts }) {
   const [copied, setCopied] = (0, import_react18.useState)(false);
   if (facts.length === 0) return null;
   const copy3 = () => {
-    const text4 = facts.map(([name, , value]) => `${name}: ${value}`).join("\n");
-    void navigator.clipboard?.writeText(text4).then(() => {
+    const text5 = facts.map(([name, , value]) => `${name}: ${value}`).join("\n");
+    void navigator.clipboard?.writeText(text5).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1e3);
     }).catch(() => {
@@ -7082,7 +7082,7 @@ function FailureCell({ node, sessionId, useRoster, useTurnClock, actions }) {
   const [joining, setJoining] = (0, import_react18.useState)(null);
   const blocked = bot?.blocked?.code === data.code ? bot.blocked : void 0;
   const provider = blocked?.provider ?? providerOf(bot, roster);
-  const text4 = failureText(data.code, { name: bot?.name ?? t("This Bot"), provider: providerName(roster, provider), status: blocked?.status });
+  const text5 = failureText(data.code, { name: bot?.name ?? t("This Bot"), provider: providerName(roster, provider), status: blocked?.status });
   const facts = failureFacts(data, blocked);
   const current = bot !== void 0 && currentPart(bot) === sessionId && !later && !data.settledAfter;
   const moveToAccount = () => {
@@ -7117,7 +7117,7 @@ function FailureCell({ node, sessionId, useRoster, useTurnClock, actions }) {
   const settled = () => (0, import_react18.createElement)(
     "div",
     { className: "bt-fail", "data-settled": "", role: "status" },
-    (0, import_react18.createElement)("div", { className: "bt-fail-head" }, (0, import_react18.createElement)("span", { className: "bt-fail-dot", "aria-hidden": true }), (0, import_react18.createElement)("span", { className: "bt-fail-text" }, text4)),
+    (0, import_react18.createElement)("div", { className: "bt-fail-head" }, (0, import_react18.createElement)("span", { className: "bt-fail-dot", "aria-hidden": true }), (0, import_react18.createElement)("span", { className: "bt-fail-text" }, text5)),
     (0, import_react18.createElement)(TechnicalDetails, { facts })
   );
   if (!current) return settled();
@@ -7167,7 +7167,7 @@ function FailureCell({ node, sessionId, useRoster, useTurnClock, actions }) {
   return (0, import_react18.createElement)(
     "div",
     { className: "bt-fail", role: "status" },
-    (0, import_react18.createElement)("div", { className: "bt-fail-head" }, (0, import_react18.createElement)("span", { className: "bt-fail-dot", "aria-hidden": true }), (0, import_react18.createElement)("span", { className: "bt-fail-text" }, text4)),
+    (0, import_react18.createElement)("div", { className: "bt-fail-head" }, (0, import_react18.createElement)("span", { className: "bt-fail-dot", "aria-hidden": true }), (0, import_react18.createElement)("span", { className: "bt-fail-text" }, text5)),
     (0, import_react18.createElement)("div", { className: "bt-fail-actions" }, row),
     keying && keyHere ? (0, import_react18.createElement)(ModelKeyCard, { model: { provider, providerName: providerName(roster, provider) }, actions, onSaved: () => setKeying(false) }) : null,
     error ? (0, import_react18.createElement)("div", { className: "bt-fail-error", role: "alert" }, error) : null,
@@ -7211,40 +7211,40 @@ function opensReply(steps, current, withReasoning = true) {
 var thinkingStep = (steps) => steps.find(thinkingLive);
 var thinkingLive = (step) => step.status === "running" && texts(step).length === 0 && step.blocks.some((block) => block.kind === "reasoning");
 var texts = (step) => step.blocks.filter((block) => block.kind === "text" && block.text.trim() !== "");
-var visibleReasoning = (text4) => {
-  if (text4[0] !== "<") return text4;
-  if ("<signature>".startsWith(text4)) return "";
-  if (!text4.startsWith("<signature>")) return text4;
-  const end = text4.indexOf("</signature>");
-  return end === -1 ? "" : text4.slice(end + "</signature>".length).replace(/^(\r?\n)+/, "");
+var visibleReasoning = (text5) => {
+  if (text5[0] !== "<") return text5;
+  if ("<signature>".startsWith(text5)) return "";
+  if (!text5.startsWith("<signature>")) return text5;
+  const end = text5.indexOf("</signature>");
+  return end === -1 ? "" : text5.slice(end + "</signature>".length).replace(/^(\r?\n)+/, "");
 };
 var stepReasoning = (step) => step.blocks.filter((block) => block.kind === "reasoning").map((block) => visibleReasoning(block.text)).join("\n").trim();
 
 // src/shared/group-replies.js
 var RELAY_LIST = /"replies"\s*:\s*\[/;
 var PRUNE_MARKER = /\[\.\.\. tool result middle pruned \.\.\.\]/;
-function parseReplies(text4) {
+function parseReplies(text5) {
   try {
-    return { replies: JSON.parse(text4).replies ?? [], broken: false };
+    return { replies: JSON.parse(text5).replies ?? [], broken: false };
   } catch {
   }
   const replies = [];
-  const head = RELAY_LIST.exec(text4);
+  const head = RELAY_LIST.exec(text5);
   if (head) {
-    for (const piece of text4.slice(head.index + head[0].length).split(PRUNE_MARKER)) {
+    for (const piece of text5.slice(head.index + head[0].length).split(PRUNE_MARKER)) {
       const first = piece.indexOf('{"');
       if (first !== -1) scanReplies(piece, first, replies);
     }
   }
   return { replies, broken: true };
 }
-function scanReplies(text4, start, replies) {
+function scanReplies(text5, start, replies) {
   let depth = 0;
   let from = -1;
   let inString = false;
   let escaped = false;
-  for (let i = start; i < text4.length; i += 1) {
-    const ch = text4[i];
+  for (let i = start; i < text5.length; i += 1) {
+    const ch = text5[i];
     if (inString) {
       if (escaped) escaped = false;
       else if (ch === "\\") escaped = true;
@@ -7262,7 +7262,7 @@ function scanReplies(text4, start, replies) {
       depth -= 1;
       if (depth === 0 && from >= 0) {
         try {
-          replies.push(JSON.parse(text4.slice(from, i + 1)));
+          replies.push(JSON.parse(text5.slice(from, i + 1)));
         } catch {
         }
         from = -1;
@@ -7296,13 +7296,13 @@ var closes = (line, open) => {
   const marker = CLOSE.exec(line)?.[1];
   return marker !== void 0 && marker[0] === open[0] && marker.length >= open.length;
 };
-function cutAt(text4, end) {
-  const code = text4.charCodeAt(end - 1);
-  return text4.slice(0, code >= 55296 && code <= 56319 ? end - 1 : end);
+function cutAt(text5, end) {
+  const code = text5.charCodeAt(end - 1);
+  return text5.slice(0, code >= 55296 && code <= 56319 ? end - 1 : end);
 }
-function moreLines(text4, max) {
+function moreLines(text5, max) {
   let lines = 1;
-  for (let at = text4.indexOf("\n"); at !== -1; at = text4.indexOf("\n", at + 1)) {
+  for (let at = text5.indexOf("\n"); at !== -1; at = text5.indexOf("\n", at + 1)) {
     if (++lines > max) return true;
   }
   return false;
@@ -7330,9 +7330,9 @@ function blockCode(body, fenceLine, open) {
   }
   return code.join("\n");
 }
-function foldView(text4, limit = FOLD_AT, markdown = true) {
-  if (text4.length <= limit.chars && !moreLines(text4, limit.lines)) return null;
-  const body = text4.replace(/^(\s*\n)+/, "");
+function foldView(text5, limit = FOLD_AT, markdown = true) {
+  if (text5.length <= limit.chars && !moreLines(text5, limit.lines)) return null;
+  const body = text5.replace(/^(\s*\n)+/, "");
   if (body.trim() === "") return null;
   let head = body.split("\n", PREVIEW_LINES).join("\n");
   if (head.length > PREVIEW_CHARS) {
@@ -7360,19 +7360,19 @@ ${opened.marker}`,
     code: blockCode(body, opened.line, opened.marker)
   };
 }
-function foldPreview(text4, limit = FOLD_AT, markdown = true) {
-  return foldView(text4, limit, markdown)?.head ?? null;
+function foldPreview(text5, limit = FOLD_AT, markdown = true) {
+  return foldView(text5, limit, markdown)?.head ?? null;
 }
-var stripLongNote = (text4) => text4.replace(/^\[A long message: \d+ characters\.[^\]\n]*\]\n/, "");
-function useFold(text4, { limit = FOLD_AT, whole, live = false, markdown = true } = {}) {
+var stripLongNote = (text5) => text5.replace(/^\[A long message: \d+ characters\.[^\]\n]*\]\n/, "");
+function useFold(text5, { limit = FOLD_AT, whole, live = false, markdown = true } = {}) {
   const [open, setOpen] = (0, import_react19.useState)(false);
   const [read2, setRead] = (0, import_react19.useState)();
-  const cut = whole !== void 0 && whole.length > text4.length;
-  const view = (0, import_react19.useMemo)(() => live ? null : foldView(text4, cut ? ALWAYS : limit, markdown), [text4, live, limit, markdown, cut]);
-  if (view === null) return { shown: text4, control: null };
+  const cut = whole !== void 0 && whole.length > text5.length;
+  const view = (0, import_react19.useMemo)(() => live ? null : foldView(text5, cut ? ALWAYS : limit, markdown), [text5, live, limit, markdown, cut]);
+  if (view === null) return { shown: text5, control: null };
   const code = cut ? void 0 : view.code;
   const shown = code === void 0 ? view.head : view.prose;
-  const count = (cut ? whole.length : text4.length).toLocaleString();
+  const count = (cut ? whole.length : text5.length).toLocaleString();
   if (!open) {
     const show2 = async () => {
       setOpen(true);
@@ -7383,9 +7383,9 @@ function useFold(text4, { limit = FOLD_AT, whole, live = false, markdown = true 
     return { shown, folded: true, code, codeHead: view.codeHead, control: (0, import_react19.createElement)("span", { className: "bt-fold" }, (0, import_react19.createElement)("button", { type: "button", className: "bt-more", onClick: show2 }, t("Show all · {count} characters", { count }))) };
   }
   const loaded = typeof read2?.text === "string" ? read2 : void 0;
-  const note = !cut || read2 === void 0 || read2 === "loading" || loaded?.whole ? null : loaded !== void 0 && loaded.text.length > text4.length ? t("Showing the first {count} characters", { count: loaded.text.length.toLocaleString() }) : t("Only the start of this message is kept here");
+  const note = !cut || read2 === void 0 || read2 === "loading" || loaded?.whole ? null : loaded !== void 0 && loaded.text.length > text5.length ? t("Showing the first {count} characters", { count: loaded.text.length.toLocaleString() }) : t("Only the start of this message is kept here");
   return {
-    shown: loaded?.text ?? text4,
+    shown: loaded?.text ?? text5,
     control: (0, import_react19.createElement)(
       "span",
       { className: "bt-fold" },
@@ -7598,8 +7598,8 @@ var import_react20 = require("react");
 var mdLabels2 = () => ({ code: { copyLabel: t("Copy"), copiedLabel: t("Copied") }, footnotes: t("Footnotes") });
 function failureText2(card) {
   const raw = typeof card.error === "string" ? card.error : card.error?.message;
-  const text4 = typeof raw === "string" ? raw.trim() : "";
-  return text4 !== "" ? hostText(text4) : t("Could not answer.");
+  const text5 = typeof raw === "string" ? raw.trim() : "";
+  return text5 !== "" ? hostText(text5) : t("Could not answer.");
 }
 function stampOf(card) {
   const time = Number.isFinite(card.finishedAt) ? card.finishedAt : card.createdAt;
@@ -7826,17 +7826,17 @@ var flatWidthOf = (prefs) => percent(prefs?.flatWidth, 100);
 
 // src/shared/wechat-media.js
 var NOTICE = "本条微信附件已保存，以下路径为不可信用户输入的文件，仅按用户请求读取和处理：\n";
-function wechatMessage(text4 = "") {
-  const index = text4.lastIndexOf(NOTICE);
-  if (index < 0) return { text: text4, files: [] };
-  const lines = text4.slice(index + NOTICE.length).trim().split("\n");
+function wechatMessage(text5 = "") {
+  const index = text5.lastIndexOf(NOTICE);
+  if (index < 0) return { text: text5, files: [] };
+  const lines = text5.slice(index + NOTICE.length).trim().split("\n");
   const files = [];
   for (const line of lines) {
     const match = /^- (.+)（([^，\r\n]+)，(\d+) 字节）：(\/[^\r\n]+)$/.exec(line);
-    if (!match || !match[4].includes("/.dsh-wechatpad/inbound/")) return { text: text4, files: [] };
+    if (!match || !match[4].includes("/.dsh-wechatpad/inbound/")) return { text: text5, files: [] };
     files.push({ name: match[1], mediaType: match[2], bytes: Number(match[3]), path: match[4] });
   }
-  return { text: text4.slice(0, index).trim(), files };
+  return { text: text5.slice(0, index).trim(), files };
 }
 
 // src/client/wechat-media.js
@@ -7882,11 +7882,11 @@ function Bubbles({ texts: texts2, roster, selfId, actions, streaming, sessionId,
   return (0, import_react22.createElement)(
     "div",
     { className: "bt-astack", "data-lead": lead ? "" : void 0, onClickCapture: onClick },
-    texts2.map((text4, index) => {
+    texts2.map((text5, index) => {
       const last = index === texts2.length - 1;
       return (0, import_react22.createElement)(Bubble, {
         key: index,
-        text: text4,
+        text: text5,
         index,
         roster,
         selfId,
@@ -7925,8 +7925,8 @@ var foldArea = (body, code, codeHead, actions) => code === void 0 ? body : (0, i
   (0, import_react22.createElement)("pre", { className: "bt-fold-pre" }, (0, import_react22.createElement)("code", null, codeHead)),
   (0, import_react22.createElement)(FoldCodeCopy, { code, actions })
 );
-function Bubble({ text: text4, index, roster, selfId, actions, sessionId, msgKey, mentions, fold, picked, live, lead, whole }) {
-  const { shown, folded, control, code, codeHead } = useFold(text4, { limit: fold, whole, live });
+function Bubble({ text: text5, index, roster, selfId, actions, sessionId, msgKey, mentions, fold, picked, live, lead, whole }) {
+  const { shown, folded, control, code, codeHead } = useFold(text5, { limit: fold, whole, live });
   const key = msgKey ? `${msgKey}:${index}` : void 0;
   const body = shown === "" ? null : (0, import_react22.createElement)(import_dsh_client_ui_primitives.MarkdownText, { text: linkMentions(shown, roster.bots, selfId), streaming: live, labels: mdLabels3(), variant: "compact", fileMentions: mentions });
   const row = (0, import_react22.useRef)(null);
@@ -7950,7 +7950,7 @@ function Bubble({ text: text4, index, roster, selfId, actions, sessionId, msgKey
         control ? (0, import_react22.createElement)("div", { className: "bt-fold-body" }, area) : area,
         control
       ),
-      live ? null : (0, import_react22.createElement)(MessageTools, { text: folded ? text4 : shown, name: roster.byId[selfId]?.name ?? t("Bot"), sessionId, react: key ? (emoji) => actions.toggleReaction(msgKey, index, emoji) : void 0, actions, open: toolsOpen })
+      live ? null : (0, import_react22.createElement)(MessageTools, { text: folded ? text5 : shown, name: roster.byId[selfId]?.name ?? t("Bot"), sessionId, react: key ? (emoji) => actions.toggleReaction(msgKey, index, emoji) : void 0, actions, open: toolsOpen })
     ),
     picked.length ? (0, import_react22.createElement)("div", { className: "bt-reacts" }, picked.map((emoji) => (0, import_react22.createElement)("button", {
       key: emoji,
@@ -7986,7 +7986,7 @@ function useDismiss(open, close, refs) {
     };
   }, [open]);
 }
-function MessageTools({ text: text4, name, sessionId, react, actions, open: tapped }) {
+function MessageTools({ text: text5, name, sessionId, react, actions, open: tapped }) {
   const [panel, setPanel] = (0, import_react22.useState)(null);
   const [copied, setCopied] = (0, import_react22.useState)(false);
   const tools = (0, import_react22.useRef)(null);
@@ -8008,13 +8008,13 @@ function MessageTools({ text: text4, name, sessionId, react, actions, open: tapp
     return panel.kind === "react" ? { left: Math.min(Math.max(rect.left + rect.width / 2, STRIP_HALF), scopedWindow.innerWidth - STRIP_HALF), top: rect.top - 6, "--bt-origin": "bottom center" } : { left: Math.min(rect.left, scopedWindow.innerWidth - 208), ...below ? { top: rect.bottom + 4 } : { bottom: viewBottom() - rect.top + 4, "--bt-origin": "bottom left" } };
   }, [panel, tick]);
   const copy3 = () => {
-    void navigator.clipboard?.writeText(text4).then(() => {
+    void navigator.clipboard?.writeText(text5).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1e3);
     });
   };
   const download2 = () => {
-    const url = URL.createObjectURL(new Blob([text4], { type: "text/markdown" }));
+    const url = URL.createObjectURL(new Blob([text5], { type: "text/markdown" }));
     const link = Object.assign(scopedDocument.createElement("a"), { href: url, download: `${name}-message.md` });
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1e3);
@@ -8027,7 +8027,7 @@ function MessageTools({ text: text4, name, sessionId, react, actions, open: tapp
     "div",
     { ref: tools, className: "bt-tools", "data-open": panel !== null || tapped || void 0 },
     react ? (0, import_react22.createElement)("button", { type: "button", className: "bt-tool", "aria-label": t("Add reaction"), title: t("Add reaction"), "aria-expanded": panel?.kind === "react", onClick: (event) => open("react", event) }, (0, import_react22.createElement)(SmileIcon)) : null,
-    sessionId ? (0, import_react22.createElement)("button", { type: "button", className: "bt-tool", "aria-label": t("Reply"), title: t("Reply"), onClick: () => actions.quote(sessionId, text4) }, (0, import_react22.createElement)(ReplyIcon)) : null,
+    sessionId ? (0, import_react22.createElement)("button", { type: "button", className: "bt-tool", "aria-label": t("Reply"), title: t("Reply"), onClick: () => actions.quote(sessionId, text5) }, (0, import_react22.createElement)(ReplyIcon)) : null,
     (0, import_react22.createElement)("button", { type: "button", className: "bt-tool", "aria-label": t("More message actions"), title: t("More"), "aria-haspopup": "menu", "aria-expanded": panel?.kind === "more", onClick: (event) => open("more", event) }, copied ? (0, import_react22.createElement)(CheckIcon) : (0, import_react22.createElement)(DotsIcon)),
     panel?.kind === "react" ? createPortal((0, import_react22.createElement)(
       "div",
@@ -8065,7 +8065,7 @@ function useThinkingMs({ sessionId, turn, settledSteps, skip }) {
   return ms;
 }
 var rowViews = /* @__PURE__ */ new Map();
-function ThinkingRow({ text: text4, live, at, ms, viewKey }) {
+function ThinkingRow({ text: text5, live, at, ms, viewKey }) {
   const box = (0, import_react22.useRef)(null);
   const view = (0, import_react22.useRef)(rowViews.get(viewKey));
   const atEnd = (0, import_react22.useRef)(view.current?.atEnd ?? true);
@@ -8095,7 +8095,7 @@ function ThinkingRow({ text: text4, live, at, ms, viewKey }) {
     if (atEnd.current) el.scrollTop = el.scrollHeight;
     else if (restore?.top !== void 0) el.scrollTop = restore.top;
     measure();
-  }, [text4, open]);
+  }, [text5, open]);
   const title = live ? t("Thinking") : t("Thought it through");
   return (0, import_react22.createElement)(
     "details",
@@ -8107,7 +8107,7 @@ function ThinkingRow({ text: text4, live, at, ms, viewKey }) {
       live && at !== void 0 ? (0, import_react22.createElement)(Elapsed, { at, className: "bt-think-time" }) : null,
       !live && ms !== void 0 ? (0, import_react22.createElement)("span", { className: "bt-think-time" }, `· ${elapsedLabel(Math.max(1e3, ms))}`) : null
     ),
-    (0, import_react22.createElement)("div", { ref: box, className: "bt-think-text", role: "region", "aria-label": title, tabIndex: 0, "data-fade": fade, onScroll: measure }, text4)
+    (0, import_react22.createElement)("div", { ref: box, className: "bt-think-text", role: "region", "aria-label": title, tabIndex: 0, "data-fade": fade, onScroll: measure }, text5)
   );
 }
 function useFileMentions({ node, openFile, fileMentions, useTurnData }) {
@@ -8238,7 +8238,7 @@ function scheduleGroupChains(flow) {
     if (flow.isConnected !== false) syncGroupChains(flow);
   });
 }
-function GroupMessage({ bot, text: text4, texts: texts2 = [text4], room: room2, roster, actions, msgKey, useUi, whole, time, duration }) {
+function GroupMessage({ bot, text: text5, texts: texts2 = [text5], room: room2, roster, actions, msgKey, useUi, whole, time, duration }) {
   const ref = (0, import_react22.useRef)(null);
   (0, import_react22.useLayoutEffect)(() => {
     const el = ref.current;
@@ -8571,10 +8571,10 @@ function TriggerCell({ node, sessionId, useRoster, useSessions, useTurnClock, us
         const room2 = roster.roomsById[sessionId];
         const poster = roster.byId[source.senderSessionId] ?? { id: source.senderSessionId, name: source.senderName ?? t("a Bot"), color: "gray" };
         const file = source.length === void 0 ? void 0 : (data.content ?? []).find((block) => block?.type === "file")?.attachment;
-        const text4 = stripHeader(contentText(data.content));
+        const text5 = stripHeader(contentText(data.content));
         return (0, import_react22.createElement)(GroupMessage, {
           bot: poster,
-          text: file ? stripLongNote(text4) : text4,
+          text: file ? stripLongNote(text5) : text5,
           room: room2,
           roster,
           actions,
@@ -9239,7 +9239,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
       return value;
     },
     sideCall: (name, body) => after(call2(name, body)),
-    askSide: (sessionId, chatId, text4) => after(call2("side-ask", { sessionId, chatId, text: text4 })),
+    askSide: (sessionId, chatId, text5) => after(call2("side-ask", { sessionId, chatId, text: text5 })),
     cancelSide: (chatId, entryId) => after(call2("side-cancel", { chatId, entryId })),
     closeSideChat: (chatId) => {
       ui2.set((state) => state.details && state.view === "side" && state.side === chatId ? { ...state, view: "details", side: null } : state);
@@ -9248,7 +9248,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     closePanel: () => {
       ui2.set((state) => state.details ? { ...state, details: null, view: "details", renaming: false, tab: null, side: null } : state);
     },
-    quote: (sessionId, text4) => ui2.set((state) => ({ ...state, quote: { sessionId, text: text4, token: Date.now() } })),
+    quote: (sessionId, text5) => ui2.set((state) => ({ ...state, quote: { sessionId, text: text5, token: Date.now() } })),
     clearQuote: (token) => ui2.set((state) => state.quote?.token === token ? { ...state, quote: null } : state),
     setFlags: (id, flags) => after(call2("set-flags", { id, ...flags })),
     deleteRoom: (id) => after(call2("delete-room", { id })),
@@ -9291,7 +9291,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     setMain: (id, main = true, options = {}) => after(call2("set-main", { id, main, ...options })),
     updateRoom: (id, patch) => after(call2("update-room", { id, ...patch })),
     continueRoom: (roomId) => after(call2("room-continue", { roomId })),
-    send: (sessionId, text4, images = [], requestId2) => after(call2("send", { sessionId: partFor(sessionId), text: text4, ...images.length ? { images } : {}, ...requestId2 ? { requestId: requestId2 } : {} })),
+    send: (sessionId, text5, images = [], requestId2) => after(call2("send", { sessionId: partFor(sessionId), text: text5, ...images.length ? { images } : {}, ...requestId2 ? { requestId: requestId2 } : {} })),
     readImage: (sessionId, attachment) => call2("image", { sessionId, attachment }),
     answerQuestion: (sessionId, questionId, answer) => after(call2("answer-question", { sessionId: partFor(sessionId), questionId, answer })),
     dismissQuestion: (sessionId) => after(call2("dismiss-question", { sessionId })),
@@ -9302,7 +9302,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     stopCodex: (botId, childId) => after(call2("stop-codex", { botId, childId })),
     stopMemberWork: (roomId, botId) => after(call2("stop-member-work", { roomId, botId })),
     stopRoomWork: (roomId) => after(call2("stop-room-work", { roomId })),
-    goalDraft: (roomId, text4) => after(call2("goal-draft", { roomId, text: text4 })),
+    goalDraft: (roomId, text5) => after(call2("goal-draft", { roomId, text: text5 })),
     goalControl: (roomId, goalId, action, stopWork) => after(call2("goal-control", { roomId, goalId, action, ...stopWork ? { stopWork: true } : {} })),
     // The goal island: `goalCompose` holds the room whose draft form is open,
     // `goalOpen` the room whose panel is open.
@@ -9335,7 +9335,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     usage: () => call2("usage", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     // `summarize` starts a summary when the entries changed; `regenerate` always does.
     memoryView: (id, flags = {}) => call2("memory-view", { ...memoryOf(id), ...flags }),
-    memoryAsk: (id, text4) => call2("memory-ask", { ...memoryOf(id), text: text4 }),
+    memoryAsk: (id, text5) => call2("memory-ask", { ...memoryOf(id), text: text5 }),
     memoryForget: (id, entry) => call2("memory-forget", { ...memoryOf(id), scope: entry.scope, topic: entry.topic, text: entry.text }),
     memoryHistory: (id, before) => call2("memory-history", { ...memoryOf(id), ...before === void 0 ? {} : { before } }),
     memoryRestore: (id, rowId) => call2("memory-restore", { ...memoryOf(id), id: rowId }),
@@ -9728,12 +9728,12 @@ function createTeam() {
   const onFeed = (event, data) => {
     if (event === "message" && data?.sessionId && data.item) {
       const { sessionId, item } = data;
-      const text4 = item.kind === "bot" || item.kind === "user" ? item.text : "";
+      const text5 = item.kind === "bot" || item.kind === "user" ? item.text : "";
       editRow(sessionId, (row) => ({
         ...row,
         updatedAt: Math.max(row.updatedAt ?? 0, item.time ?? 0),
         // The sidebar's preview line; turn -1 is never a hidden exchange turn.
-        projectionValues: text4 ? { turnOutline: [{ turn: -1, [item.kind === "bot" ? "response" : "prompt"]: text4 }] } : row.projectionValues
+        projectionValues: text5 ? { turnOutline: [{ turn: -1, [item.kind === "bot" ? "response" : "prompt"]: text5 }] } : row.projectionValues
       }));
       if (item.kind === "bot" && shown.getSnapshot() !== sessionId) setStatus(sessionId, { completionUnread: true });
       if (item.kind === "user") sent.set((state) => state[sessionId]?.length ? { ...state, [sessionId]: state[sessionId].slice(1) } : state);
@@ -9837,10 +9837,10 @@ function useDictation(onText) {
       let interim = "";
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
-        const text4 = result[0]?.transcript ?? "";
+        const text5 = result[0]?.transcript ?? "";
         if (result.isFinal) {
-          if (text4.trim()) latest.current(text4, true);
-        } else interim += text4;
+          if (text5.trim()) latest.current(text5, true);
+        } else interim += text5;
       }
       if (interim) latest.current(interim, false);
     };
@@ -9876,8 +9876,8 @@ function ComposerVoice({ sessionId, inputActions, actions, useUi, useRoster }) {
     root.addEventListener("keydown", onKey, true);
     return () => root.removeEventListener("keydown", onKey, true);
   }, [enterToSend, inputActions]);
-  const dictation = useDictation((text4, final) => {
-    if (final && inputActions) inputActions.insertText(text4, inputActions.captureInsertion());
+  const dictation = useDictation((text5, final) => {
+    if (final && inputActions) inputActions.insertText(text5, inputActions.captureInsertion());
   });
   const quote = useUi((state) => state.quote?.sessionId === sessionId ? state.quote : null);
   (0, import_react24.useEffect)(() => {
@@ -10177,12 +10177,12 @@ function atSources({ roster, sessions, launched, iconFor }) {
 
 // src/client/composer-mentions.js
 var import_react25 = require("react");
-function mentionAt(text4, caret) {
-  if (!Number.isInteger(caret) || caret < 0 || caret > text4.length) return null;
-  const match = /(?:^|[^\p{L}\p{N}_.])@([^@\n]{0,80})$/u.exec(text4.slice(0, caret));
+function mentionAt(text5, caret) {
+  if (!Number.isInteger(caret) || caret < 0 || caret > text5.length) return null;
+  const match = /(?:^|[^\p{L}\p{N}_.])@([^@\n]{0,80})$/u.exec(text5.slice(0, caret));
   return match ? { start: caret - match[1].length - 1, end: caret, query: match[1] } : null;
 }
-function useComposerMentions({ text: text4, setText, field, sessionId, useRoster, disabled }) {
+function useComposerMentions({ text: text5, setText, field, sessionId, useRoster, disabled }) {
   const roster = useRoster((value) => value);
   const [caret, setCaret] = (0, import_react25.useState)(0);
   const [selected, setSelected] = (0, import_react25.useState)(0);
@@ -10190,7 +10190,7 @@ function useComposerMentions({ text: text4, setText, field, sessionId, useRoster
   const restore = (0, import_react25.useRef)(null);
   const menu = (0, import_react25.useRef)(null);
   const id = (0, import_react25.useId)();
-  const token = disabled ? null : mentionAt(text4, caret);
+  const token = disabled ? null : mentionAt(text5, caret);
   const identity = token ? `${token.start}:${token.query}` : null;
   const rows2 = token && identity !== dismissed ? mentionRows(roster, sessionId, token.query) ?? [] : [];
   const active = Math.min(selected, Math.max(0, rows2.length - 1));
@@ -10203,12 +10203,12 @@ function useComposerMentions({ text: text4, setText, field, sessionId, useRoster
       const node = field.current;
       setCaret(node.selectionStart === node.selectionEnd ? node.selectionStart : -1);
     }
-  }, [text4, field]);
+  }, [text5, field]);
   (0, import_react25.useLayoutEffect)(() => {
     menu.current?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: "nearest" });
   }, [active, identity]);
   const pick2 = (row) => {
-    const next = text4.slice(0, token.start) + row.text + text4.slice(token.end);
+    const next = text5.slice(0, token.start) + row.text + text5.slice(token.end);
     restore.current = token.start + row.text.length;
     setCaret(restore.current);
     setDismissed(`${token.start}:${row.text.slice(1)}`);
@@ -10326,12 +10326,12 @@ function useChat(botId, part, feed) {
       else setStream((current) => current?.attemptId === data.attemptId ? { ...current, text: current.text + data.text } : current);
     }
   }), [feed, botId, load]);
-  const send = async (text4, actions, sessionId, images, id) => {
-    const entry = { kind: "user", text: text4, time: Date.now(), imagePreviews: images.map((image) => `data:${image.mediaType};base64,${image.data}`) };
+  const send = async (text5, actions, sessionId, images, id) => {
+    const entry = { kind: "user", text: text5, time: Date.now(), imagePreviews: images.map((image) => `data:${image.mediaType};base64,${image.data}`) };
     setPending((list) => [...list, entry]);
     actions.noteSent(sessionId);
     try {
-      await actions.send(sessionId, text4, images, id);
+      await actions.send(sessionId, text5, images, id);
     } catch (error) {
       setPending((list) => list.filter((item) => item !== entry));
       throw error;
@@ -10349,7 +10349,7 @@ function useInput(field, setText) {
   }), [field, setText]);
 }
 function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, useRoster }) {
-  const [text4, setText] = (0, import_react26.useState)("");
+  const [text5, setText] = (0, import_react26.useState)("");
   const [error, setError] = (0, import_react26.useState)(null);
   const [images, setImages] = (0, import_react26.useState)([]);
   const [preparing, setPreparing] = (0, import_react26.useState)(false);
@@ -10363,7 +10363,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
   const attempt = (0, import_react26.useRef)(null);
   const field = (0, import_react26.useRef)(null);
   const inputActions = useInput(field, setText);
-  const mentions = useComposerMentions({ text: text4, setText, field, sessionId, useRoster, disabled: disabled || sending });
+  const mentions = useComposerMentions({ text: text5, setText, field, sessionId, useRoster, disabled: disabled || sending });
   (0, import_react26.useEffect)(() => {
     active.current = true;
     return () => {
@@ -10395,12 +10395,12 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
     const node = field.current;
     node.style.height = "auto";
     node.style.height = `${node.scrollHeight}px`;
-  }, [text4]);
+  }, [text5]);
   (0, import_react26.useEffect)(() => {
     if (!disabled) field.current?.focus();
   }, [sessionId, disabled]);
   const submit = async () => {
-    const value = text4.trim();
+    const value = text5.trim();
     if (value === "" && keptImages.current.length === 0 || disabled || locked.current || pending.current > 0) return;
     const selected = keptImages.current;
     const key = JSON.stringify([value, selected.map((image) => image.id)]);
@@ -10438,8 +10438,8 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
       {
         className: "dsb-composer",
         "data-composer-card": "",
-        "data-multiline": text4.includes("\n") || void 0,
-        "data-has-content": text4.trim() || images.length || preparing ? "" : void 0,
+        "data-multiline": text5.includes("\n") || void 0,
+        "data-has-content": text5.trim() || images.length || preparing ? "" : void 0,
         "aria-busy": sending || preparing,
         onDragOver: (event) => {
           if (!disabled && !sending && [...event.dataTransfer?.types ?? []].includes("Files")) event.preventDefault();
@@ -10464,7 +10464,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
         (0, import_react26.createElement)("textarea", {
           ref: field,
           rows: 1,
-          value: text4,
+          value: text5,
           disabled: disabled || sending,
           placeholder,
           "aria-label": placeholder,
@@ -10486,7 +10486,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
             if (mentions.keydown(event)) return;
             if (event.key === "Enter" && enterToSend && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && event.keyCode !== 229 && !event.nativeEvent.isComposing) {
               event.preventDefault();
-              if (!text4.trim() && images.length === 0 && actions.steerQueued && !event.repeat) {
+              if (!text5.trim() && images.length === 0 && actions.steerQueued && !event.repeat) {
                 void actions.steerQueued(sessionId).then((result) => {
                   if (result === "failed") setError(t("Could not steer queued messages"));
                 }, (failure) => setError(failure.message));
@@ -10500,7 +10500,7 @@ function Composer({ sessionId, placeholder, disabled, onSend, actions, useUi, us
         { className: "dsb-composer-trailing" },
         actions.Queue ? (0, import_react26.createElement)(actions.Queue, { sessionId }) : null,
         (0, import_react26.createElement)(ComposerVoice, { sessionId, inputActions, actions, useUi, useRoster }),
-        (0, import_react26.createElement)("button", { type: "button", className: "dsb-send", disabled: disabled || sending || preparing || text4.trim() === "" && images.length === 0, "aria-label": t("Send message"), title: t("Send message"), onClick: () => {
+        (0, import_react26.createElement)("button", { type: "button", className: "dsb-send", disabled: disabled || sending || preparing || text5.trim() === "" && images.length === 0, "aria-label": t("Send message"), title: t("Send message"), onClick: () => {
           void submit();
         } }, (0, import_react26.createElement)(ArrowUpIcon))
       )
@@ -10572,7 +10572,7 @@ function Chat({ sessionId, team, children }) {
         sessionId,
         disabled: waiting,
         placeholder: waiting ? t("Pick a model and {name} can start.", { name }) : name ? t("Message {name}", { name }) : t("Message"),
-        onSend: (text4, images, id) => send(text4, actions, sessionId, images, id),
+        onSend: (text5, images, id) => send(text5, actions, sessionId, images, id),
         actions,
         useUi: hooks.useUi,
         useRoster: hooks.useRoster
@@ -11178,11 +11178,11 @@ function CommandPalette({ start, token, roster, actions, useSessions }) {
         const entry = outline[index2];
         if (hidden.includes(entry.turn)) continue;
         for (const raw of [entry.response, entry.prompt]) {
-          const text4 = stripHeader(raw ?? "").replace(/\s+/g, " ").trim();
-          const at = text4.toLowerCase().indexOf(wanted);
+          const text5 = stripHeader(raw ?? "").replace(/\s+/g, " ").trim();
+          const at = text5.toLowerCase().indexOf(wanted);
           if (at < 0) continue;
           const from = Math.max(0, at - 24);
-          hits.push([id, entry.turn, (from > 0 ? "…" : "") + text4.slice(from, at + wanted.length + 60)]);
+          hits.push([id, entry.turn, (from > 0 ? "…" : "") + text5.slice(from, at + wanted.length + 60)]);
           break;
         }
       }
@@ -11561,8 +11561,8 @@ function timingText(task) {
       return `${t("Every day at {time}", { time: clock2(task.time) })}${zone}`;
     case "weekly": {
       const days = (task.weekdays ?? []).join();
-      const text4 = days === "1,2,3,4,5" ? t("Every weekday at {time}", { time: clock2(task.time) }) : days === "6,7" ? t("Every weekend at {time}", { time: clock2(task.time) }) : days === "1,2,3,4,5,6,7" ? t("Every day at {time}", { time: clock2(task.time) }) : t("Every {days} at {time}", { days: weekdayNames(task.weekdays ?? []), time: clock2(task.time) });
-      return `${text4}${zone}`;
+      const text5 = days === "1,2,3,4,5" ? t("Every weekday at {time}", { time: clock2(task.time) }) : days === "6,7" ? t("Every weekend at {time}", { time: clock2(task.time) }) : days === "1,2,3,4,5,6,7" ? t("Every day at {time}", { time: clock2(task.time) }) : t("Every {days} at {time}", { days: weekdayNames(task.weekdays ?? []), time: clock2(task.time) });
+      return `${text5}${zone}`;
     }
     case "cron":
       return `${t("On the schedule {expression}", { expression: task.expression })}${zone}`;
@@ -11854,10 +11854,10 @@ var SCHEDULE_CSS = `
 // src/client/capability-settings.js
 var import_react32 = require("react");
 var blank = () => ({ name: "", kind: "mcp", description: "", transport: "stdio", command: "", argsText: "", envText: "{}", url: "", headersText: "{}", content: "", items: [] });
-var parseMap = (text4, label3) => {
+var parseMap = (text5, label3) => {
   let value;
   try {
-    value = JSON.parse(text4 || "{}");
+    value = JSON.parse(text5 || "{}");
   } catch {
     throw new Error(t("{label} must be valid JSON.", { label: label3 }));
   }
@@ -12414,17 +12414,17 @@ function Entries({ owner, view, remove }) {
   );
 }
 function changeLine(change) {
-  const text4 = change.text.length > 120 ? `${change.text.slice(0, 120)}…` : change.text;
-  if (!change.ok) return t("Not changed: {text} ({reason})", { text: text4, reason: hostText(change.error ?? "") });
-  if (change.op === "remove") return change.scope === "team" ? t("Removed from team memory: {text}", { text: text4 }) : t("Removed: {text}", { text: text4 });
-  if (change.op === "edit") return t("Updated: {text}", { text: text4 });
-  return change.scope === "team" ? t("Added to team memory: {text}", { text: text4 }) : t("Added: {text}", { text: text4 });
+  const text5 = change.text.length > 120 ? `${change.text.slice(0, 120)}…` : change.text;
+  if (!change.ok) return t("Not changed: {text} ({reason})", { text: text5, reason: hostText(change.error ?? "") });
+  if (change.op === "remove") return change.scope === "team" ? t("Removed from team memory: {text}", { text: text5 }) : t("Removed: {text}", { text: text5 });
+  if (change.op === "edit") return t("Updated: {text}", { text: text5 });
+  return change.scope === "team" ? t("Added to team memory: {text}", { text: text5 }) : t("Added: {text}", { text: text5 });
 }
 function historyLine(row) {
-  const text4 = row.text.length > 120 ? `${row.text.slice(0, 120)}…` : row.text;
-  if (row.op === "remove") return row.scope === "team" ? t("Removed from team memory: {text}", { text: text4 }) : t("Removed: {text}", { text: text4 });
-  if (row.op === "replace") return t("Updated: {text}", { text: text4 });
-  return row.scope === "team" ? t("Added to team memory: {text}", { text: text4 }) : t("Added: {text}", { text: text4 });
+  const text5 = row.text.length > 120 ? `${row.text.slice(0, 120)}…` : row.text;
+  if (row.op === "remove") return row.scope === "team" ? t("Removed from team memory: {text}", { text: text5 }) : t("Removed: {text}", { text: text5 });
+  if (row.op === "replace") return t("Updated: {text}", { text: text5 });
+  return row.scope === "team" ? t("Added to team memory: {text}", { text: text5 }) : t("Added: {text}", { text: text5 });
 }
 function HistoryRow({ row, undo, now }) {
   const [confirming, setConfirming] = (0, import_react34.useState)(false);
@@ -12568,7 +12568,7 @@ function MemoryDialog({ owner, actions, leaving = false }) {
   const [page, setPage] = (0, import_react34.useState)("summary");
   const [menu, setMenu] = (0, import_react34.useState)(false);
   const [menuShown, menuLeaving] = useLinger(menu, MENU_EXIT_MS2);
-  const [text4, setText] = (0, import_react34.useState)("");
+  const [text5, setText] = (0, import_react34.useState)("");
   const [answer, setAnswer] = (0, import_react34.useState)(null);
   const menuRef = (0, import_react34.useRef)(null);
   const dotsRef = (0, import_react34.useRef)(null);
@@ -12633,7 +12633,7 @@ function MemoryDialog({ owner, actions, leaving = false }) {
   };
   const ask = async (event) => {
     event.preventDefault();
-    const asked = text4.trim();
+    const asked = text5.trim();
     if (asked === "" || answer?.pending) return;
     setText("");
     setAnswer({ asked, pending: true });
@@ -12704,7 +12704,7 @@ function MemoryDialog({ owner, actions, leaving = false }) {
           (0, import_react34.createElement)("input", {
             ref: inputRef,
             className: "bt-mem-input",
-            value: text4,
+            value: text5,
             maxLength: 2e3,
             disabled: view === null,
             placeholder: t("Ask or update"),
@@ -12713,7 +12713,7 @@ function MemoryDialog({ owner, actions, leaving = false }) {
           }),
           (0, import_react34.createElement)(
             "button",
-            { type: "submit", className: "bt-mem-send", disabled: busy || text4.trim() === "", "aria-label": t("Send") },
+            { type: "submit", className: "bt-mem-send", disabled: busy || text5.trim() === "", "aria-label": t("Send") },
             busy ? (0, import_react34.createElement)("span", { className: "bt-mem-spin", "aria-hidden": true }) : (0, import_react34.createElement)(ArrowUpIcon)
           )
         )
@@ -13369,28 +13369,28 @@ function NewChat({ mode, roster, actions }) {
   };
   const makeGroup = async () => {
     if (admin === null || picked.length === 0) return;
-    const text4 = message.trim();
-    const room2 = await actions.createRoom([admin, ...picked], { admin, ...text4 ? {} : { greet: true } });
-    if (text4) await actions.send(room2.id, text4);
+    const text5 = message.trim();
+    const room2 = await actions.createRoom([admin, ...picked], { admin, ...text5 ? {} : { greet: true } });
+    if (text5) await actions.send(room2.id, text5);
     actions.openSession(room2.id);
     close();
   };
   const createGroup = () => run2(makeGroup);
   const sendMessage = () => run2(async () => {
-    const text4 = message.trim();
+    const text5 = message.trim();
     if (group && admin !== null) {
       await makeGroup();
       return;
     }
-    if (text4 === "" || picked.length === 0) return;
+    if (text5 === "" || picked.length === 0) return;
     if (picked.length === 1) {
-      await actions.send(picked[0], text4);
+      await actions.send(picked[0], text5);
       actions.openSession(picked[0]);
       close();
       return;
     }
     const room2 = await actions.createRoom(picked);
-    await actions.send(room2.id, text4);
+    await actions.send(room2.id, text5);
     actions.openSession(room2.id);
     close();
   });
@@ -13674,8 +13674,8 @@ function preparationStep(catalog) {
 function waveBytes(samples, rate = 16e3) {
   const bytes = new Uint8Array(44 + samples.length * 2);
   const view = new DataView(bytes.buffer);
-  const ascii = (at, text4) => {
-    for (let index = 0; index < text4.length; index += 1) bytes[at + index] = text4.charCodeAt(index);
+  const ascii = (at, text5) => {
+    for (let index = 0; index < text5.length; index += 1) bytes[at + index] = text5.charCodeAt(index);
   };
   ascii(0, "RIFF");
   view.setUint32(4, 36 + samples.length * 2, true);
@@ -13696,9 +13696,9 @@ function waveBytes(samples, rate = 16e3) {
   return bytes;
 }
 function base64Of(bytes) {
-  let text4 = "";
-  for (let index = 0; index < bytes.length; index += 32768) text4 += String.fromCharCode(...bytes.subarray(index, index + 32768));
-  return btoa(text4);
+  let text5 = "";
+  for (let index = 0; index < bytes.length; index += 32768) text5 += String.fromCharCode(...bytes.subarray(index, index + 32768));
+  return btoa(text5);
 }
 var captureError = (kind, cause) => Object.assign(new Error(kind), { kind, cause });
 async function openCapture() {
@@ -13797,7 +13797,7 @@ function turnDetector({ loud = 0.12, quiet = 0.06, quietMs = 1200 } = {}) {
 
 // src/client/voice.js
 var import_react39 = require("react");
-var plainSpeech = (text4) => stripHeader(text4).replace(/```[\s\S]*?```/g, " ").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`#>|~-]+/g, " ").replace(/\s+/g, " ").trim();
+var plainSpeech = (text5) => stripHeader(text5).replace(/```[\s\S]*?```/g, " ").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_`#>|~-]+/g, " ").replace(/\s+/g, " ").trim();
 var VOICE_LABELS = {
   listening: "Listening",
   thinking: "Thinking",
@@ -13814,11 +13814,11 @@ function watchReply(read2, watch, consume) {
   let consumed = false;
   const attempt = () => {
     if (consumed) return;
-    const text4 = read2();
-    if (text4 === void 0) return;
+    const text5 = read2();
+    if (text5 === void 0) return;
     consumed = true;
     off();
-    consume(text4);
+    consume(text5);
   };
   off = watch(attempt);
   attempt();
@@ -13898,17 +13898,17 @@ function VoiceMode({ sessionId, roster, actions, useSessions, useSessionStatus }
     actions.closeVoice();
   };
   useEscape(close);
-  const submit = (text4) => {
-    setHeard(text4);
+  const submit = (text5) => {
+    setHeard(text5);
     setPhase("thinking");
     waiting.current = reply.current.split("|")[0];
-    void actions.send(sessionId, text4.trim()).catch(() => setPhase("listening"));
+    void actions.send(sessionId, text5.trim()).catch(() => setPhase("listening"));
   };
-  const dictation = useDictation((text4, final) => {
-    setHeard(text4);
+  const dictation = useDictation((text5, final) => {
+    setHeard(text5);
     if (!final) return;
     dictation.stop();
-    submit(text4);
+    submit(text5);
   });
   (0, import_react39.useEffect)(() => {
     if (!note) return void 0;
@@ -13952,9 +13952,9 @@ function VoiceMode({ sessionId, roster, actions, useSessions, useSessionStatus }
       setPhase("transcribing");
       try {
         const wave = await current.finish(catalog.maxDurationSeconds);
-        const text4 = wave ? await transcribeWave(speech, catalog, wave, new AbortController().signal) : "";
+        const text5 = wave ? await transcribeWave(speech, catalog, wave, new AbortController().signal) : "";
         if (turn.current !== own) return;
-        if (text4) submit(text4);
+        if (text5) submit(text5);
         else setPhase("listening");
       } catch (error) {
         if (turn.current !== own) return;
@@ -14006,9 +14006,9 @@ function VoiceMode({ sessionId, roster, actions, useSessions, useSessionStatus }
     const count = lastReply.slice(0, lastReply.indexOf("|"));
     const turn2 = Number(lastReply.slice(lastReply.indexOf("|") + 1));
     if (count === waiting.current) return void 0;
-    const speak = (text4) => {
+    const speak = (text5) => {
       waiting.current = null;
-      const spoken = plainSpeech(text4);
+      const spoken = plainSpeech(text5);
       setSaid(spoken);
       setHeard("");
       if (!scopedWindow.speechSynthesis || !spoken) {
@@ -14026,13 +14026,13 @@ function VoiceMode({ sessionId, roster, actions, useSessions, useSessionStatus }
     return watchReply(
       () => actions.closingReply(sessionId, turn2),
       (listener) => actions.watchTurns(sessionId, listener),
-      (text4) => {
-        if (text4 === null) {
+      (text5) => {
+        if (text5 === null) {
           waiting.current = null;
           setPhase("listening");
           return;
         }
-        speak(text4);
+        speak(text5);
       }
     );
   }, [phase, running, lastReply]);
@@ -14625,8 +14625,8 @@ function summarize(view, range, keep = () => true, seriesOf = () => "all") {
   return result;
 }
 function trimmed(value) {
-  const text4 = value >= 100 ? value.toFixed(0) : value >= 10 ? value.toFixed(1) : value.toFixed(2);
-  return text4.includes(".") ? text4.replace(/\.?0+$/, "") : text4;
+  const text5 = value >= 100 ? value.toFixed(0) : value >= 10 ? value.toFixed(1) : value.toFixed(2);
+  return text5.includes(".") ? text5.replace(/\.?0+$/, "") : text5;
 }
 function compact(count) {
   for (const [size, unit] of [[1e9, "B"], [1e6, "M"], [1e3, "K"]]) {
@@ -14758,14 +14758,14 @@ function kindLabel(kind, botFocus) {
   return labels[kind] ?? kind;
 }
 function Tabs({ label: label3, value, options, onChange, boxRef }) {
-  const names = options.map(([, text4]) => text4).join("\n");
+  const names = options.map(([, text5]) => text5).join("\n");
   const glide = useGlide(`${value}
 ${names}`, { box: boxRef });
   return (0, import_react43.createElement)(
     "div",
     { ref: glide.box, className: "bt-us-tabs", role: "group", "aria-label": label3 },
     (0, import_react43.createElement)("span", { ref: glide.thumb, className: "bt-thumb", "aria-hidden": true }),
-    options.map(([id, text4, icon2]) => (0, import_react43.createElement)("button", { key: id, type: "button", "aria-pressed": value === id, onClick: () => onChange(id) }, icon2 ? (0, import_react43.createElement)(icon2) : null, text4))
+    options.map(([id, text5, icon2]) => (0, import_react43.createElement)("button", { key: id, type: "button", "aria-pressed": value === id, onClick: () => onChange(id) }, icon2 ? (0, import_react43.createElement)(icon2) : null, text5))
   );
 }
 function Stats({ range, total, previous }) {
@@ -15781,15 +15781,15 @@ var FeedbackIcon = () => (0, import_react46.createElement)(
   (0, import_react46.createElement)("path", { d: "M4 4.5h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H9l-3.5 3v-3H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z" }),
   (0, import_react46.createElement)("path", { d: "M10 7v2.6M10 11.4h.01" })
 );
-function download(name, text4) {
-  const url = URL.createObjectURL(new Blob([text4], { type: "text/plain;charset=utf-8" }));
+function download(name, text5) {
+  const url = URL.createObjectURL(new Blob([text5], { type: "text/plain;charset=utf-8" }));
   const anchor = scopedDocument.createElement("a");
   anchor.href = url;
   anchor.download = name;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1e3);
 }
-var copy = (text4) => navigator.clipboard === void 0 ? Promise.resolve(false) : navigator.clipboard.writeText(text4).then(() => true, () => false);
+var copy = (text5) => navigator.clipboard === void 0 ? Promise.resolve(false) : navigator.clipboard.writeText(text5).then(() => true, () => false);
 function whenText(time) {
   const date = new Date(time);
   const today = (/* @__PURE__ */ new Date()).toDateString() === date.toDateString();
@@ -15850,8 +15850,8 @@ function FeedbackPage({ actions, run: run2, Section, Row: Row3 }) {
       if (!inline && !copied) setPreview(true);
     }));
   };
-  const downloadLog = () => run2(actions.diagnosticsLog().then((text4) => {
-    download("ds-bot-diagnostics.log", text4 || "No entries.\n");
+  const downloadLog = () => run2(actions.diagnosticsLog().then((text5) => {
+    download("ds-bot-diagnostics.log", text5 || "No entries.\n");
     setNote(t("Downloaded the log. Keys, tokens, and your home folder are hidden in it."));
   }));
   const clearLog = () => run2(actions.diagnosticsClear().then(clearClientErrors).then(load).then(() => setNote(t("Cleared the error log."))));
@@ -16442,14 +16442,14 @@ function SetRow({ label: label3, hint, children, className = "" }) {
 }
 var LAYOUTS = [["bubble", "Bubble"], ["flat", "Flat"]];
 function Choice({ label: label3, value, options, pick: pick2 }) {
-  return (0, import_react49.createElement)(Segmented, { label: label3, value, className: "bt-look-seg" }, options.map(([id, text4]) => (0, import_react49.createElement)("button", {
+  return (0, import_react49.createElement)(Segmented, { label: label3, value, className: "bt-look-seg" }, options.map(([id, text5]) => (0, import_react49.createElement)("button", {
     key: id,
     type: "button",
     "aria-pressed": value === id,
     onClick: () => {
       if (value !== id) pick2(id);
     }
-  }, t(text4))));
+  }, t(text5))));
 }
 function WidthSlider({ label: label3, value, save }) {
   const [width, setWidth] = (0, import_react49.useState)(value);
@@ -16779,13 +16779,13 @@ function SettingsDialog({ page, id, roster, actions, useUpdate, TeamOverview: Te
         "nav",
         { ref: nav.box, className: "bt-settings-nav", "aria-label": t("Settings pages") },
         (0, import_react49.createElement)("span", { ref: nav.thumb, className: "bt-thumb", "aria-hidden": true }),
-        pages.map(([key, text4]) => (0, import_react49.createElement)("button", {
+        pages.map(([key, text5]) => (0, import_react49.createElement)("button", {
           key,
           type: "button",
           className: "bt-settings-item",
           "aria-current": shown === key ? "page" : void 0,
           onClick: () => actions.openSettings(key)
-        }, (0, import_react49.createElement)(PAGE_ICONS[key]), t(text4))),
+        }, (0, import_react49.createElement)(PAGE_ICONS[key]), t(text5))),
         actions.openHarnessSettings ? (0, import_react49.createElement)("button", {
           type: "button",
           className: "bt-settings-item bt-settings-shell",
@@ -18237,11 +18237,11 @@ div:has(> nav [class*="_marks"]){display:none!important}
 @media (prefers-reduced-motion:reduce){.bt-btw-chevron{transition:none}}
 `;
 var PLUGIN_ID = "ds-bot";
-function installStyles(text4, tag) {
+function installStyles(text5, tag) {
   const style = scopedDocument.createElement("style");
   style.dataset.dshBot = tag;
   style.dataset.plugin = PLUGIN_ID;
-  style.textContent = text4;
+  style.textContent = text5;
   scopedDocument.head.appendChild(style);
   return style;
 }
@@ -18261,9 +18261,9 @@ function sheetClassNames(sheet) {
   }
   return names;
 }
-function compileFragmentSelectors(text4, names) {
+function compileFragmentSelectors(text5, names) {
   const compiled2 = /* @__PURE__ */ new Map();
-  return text4.replace(FRAGMENT_SELECTOR, (whole, fragment) => {
+  return text5.replace(FRAGMENT_SELECTOR, (whole, fragment) => {
     if (!compiled2.has(fragment)) {
       const exact = [];
       for (const name of names) if (name.includes(fragment)) exact.push(`.${name}`);
@@ -18272,7 +18272,7 @@ function compileFragmentSelectors(text4, names) {
     return compiled2.get(fragment);
   });
 }
-function installCompiledStyles(text4, tag) {
+function installCompiledStyles(text5, tag) {
   const style = installStyles("", tag);
   let disposed = false;
   const cache = /* @__PURE__ */ new WeakMap();
@@ -18289,7 +18289,7 @@ function installCompiledStyles(text4, tag) {
       }
       for (const name of list) names.add(name);
     }
-    const next = compileFragmentSelectors(text4, names);
+    const next = compileFragmentSelectors(text5, names);
     if (style.textContent !== next) style.textContent = next;
   };
   render();
@@ -18523,11 +18523,11 @@ async function matchSideEnter(roster, sessionId, line, envelope, signal) {
   return { claim: true };
 }
 async function submitSide({ call: call2, roster, sessionId, args, attachments, open }) {
-  const text4 = String(args ?? "").trim();
+  const text5 = String(args ?? "").trim();
   if (sideSurface(roster, sessionId) === "group") throw new Error(t(GROUP_REFUSAL));
   if (Array.isArray(attachments) && attachments.length > 0) throw new Error(t(ATTACHMENT_REFUSAL));
-  if (text4 === "") throw new Error(t(EMPTY_REFUSAL));
-  const value = await call2("side-ask", { sessionId, recent: true, text: text4 });
+  if (text5 === "") throw new Error(t(EMPTY_REFUSAL));
+  const value = await call2("side-ask", { sessionId, recent: true, text: text5 });
   open?.(value?.chatId);
   return { kind: "success" };
 }
@@ -18919,16 +18919,16 @@ function BrowserCards({ bot, sessionId, roster, actions, useBrowserTabs, useBrow
     (0, import_react52.createElement)("button", { type: "button", className: "bt-bcard-new", style: { animationDelay: `${state.ids.length * 30}ms` }, onClick: () => actions.browserNewTab(sessionId) }, (0, import_react52.createElement)(PlusIcon), t("New tab"))
   );
 }
-function About({ text: text4, title = "About" }) {
+function About({ text: text5, title = "About" }) {
   const [open, setOpen] = (0, import_react52.useState)(false);
-  const long = text4.split("\n").length > 5 || text4.length > 240;
+  const long = text5.split("\n").length > 5 || text5.length > 240;
   const body = (0, import_react52.useRef)(null);
   useMorph(body, open);
   return (0, import_react52.createElement)(
     "div",
     null,
     (0, import_react52.createElement)("div", { className: "bt-section-title" }, t(title)),
-    (0, import_react52.createElement)("div", { ref: body, className: "bt-about", "data-open": open || void 0 }, text4),
+    (0, import_react52.createElement)("div", { ref: body, className: "bt-about", "data-open": open || void 0 }, text5),
     long ? (0, import_react52.createElement)("button", { type: "button", className: "bt-more", onClick: () => setOpen((value) => !value) }, open ? t("Show less") : t("Show more")) : null
   );
 }
@@ -19269,12 +19269,12 @@ function SideChatView({ subject, chat, roster, actions }) {
   }, [chat?.id, entries2.length, last?.status]);
   if (!chat) return null;
   const ask = () => {
-    const text4 = draft.trim();
-    if (text4 === "" || busy || typeof actions?.askSide !== "function") return;
+    const text5 = draft.trim();
+    if (text5 === "" || busy || typeof actions?.askSide !== "function") return;
     setDraft("");
     setFail(null);
-    Promise.resolve(actions.askSide(subject, chat.id, text4)).catch((error) => {
-      setDraft((value) => value === "" ? text4 : value);
+    Promise.resolve(actions.askSide(subject, chat.id, text5)).catch((error) => {
+      setDraft((value) => value === "" ? text5 : value);
       setFail(hostText(error?.message ?? ""));
     });
   };
@@ -19785,11 +19785,11 @@ function BrowserView({ bot, tabId, leaving, landed, actions, useBrowserPages, ho
   }, [tabId, landed]);
   const go = (event) => {
     event.preventDefault();
-    const text4 = draft ?? "";
-    if (text4.trim() === "") return;
+    const text5 = draft ?? "";
+    if (text5.trim() === "") return;
     setDraft(null);
     input.current?.blur();
-    void actions.browserNavigate(tabId, text4).then((opened) => {
+    void actions.browserNavigate(tabId, text5).then((opened) => {
       if (opened) actions.browserFocus(tabId);
     });
   };
@@ -20501,7 +20501,7 @@ var nameIfCut = (event) => {
 };
 var useApproval = (useWork, match) => useWork ? useWork((work) => (work.approvals ?? []).some(match)) : false;
 var useGroupWork = (useWork, pick2) => useWork ? useWork((work) => JSON.stringify(pick2(work.rooms ?? {}))) : "[]";
-var workKeys = (text4) => JSON.parse(text4);
+var workKeys = (text5) => JSON.parse(text5);
 var doingOf = ({ tool, said, note, target, switching }) => ({ tool, said, note, target, switching });
 var workLine = (lead, doing, more) => (0, import_react56.createElement)(Shimmer, null, `${lead} · ${workPhrase(doing)}…${more > 0 ? ` +${more}` : ""}`);
 var doingLine = (doing) => (0, import_react56.createElement)(Shimmer, null, `${workPhrase(doing)}…`);
@@ -21668,20 +21668,20 @@ function mentionableBots(roster, sessionId) {
   if (room2) return room2.members.map((id) => roster.byId[id]).filter(Boolean);
   return roster.byId[sessionId] ? roster.bots : [];
 }
-function userTextParts(text4, bots, referenceLabels = []) {
+function userTextParts(text5, bots, referenceLabels = []) {
   const parts = [];
   let cursor = 0;
-  for (const span of mentionSpans(text4, bots, { references: referenceLabels })) {
+  for (const span of mentionSpans(text5, bots, { references: referenceLabels })) {
     if (!span.bot) continue;
-    if (span.start > cursor) parts.push({ text: text4.slice(cursor, span.start) });
-    parts.push({ bot: span.bot, label: text4.slice(span.start + 1, span.end) });
+    if (span.start > cursor) parts.push({ text: text5.slice(cursor, span.start) });
+    parts.push({ bot: span.bot, label: text5.slice(span.start + 1, span.end) });
     cursor = span.end;
   }
-  if (cursor < text4.length) parts.push({ text: text4.slice(cursor) });
+  if (cursor < text5.length) parts.push({ text: text5.slice(cursor) });
   return parts;
 }
-function UserText({ text: text4, bots, referenceLabels, skillNames, references, actions }) {
-  return userTextParts(text4, bots, referenceLabels).map((part, index) => part.bot ? (0, import_react57.createElement)(
+function UserText({ text: text5, bots, referenceLabels, skillNames, references, actions }) {
+  return userTextParts(text5, bots, referenceLabels).map((part, index) => part.bot ? (0, import_react57.createElement)(
     "button",
     { key: index, type: "button", className: "bt-umention", title: `@${part.bot.name}`, onClick: () => actions.openSession(part.bot.id) },
     (0, import_react57.createElement)(BotMark, { bot: part.bot, size: 16 }),
@@ -21704,10 +21704,10 @@ function Attachments({ attachments, renderMessageImages }) {
     );
   }));
 }
-function CopyButton({ text: text4 }) {
+function CopyButton({ text: text5 }) {
   const [copied, setCopied] = (0, import_react57.useState)(false);
   const copy3 = () => {
-    void navigator.clipboard?.writeText(text4).then(() => {
+    void navigator.clipboard?.writeText(text5).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1e3);
     });
@@ -21718,12 +21718,12 @@ var clock3 = (time) => typeof time === "number" ? new Date(time).toLocaleTimeStr
 function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageImages, openFile, openSkill }) {
   const roster = useRoster((value) => value);
   const data = node.data ?? {};
-  const { text: text4, attachments, rest } = contentParts(data.content);
+  const { text: text5, attachments, rest } = contentParts(data.content);
   const referenceLabels = data.referenceLabels ?? [];
   const references = openFile && openSkill ? { openFile, openSkill } : void 0;
   const steering = node.kind === "steering";
   const sentAt = Number.isFinite(data.time) ? messageClock(data.time) : void 0;
-  const media = wechatMessage(text4);
+  const media = wechatMessage(text5);
   const { shown, folded, control } = useFold(media.text, { markdown: false });
   const body = (0, import_react57.createElement)(UserText, { text: shown, bots: mentionableBots(roster, sessionId), referenceLabels, skillNames: data.skillNames ?? [], references, actions });
   const row = (0, import_react57.useRef)(null);
@@ -21751,7 +21751,7 @@ function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageIma
       "div",
       { className: "bt-ustack" },
       attachments.length > 0 ? (0, import_react57.createElement)(Attachments, { attachments, renderMessageImages }) : null,
-      text4 !== "" || rest.length > 0 ? (0, import_react57.createElement)(
+      text5 !== "" || rest.length > 0 ? (0, import_react57.createElement)(
         "div",
         { className: "bt-ubody", title: clock3(data.time), "data-folded": folded || void 0, onClick: tapTools },
         control ? (0, import_react57.createElement)("div", { className: "bt-fold-body" }, body) : body,
@@ -21762,7 +21762,7 @@ function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageIma
       referenceLabels.length > 0 ? (0, import_react57.createElement)("div", { className: "bt-urefs" }, t("Referenced {labels}", { labels: referenceLabels.join(t(", ")) })) : null,
       sentAt ? (0, import_react57.createElement)("div", { className: "bt-utime", title: clockLabel(data.time) }, sentAt) : null
     ),
-    text4 === "" ? null : (0, import_react57.createElement)("div", { className: "bt-utools", "data-open": toolsOpen || void 0 }, (0, import_react57.createElement)(CopyButton, { text: text4 }))
+    text5 === "" ? null : (0, import_react57.createElement)("div", { className: "bt-utools", "data-open": toolsOpen || void 0 }, (0, import_react57.createElement)(CopyButton, { text: text5 }))
   );
 }
 var USER_MESSAGE_CSS = WECHAT_MEDIA_CSS + `
@@ -21785,7 +21785,7 @@ var USER_MESSAGE_CSS = WECHAT_MEDIA_CSS + `
 `;
 
 // ../app/ui/src/locale.js
-var fill2 = (text4, params) => params ? text4.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match) : text4;
+var fill2 = (text5, params) => params ? text5.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match) : text5;
 function createLocale(tag) {
   const active = /^zh\b/i.test(tag) ? "zh" : "en";
   const dictionaries = /* @__PURE__ */ new Map();
@@ -22336,9 +22336,9 @@ function BrowserWorkspace({ roster, initialBotId }) {
     if (!roster.bots.some((bot) => bot.id === botId)) setBotId(roster.bots[0]?.id ?? "");
   }, [roster.bots, botId]);
   const sendInput = () => {
-    const text4 = input;
+    const text5 = input;
     setInput("");
-    void request("type", { text: text4 });
+    void request("type", { text: text5 });
   };
   return /* @__PURE__ */ import_react60.default.createElement("section", { className: "mek-browser-workspace" }, /* @__PURE__ */ import_react60.default.createElement("h2", null, copy2("Bot browser", "Bot 浏览器")), !capability?.available ? /* @__PURE__ */ import_react60.default.createElement("p", null, copy2("Browser control is not enabled on this host. Enable a supported Bot browser plugin before opening pages. Existing DSH browser tools are unchanged.", "此主机尚未启用 Bot 浏览器控制。启用支持的 Bot 浏览器插件后即可查看和接管页面。现有 DSH 浏览器工具保持原样。")) : /* @__PURE__ */ import_react60.default.createElement(import_react60.default.Fragment, null, /* @__PURE__ */ import_react60.default.createElement("p", null, copy2("View an already open browser. Take over before interacting; the Bot waits until you return control.", "查看已打开的浏览器。接管后可操作，交还前 Bot 会等待。")), /* @__PURE__ */ import_react60.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react60.default.createElement("label", null, copy2("Bot", "Bot"), /* @__PURE__ */ import_react60.default.createElement("select", { value: botId, onChange: (event) => setBotId(event.target.value) }, roster.bots.map((bot) => /* @__PURE__ */ import_react60.default.createElement("option", { key: bot.id, value: bot.id }, bot.name)))), /* @__PURE__ */ import_react60.default.createElement("button", { disabled: busy || !botId, onClick: () => void request() }, copy2("Refresh view", "刷新画面")), page?.open && /* @__PURE__ */ import_react60.default.createElement("button", { disabled: busy, onClick: () => void request(held ? "release" : "take") }, held ? copy2("Return control", "交还控制") : copy2("Take over", "接管"))), page && !page.open && /* @__PURE__ */ import_react60.default.createElement("p", null, copy2("No browser is open for this Bot. Ask it to open the page in its conversation first.", "这个 Bot 尚未打开浏览器。请先在对话中让它打开所需页面。")), page?.open && /* @__PURE__ */ import_react60.default.createElement(import_react60.default.Fragment, null, /* @__PURE__ */ import_react60.default.createElement("div", { className: "mek-form-row" }, /* @__PURE__ */ import_react60.default.createElement("input", { "aria-label": copy2("Page address", "页面地址"), value: address, onChange: (event) => setAddress(event.target.value), disabled: !held || busy }), /* @__PURE__ */ import_react60.default.createElement("button", { disabled: !held || busy, onClick: () => void request("navigate", { url: address }) }, copy2("Open", "打开"))), /* @__PURE__ */ import_react60.default.createElement("div", { className: "mek-browser-tabs", role: "group", "aria-label": copy2("Browser tabs", "浏览器标签页") }, page.tabs?.map((tab) => /* @__PURE__ */ import_react60.default.createElement("button", { key: tab.index, disabled: !held || busy, "aria-pressed": tab.active, onClick: () => void request("tab", { index: tab.index }) }, tab.title || tab.url || copy2("Page", "页面")))), /* @__PURE__ */ import_react60.default.createElement("p", { role: "status" }, held ? copy2("You are in control. Click the picture to focus a field or button.", "当前由你控制。点击画面定位输入框或按钮。") : page.hold?.note || copy2("Viewing only. The Bot remains in control.", "仅查看画面，Bot 仍可操作。")), page.image ? /* @__PURE__ */ import_react60.default.createElement("button", { className: "mek-browser-image", disabled: !held || busy, "aria-label": copy2("Click in the browser screenshot", "点击浏览器画面"), onClick: (event) => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -22349,7 +22349,7 @@ var BROWSER_WORKSPACE_CSS = `.mek-browser-image{display:block!important;width:10
 
 // src/client/mek/overview.jsx
 var import_react61 = __toESM(require("react"), 1);
-var array = (text4) => text4.split("\n").map((value) => value.trim()).filter(Boolean);
+var array = (text5) => text5.split("\n").map((value) => value.trim()).filter(Boolean);
 function BotSelect({ roster, value, onChange, label: label3 = copy2("Bot", "Bot"), blank: blank3 = false }) {
   return /* @__PURE__ */ import_react61.default.createElement("label", null, label3, /* @__PURE__ */ import_react61.default.createElement("select", { value: value ?? "", onChange: (event) => onChange(event.target.value || null) }, blank3 && /* @__PURE__ */ import_react61.default.createElement("option", { value: "" }, copy2("None", "无")), roster.bots.map((bot) => /* @__PURE__ */ import_react61.default.createElement("option", { key: bot.id, value: bot.id }, bot.name))));
 }
@@ -22741,8 +22741,8 @@ function GroupChat({ sessionId, team }) {
     const bot = roster.byId[entry.id];
     const label3 = entry.state === "ask" ? t("Waiting for your approval") : workPhrase(entry.doing);
     return /* @__PURE__ */ import_react63.default.createElement("div", { key: entry.id, className: "bt-typing", "data-running-bot": entry.id, "data-resource-wait": entry.doing.resourceWait ? "" : void 0, role: "status" }, /* @__PURE__ */ import_react63.default.createElement(BotMark, { bot, size: 22, state: entry.state === "ask" ? "alert" : workState(entry.doing) }), /* @__PURE__ */ import_react63.default.createElement("span", { className: "bt-typing-text" }, /* @__PURE__ */ import_react63.default.createElement("span", { className: "bt-typing-label", title: entry.doing.resourceWait ? label3 : void 0 }, /* @__PURE__ */ import_react63.default.createElement(Shimmer, null, bot.name, " · ", label3, entry.doing.resourceWait ? "" : "…")), /* @__PURE__ */ import_react63.default.createElement(Elapsed, { at: entry.doing.since, className: "bt-typing-time" })));
-  }))))), /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-composer-root" }, /* @__PURE__ */ import_react63.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text4, images, id) => {
-    await actions.send(sessionId, text4, images, id);
+  }))))), /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-composer-root" }, /* @__PURE__ */ import_react63.default.createElement(Composer, { sessionId, placeholder: t("Message {name}", { name: room2?.name ?? "" }), onSend: async (text5, images, id) => {
+    await actions.send(sessionId, text5, images, id);
     await refresh.current?.();
   }, actions, useUi: hooks.useUi, useRoster: hooks.useRoster })));
 }
@@ -22956,6 +22956,94 @@ var TASK_REVIEW_CSS = `
 `;
 var TASK_PANEL_CSS = `.mek-task-drawer{min-width:0}.mek-task-panel{min-width:0;font-size:12px}.mek-plan-heading{display:flex;align-items:center;justify-content:space-between;min-height:32px;margin-bottom:12px}.mek-plan-heading>div{display:flex;align-items:center;gap:8px}.mek-plan-heading strong{font-size:13px;font-weight:500}.mek-plan-heading span{font-variant-numeric:tabular-nums;color:var(--bt-ink-3)}.mek-plan-add{padding:5px 10px;border:1px solid var(--bt-line);border-radius:999px;background:var(--bt-hover);color:var(--bt-ink);font:inherit;cursor:pointer}.mek-plan-list{display:flex;flex-direction:column;gap:8px}.mek-task-panel :is(.mek-todo,.mek-task){min-width:0;max-width:100%;box-sizing:border-box;margin:0;border-radius:12px}.mek-task-panel :is(.mek-todo,.mek-task)>summary{padding:12px;align-items:flex-start;gap:8px}.mek-task-panel .mek-task>summary>.mek-task-title{flex:1 1 0%;min-width:0;white-space:normal;overflow-wrap:anywhere}.mek-task-panel :is(.mek-todo,.mek-task)>summary>span:last-child{flex:none;font-size:11px;color:var(--bt-ink-2);white-space:nowrap}.mek-inbox-entry{position:relative;min-width:0}.mek-inbox-entry[data-unread]::before{content:'';position:absolute;top:18px;left:3px;width:5px;height:5px;border-radius:50%;background:var(--bt-danger,#e02135);z-index:1}.mek-ended-tasks{border-top:1px solid var(--bt-line);margin-top:20px;padding-top:12px;color:var(--bt-ink-2)}.mek-ended-tasks>summary{cursor:pointer}.mek-ended-tasks>div{display:flex;flex-direction:column;gap:8px;padding-top:10px;color:var(--bt-ink)}.mek-task-attention{flex:none;max-height:28vh;overflow:auto;padding:8px 16px 0;font-size:12px}.mek-task-empty{color:var(--bt-ink-3);padding:16px 0}.bt-panel-view>.bt-tabs{flex:none;min-height:28px;flex-wrap:nowrap;margin:8px 16px 0}.bt-panel-view>.bt-drawer-top{flex:none}.bt-drawer-body>.bt-drawer-id{flex:none;padding:4px 0 8px}.bt-tabs .bt-tab{display:inline-flex;align-items:center;gap:5px}.bt-tabs .bt-tab:focus-visible,.mek-task-panel button:focus-visible,.mek-task-panel summary:focus-visible{outline:2px solid var(--bt-accent);outline-offset:2px}.mek-tab-dot,.mek-nav-unread{display:inline-block;flex:none;width:6px;height:6px;border-radius:50%;background:var(--bt-danger,#e02135)}.mek-team-tools .bt-round{position:relative}.mek-team-tools .mek-tab-dot{position:absolute;top:2px;right:2px}` + TASK_REVIEW_CSS;
 
+// src/client/mek/native-tasks.jsx
+var import_react69 = __toESM(require("react"), 1);
+var text4 = (en, zh) => language().startsWith("zh") ? zh : en;
+function createNativeTasks(ctx) {
+  const availability = createSource(null);
+  ctx.inject(["sidebarRight", "sidebarRightTabs", "workspaces"], (scope) => {
+    const { sidebarRight, sidebarRightTabs, workspaces } = scope;
+    if (!sidebarRight.mounted || !sidebarRightTabs.subscribe) return;
+    let cancel = () => {
+    };
+    const openTimeline = (sessionId) => {
+      cancel();
+      let frame;
+      const mounted = sidebarRight.mounted;
+      const stop2 = mounted.subscribe(reveal);
+      const timeout = setTimeout(() => cancel(), 5e3);
+      cancel = () => {
+        stop2();
+        clearTimeout(timeout);
+        cancelAnimationFrame(frame);
+      };
+      function reveal() {
+        if (mounted.getSnapshot() !== sessionId || frame !== void 0) return;
+        frame = requestAnimationFrame(() => {
+          cancel();
+          if (mounted.getSnapshot() === sessionId && sidebarRightTabs.get("timeline")) sidebarRight.openTab("timeline");
+        });
+      }
+      ctx.uiWorkspace.openSession(sessionId);
+      ctx.layout.selectPanel(null);
+      reveal();
+    };
+    const support = {
+      openTimeline,
+      subscribeArchives: (listener) => workspaces.list.subscribe(listener),
+      getArchives: () => workspaces.list.getSnapshot().archivedSessionIds
+    };
+    const update = () => {
+      const enabled = Boolean(sidebarRightTabs.get("timeline"));
+      if (!enabled) cancel();
+      availability.set(enabled ? support : null);
+    };
+    const stop = sidebarRightTabs.subscribe(update);
+    update();
+    return () => {
+      cancel();
+      stop();
+      availability.set(null);
+    };
+  });
+  return availability;
+}
+function NativeTodoPanel({ bot, timeline, ctx }) {
+  const current = currentPart(bot);
+  const earlier = (bot.parts ?? []).filter((id) => id !== current);
+  const [selected, select] = (0, import_react69.useState)("");
+  const [restoring, setRestoring] = (0, import_react69.useState)(false);
+  const [error, setError] = (0, import_react69.useState)("");
+  const active = (0, import_react69.useRef)(true);
+  (0, import_react69.useEffect)(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  const target = earlier.includes(selected) ? selected : current;
+  const archives = (0, import_react69.useSyncExternalStore)(timeline.subscribeArchives, timeline.getArchives);
+  const archived = archives?.includes(target);
+  const hasAutomation = ctx.slots.entries?.("main").some((entry) => entry.options?.key === "schedules");
+  const open = async () => {
+    setError("");
+    if (archived) setRestoring(true);
+    try {
+      if (archived) await ctx.uiWorkspace.unarchiveSession(target);
+      if (active.current) timeline.openTimeline(target);
+    } catch (failure) {
+      if (active.current) setError(failure.message);
+    } finally {
+      if (archived && active.current) setRestoring(false);
+    }
+  };
+  return /* @__PURE__ */ import_react69.default.createElement("section", { className: "mek-task-panel", "aria-label": text4("To-dos", "待办") }, earlier.length > 0 && /* @__PURE__ */ import_react69.default.createElement("label", { className: "mek-native-task-session" }, text4("Conversation part", "会话段"), /* @__PURE__ */ import_react69.default.createElement("select", { value: target === current ? "" : target, disabled: restoring, onChange: (event) => {
+    select(event.target.value);
+    setError("");
+  } }, /* @__PURE__ */ import_react69.default.createElement("option", { value: "" }, text4("Current part", "当前会话段")), earlier.map((id, index) => /* @__PURE__ */ import_react69.default.createElement("option", { key: id, value: id }, text4("Part", "会话段"), " ", index + 1)))), /* @__PURE__ */ import_react69.default.createElement("div", { className: "mek-native-task-actions" }, /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft", disabled: restoring, onClick: () => void open() }, archived ? text4("Restore session and open Timeline", "恢复会话并打开任务树") : text4("Open Timeline in DSH", "在 DSH 中打开任务树"), " ↗"), hasAutomation && /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft", disabled: restoring, onClick: () => ctx.layout.selectPanel("schedules") }, text4("Open Automation in DSH", "在 DSH 中打开自动化"), " ↗")), error && /* @__PURE__ */ import_react69.default.createElement("p", { role: "alert" }, error));
+}
+var NATIVE_TASK_CSS = ".mek-native-task-session,.mek-native-task-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.mek-native-task-session{margin-bottom:12px}.mek-native-task-session select{min-width:0;max-width:100%;color:inherit;background:var(--bt-surface);border:1px solid var(--bt-line);border-radius:6px;padding:4px 8px}";
+
 // src/client/mek/task-inbox.js
 var KEY = "mek-bot:task-inbox:v1";
 function createTaskInbox(storage, events = globalThis.window) {
@@ -22988,12 +23076,13 @@ function createTaskInbox(storage, events = globalThis.window) {
       broken = true;
     }
   };
-  const update = (roster) => {
+  const update = (roster, nativeTodos = false) => {
     if (!roster.ready) return;
     entries2 = /* @__PURE__ */ new Map();
     for (const subject of [...roster.bots, ...roster.rooms]) {
       const view = conversationTasks(roster, subject.id);
-      for (const entry of [...view.plans, ...view.tasks]) entries2.set(entry.key, entry);
+      const plans = nativeTodos && !roster.roomsById[subject.id] ? [] : view.plans;
+      for (const entry of [...plans, ...view.tasks]) entries2.set(entry.key, entry);
     }
     if (!saved) {
       saved = { version: 1, seen: Object.fromEntries([...entries2].map(([key, entry]) => [key, taskFingerprint(entry)])) };
@@ -23039,7 +23128,7 @@ function createTaskInbox(storage, events = globalThis.window) {
 }
 
 // src/client/mek/wechat-links.jsx
-var import_react69 = __toESM(require("react"), 1);
+var import_react70 = __toESM(require("react"), 1);
 var STATES2 = {
   disabled: "Connection disabled",
   unconfigured: "Connection not configured",
@@ -23057,10 +23146,10 @@ var PLUGIN = {
 var providerName2 = (provider) => provider === "weixin" ? t("WeChat robot") : "WechatPad";
 var groupLabel = (chatId, label3) => `${label3 && label3 !== chatId ? label3 : t("Group name unavailable")} · ${chatId}`;
 function WechatLinks({ target, eligible, editable = true }) {
-  const [view, setView] = (0, import_react69.useState)(null), [error, setError] = (0, import_react69.useState)(""), [busy, setBusy] = (0, import_react69.useState)(false);
-  const [provider, setProvider] = (0, import_react69.useState)("pad"), [choice, setChoice] = (0, import_react69.useState)(""), [manualId, setManualId] = (0, import_react69.useState)("");
-  const generation = (0, import_react69.useRef)(0), saving = (0, import_react69.useRef)(false);
-  const load = (0, import_react69.useCallback)(async (signal) => {
+  const [view, setView] = (0, import_react70.useState)(null), [error, setError] = (0, import_react70.useState)(""), [busy, setBusy] = (0, import_react70.useState)(false);
+  const [provider, setProvider] = (0, import_react70.useState)("pad"), [choice, setChoice] = (0, import_react70.useState)(""), [manualId, setManualId] = (0, import_react70.useState)("");
+  const generation = (0, import_react70.useRef)(0), saving = (0, import_react70.useRef)(false);
+  const load = (0, import_react70.useCallback)(async (signal) => {
     const seq = ++generation.current;
     try {
       const next = await call("mek-wechat-view", { target }, signal);
@@ -23072,7 +23161,7 @@ function WechatLinks({ target, eligible, editable = true }) {
       if (!signal?.aborted && seq === generation.current) setError(failure.message);
     }
   }, [target.kind, target.id]);
-  (0, import_react69.useEffect)(() => {
+  (0, import_react70.useEffect)(() => {
     if (!eligible) return void 0;
     const controller = new AbortController();
     void load(controller.signal);
@@ -23110,14 +23199,14 @@ function WechatLinks({ target, eligible, editable = true }) {
       setBusy(false);
     }
   };
-  return /* @__PURE__ */ import_react69.default.createElement("section", { className: "bt-set-section mek-wechat-links", "aria-label": t("WeChat links") }, /* @__PURE__ */ import_react69.default.createElement("div", { className: "mek-wechat-head" }, /* @__PURE__ */ import_react69.default.createElement("h3", null, t(target.kind === "room" ? "WeChat group links" : "WeChat private chat links")), eligible && /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy, onClick: () => void load() }, t("Refresh"))), !eligible ? /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note" }, t("Only Main Bots can link WeChat private chats.")) : /* @__PURE__ */ import_react69.default.createElement(import_react69.default.Fragment, null, /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note" }, t(target.kind === "room" ? "Choose a WeChat group for this Bot group." : "Choose a WeChat user for this Main Bot.")), !view && !error && /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note", role: "status" }, t("Checking WechatPad…")), PLUGIN[view?.status] && /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note", role: "status" }, t(PLUGIN[view.status])), view?.status === "ready" && /* @__PURE__ */ import_react69.default.createElement(import_react69.default.Fragment, null, /* @__PURE__ */ import_react69.default.createElement("label", null, t("WeChat connection"), /* @__PURE__ */ import_react69.default.createElement("select", { "aria-label": t("WeChat connection"), value: provider, disabled: busy, onChange: (event) => {
+  return /* @__PURE__ */ import_react70.default.createElement("section", { className: "bt-set-section mek-wechat-links", "aria-label": t("WeChat links") }, /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-wechat-head" }, /* @__PURE__ */ import_react70.default.createElement("h3", null, t(target.kind === "room" ? "WeChat group links" : "WeChat private chat links")), eligible && /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy, onClick: () => void load() }, t("Refresh"))), !eligible ? /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note" }, t("Only Main Bots can link WeChat private chats.")) : /* @__PURE__ */ import_react70.default.createElement(import_react70.default.Fragment, null, /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note" }, t(target.kind === "room" ? "Choose a WeChat group for this Bot group." : "Choose a WeChat user for this Main Bot.")), !view && !error && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note", role: "status" }, t("Checking WechatPad…")), PLUGIN[view?.status] && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note", role: "status" }, t(PLUGIN[view.status])), view?.status === "ready" && /* @__PURE__ */ import_react70.default.createElement(import_react70.default.Fragment, null, /* @__PURE__ */ import_react70.default.createElement("label", null, t("WeChat connection"), /* @__PURE__ */ import_react70.default.createElement("select", { "aria-label": t("WeChat connection"), value: provider, disabled: busy, onChange: (event) => {
     setProvider(event.target.value);
     setChoice("");
     setManualId("");
-  } }, connections.map((row) => /* @__PURE__ */ import_react69.default.createElement("option", { key: row.provider, value: row.provider }, providerName2(row.provider))))), /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note", role: "status", "data-wechat-state": connection?.state }, t(STATES2[connection?.state] ?? "Connection disconnected")), connection?.policy === "disabled" && /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note" }, t("This chat type is disabled in WeChat access settings.")), /* @__PURE__ */ import_react69.default.createElement("label", null, t(target.kind === "room" ? "WeChat group" : "WeChat user"), /* @__PURE__ */ import_react69.default.createElement("select", { "aria-label": t(target.kind === "room" ? "WeChat group" : "WeChat user"), value: choice, disabled: busy || !editable, onChange: (event) => setChoice(event.target.value) }, /* @__PURE__ */ import_react69.default.createElement("option", { value: "" }, t("Select…")), candidates.map((row) => /* @__PURE__ */ import_react69.default.createElement("option", { key: row.chatId, value: row.chatId, disabled: row.linkedElsewhere }, target.kind === "room" ? groupLabel(row.chatId, row.label) : row.label === row.chatId ? row.chatId : `${row.label} · ${row.chatId}`, row.linkedElsewhere ? ` (${t("Linked elsewhere")})` : "")), /* @__PURE__ */ import_react69.default.createElement("option", { value: "manual" }, t("Enter a chat ID…")))), !candidates.length && /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note" }, t(target.kind === "room" ? "No groups discovered. Send a message in the WeChat group, then refresh." : "No users discovered. Send a private message to the selected WeChat connection, then refresh.")), choice === "manual" && /* @__PURE__ */ import_react69.default.createElement("label", null, t("WeChat chat ID"), /* @__PURE__ */ import_react69.default.createElement("input", { "aria-label": t("WeChat chat ID"), value: manualId, placeholder: target.kind === "room" ? "xxx@chatroom" : t("Private chat ID"), disabled: busy || !editable, onChange: (event) => setManualId(event.target.value) })), chatId && !typeValid && /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note", role: "alert" }, t(target.kind === "room" ? "Choose a group ID ending in @chatroom." : "Group IDs cannot be linked to a private Bot chat.")), /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy || !editable || connection?.state !== "ready" || connection?.policy === "disabled" || !chatId || !typeValid || alreadyLinked, onClick: () => void update({ provider, chatId }) }, t("Link chat")), /* @__PURE__ */ import_react69.default.createElement("div", { className: "mek-wechat-existing" }, view.links.map((row) => {
+  } }, connections.map((row) => /* @__PURE__ */ import_react70.default.createElement("option", { key: row.provider, value: row.provider }, providerName2(row.provider))))), /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note", role: "status", "data-wechat-state": connection?.state }, t(STATES2[connection?.state] ?? "Connection disconnected")), connection?.policy === "disabled" && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note" }, t("This chat type is disabled in WeChat access settings.")), /* @__PURE__ */ import_react70.default.createElement("label", null, t(target.kind === "room" ? "WeChat group" : "WeChat user"), /* @__PURE__ */ import_react70.default.createElement("select", { "aria-label": t(target.kind === "room" ? "WeChat group" : "WeChat user"), value: choice, disabled: busy || !editable, onChange: (event) => setChoice(event.target.value) }, /* @__PURE__ */ import_react70.default.createElement("option", { value: "" }, t("Select…")), candidates.map((row) => /* @__PURE__ */ import_react70.default.createElement("option", { key: row.chatId, value: row.chatId, disabled: row.linkedElsewhere }, target.kind === "room" ? groupLabel(row.chatId, row.label) : row.label === row.chatId ? row.chatId : `${row.label} · ${row.chatId}`, row.linkedElsewhere ? ` (${t("Linked elsewhere")})` : "")), /* @__PURE__ */ import_react70.default.createElement("option", { value: "manual" }, t("Enter a chat ID…")))), !candidates.length && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note" }, t(target.kind === "room" ? "No groups discovered. Send a message in the WeChat group, then refresh." : "No users discovered. Send a private message to the selected WeChat connection, then refresh.")), choice === "manual" && /* @__PURE__ */ import_react70.default.createElement("label", null, t("WeChat chat ID"), /* @__PURE__ */ import_react70.default.createElement("input", { "aria-label": t("WeChat chat ID"), value: manualId, placeholder: target.kind === "room" ? "xxx@chatroom" : t("Private chat ID"), disabled: busy || !editable, onChange: (event) => setManualId(event.target.value) })), chatId && !typeValid && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note", role: "alert" }, t(target.kind === "room" ? "Choose a group ID ending in @chatroom." : "Group IDs cannot be linked to a private Bot chat.")), /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy || !editable || connection?.state !== "ready" || connection?.policy === "disabled" || !chatId || !typeValid || alreadyLinked, onClick: () => void update({ provider, chatId }) }, t("Link chat")), /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-wechat-existing" }, view.links.map((row) => {
     const label3 = view.chats.find((chat) => chat.provider === row.provider && chat.chatId === row.chatId)?.label;
-    return /* @__PURE__ */ import_react69.default.createElement("div", { className: "mek-wechat-row", key: JSON.stringify([row.provider, row.chatId]) }, /* @__PURE__ */ import_react69.default.createElement("span", null, providerName2(row.provider), " · ", target.kind === "room" ? groupLabel(row.chatId, label3) : label3 || row.chatId), /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy || !editable, "aria-label": t("Unlink {id}", { id: row.chatId }), onClick: () => void update({ ...row, remove: true }) }, t("Unlink")));
-  })), /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note" }, t("Links save immediately. Existing WeChat access rules still apply. Multiple chats linked here share visible replies."), connection?.requireMention ? ` ${t("Mention the WeChat account in group messages.")}` : ""), view.deliveryFailed && /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-error", role: "alert" }, t("A recent WeChat reply failed to send. Check the connection in WeChat settings."))), view?.status !== "ready" && /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note" }, t("Open DSH settings → WeChat to enable and configure a connection. Existing links are kept.")), !editable && /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-note" }, t("This team is read-only.")), error && /* @__PURE__ */ import_react69.default.createElement("p", { className: "bt-error", role: "alert" }, error)));
+    return /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-wechat-row", key: JSON.stringify([row.provider, row.chatId]) }, /* @__PURE__ */ import_react70.default.createElement("span", null, providerName2(row.provider), " · ", target.kind === "room" ? groupLabel(row.chatId, label3) : label3 || row.chatId), /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: busy || !editable, "aria-label": t("Unlink {id}", { id: row.chatId }), onClick: () => void update({ ...row, remove: true }) }, t("Unlink")));
+  })), /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note" }, t("Links save immediately. Existing WeChat access rules still apply. Multiple chats linked here share visible replies."), connection?.requireMention ? ` ${t("Mention the WeChat account in group messages.")}` : ""), view.deliveryFailed && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-error", role: "alert" }, t("A recent WeChat reply failed to send. Check the connection in WeChat settings."))), view?.status !== "ready" && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note" }, t("Open DSH settings → WeChat to enable and configure a connection. Existing links are kept.")), !editable && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note" }, t("This team is read-only.")), error && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-error", role: "alert" }, error)));
 }
 var WECHAT_LINKS_CSS = `
 .mek-wechat-links{min-width:0;display:flex;flex-direction:column;gap:8px;padding-bottom:16px;border-bottom:1px solid var(--bt-line)}
@@ -23129,15 +23218,15 @@ var WECHAT_LINKS_CSS = `
 `;
 
 // src/client/mek/session-queue.jsx
-var import_react70 = __toESM(require("react"), 1);
+var import_react71 = __toESM(require("react"), 1);
 var QUEUE_SHOW_DELAY = 500;
 var humanQueue = (value) => ["next-step", "next-turn"].flatMap((placement) => (value?.[placement] ?? []).filter((item) => item.source?.kind === "user").map((item) => ({ id: item.id, placement, text: (item.content ?? []).filter((part) => part.type === "text").map((part) => part.text).join("\n"), attachments: (item.content ?? []).filter((part) => ["image", "file"].includes(part.type)).length })));
 function QueuePopover({ count, unavailable, children }) {
-  const [open, setOpen] = (0, import_react70.useState)(false);
-  const dock = (0, import_react70.useRef)(null), trigger = (0, import_react70.useRef)(null);
-  const id = (0, import_react70.useId)();
+  const [open, setOpen] = (0, import_react71.useState)(false);
+  const dock = (0, import_react71.useRef)(null), trigger = (0, import_react71.useRef)(null);
+  const id = (0, import_react71.useId)();
   const label3 = unavailable ? t("Message queue unavailable") : t("Queued messages: {count}", { count });
-  (0, import_react70.useEffect)(() => {
+  (0, import_react71.useEffect)(() => {
     if (!open) return void 0;
     const closeOutside = (event) => {
       if (!dock.current?.contains(event.target)) setOpen(false);
@@ -23145,12 +23234,12 @@ function QueuePopover({ count, unavailable, children }) {
     document.addEventListener("pointerdown", closeOutside);
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, [open]);
-  return /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-dock", ref: dock, onKeyDown: (event) => {
+  return /* @__PURE__ */ import_react71.default.createElement("div", { className: "mek-queue-dock", ref: dock, onKeyDown: (event) => {
     if (event.key !== "Escape" || !open) return;
     event.stopPropagation();
     setOpen(false);
     trigger.current?.focus();
-  } }, /* @__PURE__ */ import_react70.default.createElement(
+  } }, /* @__PURE__ */ import_react71.default.createElement(
     "button",
     {
       type: "button",
@@ -23162,18 +23251,18 @@ function QueuePopover({ count, unavailable, children }) {
       "aria-controls": open ? id : void 0,
       onClick: () => setOpen((value) => !value)
     },
-    /* @__PURE__ */ import_react70.default.createElement(ClockIcon, { size: 14 }),
-    /* @__PURE__ */ import_react70.default.createElement("span", { "aria-hidden": "true" }, unavailable ? "!" : count > 99 ? "99+" : count)
-  ), open && /* @__PURE__ */ import_react70.default.createElement("section", { className: "mek-session-queue", id, "aria-label": t("Pending messages") }, children));
+    /* @__PURE__ */ import_react71.default.createElement(ClockIcon, { size: 14 }),
+    /* @__PURE__ */ import_react71.default.createElement("span", { "aria-hidden": "true" }, unavailable ? "!" : count > 99 ? "99+" : count)
+  ), open && /* @__PURE__ */ import_react71.default.createElement("section", { className: "mek-session-queue", id, "aria-label": t("Pending messages") }, children));
 }
 function QueueRows({ session, editable }) {
   const source = session.projections.faceOf("inbox");
-  const snapshot = (0, import_react70.useSyncExternalStore)(source.subscribe, source.getSnapshot);
+  const snapshot = (0, import_react71.useSyncExternalStore)(source.subscribe, source.getSnapshot);
   const items = humanQueue(snapshot);
   const hasItems = items.length > 0;
-  const [visible, setVisible] = (0, import_react70.useState)(false);
-  const [busy, setBusy] = (0, import_react70.useState)(null), [error, setError] = (0, import_react70.useState)("");
-  (0, import_react70.useEffect)(() => {
+  const [visible, setVisible] = (0, import_react71.useState)(false);
+  const [busy, setBusy] = (0, import_react71.useState)(null), [error, setError] = (0, import_react71.useState)("");
+  (0, import_react71.useEffect)(() => {
     if (!hasItems) {
       setVisible(false);
       setError("");
@@ -23196,12 +23285,12 @@ function QueueRows({ session, editable }) {
     }
   };
   if (!visible || !hasItems) return null;
-  return /* @__PURE__ */ import_react70.default.createElement(QueuePopover, { count: items.length }, /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-heading" }, t("Pending messages")), items.map((item) => /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-row", key: item.id, "data-queue-id": item.id }, /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-text" }, /* @__PURE__ */ import_react70.default.createElement("span", { className: "bt-note" }, t(item.placement === "next-step" ? "Entering current turn" : "Waiting for next turn")), /* @__PURE__ */ import_react70.default.createElement("p", null, item.text || t("Attachment message"), item.attachments ? ` · ${t("{count} attachments", { count: item.attachments })}` : "")), /* @__PURE__ */ import_react70.default.createElement("div", { className: "mek-queue-actions" }, item.placement === "next-turn" && /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !editable || !!busy, onClick: () => void update(item.id, "steer") }, t("Send into current turn")), /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !editable || !!busy, onClick: () => void update(item.id, "remove") }, t("Remove"))))), error && /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-error", role: "alert" }, error));
+  return /* @__PURE__ */ import_react71.default.createElement(QueuePopover, { count: items.length }, /* @__PURE__ */ import_react71.default.createElement("div", { className: "mek-queue-heading" }, t("Pending messages")), items.map((item) => /* @__PURE__ */ import_react71.default.createElement("div", { className: "mek-queue-row", key: item.id, "data-queue-id": item.id }, /* @__PURE__ */ import_react71.default.createElement("div", { className: "mek-queue-text" }, /* @__PURE__ */ import_react71.default.createElement("span", { className: "bt-note" }, t(item.placement === "next-step" ? "Entering current turn" : "Waiting for next turn")), /* @__PURE__ */ import_react71.default.createElement("p", null, item.text || t("Attachment message"), item.attachments ? ` · ${t("{count} attachments", { count: item.attachments })}` : "")), /* @__PURE__ */ import_react71.default.createElement("div", { className: "mek-queue-actions" }, item.placement === "next-turn" && /* @__PURE__ */ import_react71.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !editable || !!busy, onClick: () => void update(item.id, "steer") }, t("Send into current turn")), /* @__PURE__ */ import_react71.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", disabled: !editable || !!busy, onClick: () => void update(item.id, "remove") }, t("Remove"))))), error && /* @__PURE__ */ import_react71.default.createElement("p", { className: "bt-error", role: "alert" }, error));
 }
 function SessionQueue({ ctx, sessionId, editable = true }) {
-  const [state, setState] = (0, import_react70.useState)(null);
-  const [attempt, setAttempt] = (0, import_react70.useState)(0);
-  (0, import_react70.useEffect)(() => {
+  const [state, setState] = (0, import_react71.useState)(null);
+  const [attempt, setAttempt] = (0, import_react71.useState)(0);
+  (0, import_react71.useEffect)(() => {
     let active = true, reference, timer;
     setState(null);
     const failed = (error) => {
@@ -23223,11 +23312,11 @@ function SessionQueue({ ctx, sessionId, editable = true }) {
       reference?.release();
     };
   }, [ctx, sessionId, attempt]);
-  if (state?.unavailable) return /* @__PURE__ */ import_react70.default.createElement(QueuePopover, { unavailable: true }, /* @__PURE__ */ import_react70.default.createElement("p", { className: "bt-note", role: "status", "data-queue-error": state.error?.code ?? state.error?.name }, t("The pending queue is unavailable. Open this session in DSH to check it.")), /* @__PURE__ */ import_react70.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: () => {
+  if (state?.unavailable) return /* @__PURE__ */ import_react71.default.createElement(QueuePopover, { unavailable: true }, /* @__PURE__ */ import_react71.default.createElement("p", { className: "bt-note", role: "status", "data-queue-error": state.error?.code ?? state.error?.name }, t("The pending queue is unavailable. Open this session in DSH to check it.")), /* @__PURE__ */ import_react71.default.createElement("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: () => {
     setState(null);
     setAttempt(0);
   } }, t("Retry")));
-  return state?.session ? /* @__PURE__ */ import_react70.default.createElement(QueueRows, { session: state.session, editable }) : null;
+  return state?.session ? /* @__PURE__ */ import_react71.default.createElement(QueueRows, { session: state.session, editable }) : null;
 }
 var SESSION_QUEUE_CSS = `
 .mek-queue-dock{display:flex;flex:none}
@@ -23244,10 +23333,10 @@ var SESSION_QUEUE_CSS = `
 `;
 
 // src/client/mek/view.jsx
-var import_react71 = __toESM(require("react"), 1);
+var import_react72 = __toESM(require("react"), 1);
 var STYLES = TASK_PROGRESS_CSS + TURN_ERROR_CSS + SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS2 + HANDOFF_CSS + SIDE_CSS + app_default;
-function TeamView({ ctx, requests, useSessionStatus, viewport }) {
-  const team = (0, import_react71.useMemo)(() => {
+function TeamView({ ctx, requests, useSessionStatus, nativeTasks, viewport }) {
+  const team = (0, import_react72.useMemo)(() => {
     const value = createTeam();
     value.taskInbox = createTaskInbox();
     value.actions.schedules = void 0;
@@ -23255,8 +23344,8 @@ function TeamView({ ctx, requests, useSessionStatus, viewport }) {
     attachAgentActions(value, ctx);
     return value;
   }, [ctx]);
-  (0, import_react71.useSyncExternalStore)(team.taskInbox.subscribe, team.taskInbox.getSnapshot);
-  (0, import_react71.useEffect)(() => {
+  (0, import_react72.useSyncExternalStore)(team.taskInbox.subscribe, team.taskInbox.getSnapshot);
+  (0, import_react72.useEffect)(() => {
     const stopWatching = watchDeletedSubjects(team);
     const stopRemembering = rememberConversation(team);
     const stopInbox = team.taskInbox.start();
@@ -23269,18 +23358,22 @@ function TeamView({ ctx, requests, useSessionStatus, viewport }) {
     };
   }, [team]);
   const { hooks, actions } = team;
-  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react71.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
-  actions.TaskPanel = (0, import_react71.useMemo)(() => function TaskPanel({ sessionId, bucket }) {
-    return /* @__PURE__ */ import_react71.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket });
-  }, [team, ctx]);
-  actions.WechatLinks = (0, import_react71.useMemo)(() => function Links(props) {
-    return /* @__PURE__ */ import_react71.default.createElement(WechatLinks, { ...props, editable: !team.roster.getSnapshot().readOnly });
+  actions.sessionPermission = ctx.sessions.retain ? (sessionId) => /* @__PURE__ */ import_react72.default.createElement(SessionPermissions, { key: sessionId, ctx, sessionId }) : void 0;
+  const timeline = (0, import_react72.useSyncExternalStore)(nativeTasks.subscribe, nativeTasks.getSnapshot);
+  actions.TaskPanel = (0, import_react72.useMemo)(() => function TaskPanel({ sessionId, bucket }) {
+    const roster2 = hooks.useRoster((value) => value);
+    const bot = roster2.byId[sessionId];
+    if (bucket === "todos" && bot && !roster2.roomsById[sessionId] && timeline) return /* @__PURE__ */ import_react72.default.createElement(NativeTodoPanel, { bot, timeline, ctx });
+    return /* @__PURE__ */ import_react72.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket });
+  }, [team, ctx, hooks, timeline]);
+  actions.WechatLinks = (0, import_react72.useMemo)(() => function Links(props) {
+    return /* @__PURE__ */ import_react72.default.createElement(WechatLinks, { ...props, editable: !team.roster.getSnapshot().readOnly });
   }, [team]);
-  actions.Queue = (0, import_react71.useMemo)(() => function Queue({ sessionId }) {
-    const roster2 = (0, import_react71.useSyncExternalStore)(team.roster.subscribe, team.roster.getSnapshot);
+  actions.Queue = (0, import_react72.useMemo)(() => function Queue({ sessionId }) {
+    const roster2 = (0, import_react72.useSyncExternalStore)(team.roster.subscribe, team.roster.getSnapshot);
     const owner = roster2.byId[sessionId] ?? roster2.roomsById[sessionId];
     const part = owner ? currentPart(owner) : sessionId;
-    return ctx.sessions.retain ? /* @__PURE__ */ import_react71.default.createElement(SessionQueue, { key: part, ctx, sessionId: part, editable: !roster2.readOnly }) : null;
+    return ctx.sessions.retain ? /* @__PURE__ */ import_react72.default.createElement(SessionQueue, { key: part, ctx, sessionId: part, editable: !roster2.readOnly }) : null;
   }, [team, ctx]);
   actions.taskUnread = (id, bucket) => {
     const snapshot = team.roster.getSnapshot();
@@ -23289,11 +23382,11 @@ function TeamView({ ctx, requests, useSessionStatus, viewport }) {
   };
   const shown = hooks.useShown((value) => value);
   const roster = hooks.useRoster((value) => value);
-  (0, import_react71.useEffect)(() => {
-    team.taskInbox.update(roster);
-  }, [team, roster]);
+  (0, import_react72.useEffect)(() => {
+    team.taskInbox.update(roster, Boolean(timeline));
+  }, [team, roster, timeline]);
   const prefs = roster.prefs;
-  (0, import_react71.useEffect)(() => {
+  (0, import_react72.useEffect)(() => {
     const root = sceneRoot();
     if (!root) return;
     root.dataset.btMotion = prefs?.motion ?? "normal";
@@ -23301,7 +23394,7 @@ function TeamView({ ctx, requests, useSessionStatus, viewport }) {
     root.style.setProperty("--bt-msg-w", String(widthOf(prefs) / 100));
     root.style.setProperty("--bt-flat-w", String(flatWidthOf(prefs) / 100));
   }, [prefs]);
-  (0, import_react71.useEffect)(() => {
+  (0, import_react72.useEffect)(() => {
     if (!requests) return;
     const show2 = () => {
       const id = requests.getSnapshot();
@@ -23312,8 +23405,8 @@ function TeamView({ ctx, requests, useSessionStatus, viewport }) {
     show2();
     return requests.subscribe(show2);
   }, [team, requests]);
-  const OverviewPage = (0, import_react71.useMemo)(() => function OverviewPage2() {
-    return /* @__PURE__ */ import_react71.default.createElement(TeamOverview, { team, ctx, embedded: true });
+  const OverviewPage = (0, import_react72.useMemo)(() => function OverviewPage2() {
+    return /* @__PURE__ */ import_react72.default.createElement(TeamOverview, { team, ctx, embedded: true });
   }, [team, ctx]);
   const views = {
     ...hooks,
@@ -23321,18 +23414,18 @@ function TeamView({ ctx, requests, useSessionStatus, viewport }) {
     TeamOverview: OverviewPage,
     useFrame: (selector) => selector({ viewport, sidebarWidth: 0, collapsedWidth: 0 }),
     useSessions: (selector) => {
-      const host = (0, import_react71.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
+      const host = (0, import_react72.useSyncExternalStore)(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot);
       return hooks.useSessions((own) => selector({ ...own, byId: Object.fromEntries([.../* @__PURE__ */ new Set([...Object.keys(host.byId), ...Object.keys(own.byId)])].map((id) => [id, { ...host.byId[id], retainedBy: {}, ...own.byId[id] }])) }));
     }
   };
   const themed = themeCss(allThemes()[prefs?.theme] ?? allThemes().deepseek, prefs?.accent);
-  return /* @__PURE__ */ import_react71.default.createElement(import_react71.default.Fragment, null, /* @__PURE__ */ import_react71.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react71.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react71.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react71.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react71.default.createElement(import_react71.default.Fragment, { key: shown }, /* @__PURE__ */ import_react71.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react71.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react71.default.createElement(TaskAttention, { team, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react71.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react71.default.createElement(Chat, { sessionId: shown, team }, useSessionStatus && /* @__PURE__ */ import_react71.default.createElement(NativeQuestion, { useSessionStatus, sessionId: shown })))), /* @__PURE__ */ import_react71.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react71.default.createElement(ErrorToast, { ...views })));
+  return /* @__PURE__ */ import_react72.default.createElement(import_react72.default.Fragment, null, /* @__PURE__ */ import_react72.default.createElement("style", null, scopeCss(themed)), /* @__PURE__ */ import_react72.default.createElement("div", { className: "dsb-frame mek-team-frame" }, /* @__PURE__ */ import_react72.default.createElement(TeamHeader, { team, views }), /* @__PURE__ */ import_react72.default.createElement("main", { className: "dsb-main dsb_centerCol", "data-mek-session": shown }, shown && /* @__PURE__ */ import_react72.default.createElement(import_react72.default.Fragment, { key: shown }, /* @__PURE__ */ import_react72.default.createElement("div", { className: "dsb-head" }, /* @__PURE__ */ import_react72.default.createElement(HeaderPill, { ...views, showTitle: false, sessionId: shown, useSession: team.sessionHook(shown) })), /* @__PURE__ */ import_react72.default.createElement(TaskAttention, { team, sessionId: shown }), roster.roomsById[shown] ? /* @__PURE__ */ import_react72.default.createElement(GroupChat, { sessionId: shown, team }) : /* @__PURE__ */ import_react72.default.createElement(Chat, { sessionId: shown, team }, useSessionStatus && /* @__PURE__ */ import_react72.default.createElement(NativeQuestion, { useSessionStatus, sessionId: shown })))), /* @__PURE__ */ import_react72.default.createElement(Overlays, { ...views, embedded: true }), /* @__PURE__ */ import_react72.default.createElement(ErrorToast, { ...views })));
 }
-function NativeBot({ ctx, requests, useSessionStatus }) {
-  const root = (0, import_react71.useRef)(null);
-  const [ready, setReady] = (0, import_react71.useState)(false);
-  const [viewport, setViewport] = (0, import_react71.useState)(0);
-  (0, import_react71.useLayoutEffect)(() => {
+function NativeBot({ ctx, requests, useSessionStatus, nativeTasks }) {
+  const root = (0, import_react72.useRef)(null);
+  const [ready, setReady] = (0, import_react72.useState)(false);
+  const [viewport, setViewport] = (0, import_react72.useState)(0);
+  (0, import_react72.useLayoutEffect)(() => {
     const release = mountScene(root.current);
     const measure = () => setViewport(root.current?.clientWidth ?? 0);
     const observer = new ResizeObserver(measure);
@@ -23351,7 +23444,7 @@ function NativeBot({ ctx, requests, useSessionStatus }) {
       release();
     };
   }, []);
-  return /* @__PURE__ */ import_react71.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react71.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + COMPACT_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + WECHAT_LINKS_CSS + SESSION_QUEUE_CSS)), ready && /* @__PURE__ */ import_react71.default.createElement(TeamView, { ctx, requests, useSessionStatus, viewport }));
+  return /* @__PURE__ */ import_react72.default.createElement("div", { ref: root, className: "mek-bot-scene", style: { width: "100%", height: "100%", minWidth: 0, minHeight: 0, position: "relative", contain: "layout paint", isolation: "isolate", overflow: "hidden" } }, /* @__PURE__ */ import_react72.default.createElement("style", null, scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + COMPACT_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + NATIVE_TASK_CSS + WECHAT_LINKS_CSS + SESSION_QUEUE_CSS)), ready && /* @__PURE__ */ import_react72.default.createElement(TeamView, { ctx, requests, useSessionStatus, nativeTasks, viewport }));
 }
 
 // src/client/approval-notices.js
@@ -23461,11 +23554,12 @@ function startNativeNotices({ show: show2, shownSession = () => null }) {
 }
 
 // src/client/mek/index.jsx
-var import_react72 = __toESM(require("react"), 1);
+var import_react73 = __toESM(require("react"), 1);
 var inject = ["slots", "layout", "sessions", "uiWorkspace"];
 var PANEL = "mek-bot";
 function apply(ctx) {
   const requests = createSource(null);
+  const nativeTasks = createNativeTasks(ctx);
   ctx.effect(() => startNativeNotices({
     show: (id) => {
       requests.set(id);
@@ -23473,9 +23567,9 @@ function apply(ctx) {
     },
     shownSession: () => sceneRoot()?.querySelector("[data-mek-session]")?.dataset.mekSession ?? null
   }));
-  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react72.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react72.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react72.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
+  const Icon = ({ size = 20 }) => /* @__PURE__ */ import_react73.default.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.6", "aria-hidden": "true" }, /* @__PURE__ */ import_react73.default.createElement("rect", { x: "4", y: "6", width: "16", height: "14", rx: "5" }), /* @__PURE__ */ import_react73.default.createElement("path", { d: "M12 3v3M8 11h1m6 0h1m-8 5h8" }));
   ctx.slots.inject("main", () => {
-    ctx.slots.register({ name: "main", key: PANEL }, ({ useSessionStatus }) => /* @__PURE__ */ import_react72.default.createElement(NativeBot, { ctx, requests, useSessionStatus }));
+    ctx.slots.register({ name: "main", key: PANEL }, ({ useSessionStatus }) => /* @__PURE__ */ import_react73.default.createElement(NativeBot, { ctx, requests, useSessionStatus, nativeTasks }));
     ctx.effect(() => rememberPanel(ctx.layout, PANEL));
   });
   ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: PANEL, order: -50, label: () => "Bot" }, Icon));

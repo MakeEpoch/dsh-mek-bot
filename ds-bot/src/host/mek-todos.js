@@ -15,8 +15,15 @@ Dependencies mean all predecessors were accepted, not merely that a member stopp
 Members use report_bot_task for their existing assignment. The coordinator reads the result, accepts each returned child with control_todo accept and concrete evidence, or revises it with feedback. Accept the main task only after all children satisfy the goal. Do not repeat completed external actions just to add evidence.
 Keep routine progress internal. Deliver the final outcome in the original conversation. Pause/cancel and unknown outcomes must not be described as success. Tool approvals and secure credentials retain their original DSH boundaries.`
 
+const nativeRules = `## Personal plans and team work
+Record new personal checklists and progress with DSH Timeline (timeline_tree and timeline_tasks). Use the current tree for follow-ups. If the user only asks to record work for later, leave the task pending.
+Use DSH schedule tools for ordinary timed reminders and scheduled actions. For formal cross-Bot delegation use message_bot and the team task tools. In a group, the administrator uses the group plan and acceptance tools for shared work.
+If an existing MEK task or scheduled team workflow already has an ID, finish it through its existing tools. Keep one plan for each goal.`
+
 export function install(rt) {
   const { ctx, state } = rt
+  const hasNativeTimeline = agent => Boolean(ctx.tools.get?.('timeline_tree', agent))
+  rt.mekHasNativeTimeline = hasNativeTimeline
   const data = () => {
     if (state.mekTodos && state.mekTodos.version !== 1) refuse('To-dos were saved by a newer plugin. Update before changing them.')
     return state.mekTodos ??= { version: 1, tasks: {}, requests: {} }
@@ -154,7 +161,7 @@ export function install(rt) {
     try { await pumping } finally { pumping = null; if (again) { again = false; void pump().catch(error => rt.warn('mek-bot: to-do dispatch: %s', error)) } }
   }
   const kick = () => { void pump().catch(error => rt.warn('mek-bot: to-do dispatch: %s', error)) }
-  async function action(endpoint, body, actor, sessionId) {
+  async function action(endpoint, body, actor, sessionId, scheduled = false) {
     await rt.load()
     if (endpoint === 'mek-todo-list') return { tasks: view(body.target, actor) }
     return serialized(async () => {
@@ -173,6 +180,7 @@ export function install(rt) {
         const key = !existing ? safeText(rt, body.requestId, 'Stable request id', 150) : undefined
         const request = key && own(data().requests, `${target}:${key}`)
         if (request) return projection(get(request))
+        if (!room && !existing && !parent && !scheduled && hasNativeTimeline()) refuse('Create new personal plans with DSH Timeline.')
         if (parent) assertManage(parent, actor)
         task = existing ?? { id: randomUUID(), rootId: parent?.rootId, ...(parent ? { parentId: parent.id } : {}), ...(room ? { roomId: room.id } : { botId: bot.id }),
           status: 'pending', dependencies: [], criteria: [], attempts: [], revision: 0, resultVersion: 0, createdAt: Date.now() }
@@ -325,7 +333,12 @@ export function install(rt) {
     id: { type: 'string', required: true }, revision: { type: 'number', required: true }, action: { type: 'string', required: true, enum: ['start', 'pause', 'resume', 'cancel', 'accept', 'revise'] }, summary: { type: 'string' }, evidence: { type: 'string' }, feedback: { type: 'string' },
   }, (args, exec, self) => action(`mek-todo-${args.action}`, args, self, exec.agent.id))
   ctx.effect(() => ctx.systemPrompt.section({ name: 'mek-conversation-todos', order: 660, interpolate: false,
-    text: context => rt.selfOf(context?.agent?.id) ? rules : '',
+    text: context => {
+      const agent = context?.agent
+      if (!rt.selfOf(agent?.id)) return ''
+      if (rt.groupOwners.has(agent.id) && hasNativeTimeline(agent)) return rules + '\nKeep this group plan in the MEK team tools.'
+      return hasNativeTimeline(agent) ? nativeRules : rules
+    },
   }), 'mek-bot: conversation to-dos')
   ctx.effect(() => {
     const timer = setInterval(() => { void rt.load().then(pump).catch(error => rt.warn('mek-bot: to-do recovery: %s', error)) }, 5000)

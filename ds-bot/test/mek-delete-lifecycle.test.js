@@ -90,6 +90,7 @@ const registrations=[]
 const effects=[]
 const hostSnapshot={byId:{},ids:[]};const list={getSnapshot:()=>hostSnapshot,subscribe:()=>()=>{}}
 exports.apply({
+ inject: () => {},
  get: name => name === 'uiSession' ? { get sessionStatus() { throw new Error('cannot get property "uiSession.sessionStatus" without inject') } } : undefined,
  effect: create => effects.push(create()),slots:{inject:(_,work)=>work(),register:(seat,component)=>registrations.push({seat,component})},sessions:{list,refresh(){}},layout:{selectPanel(){}},uiWorkspace:{openSession(){}}
 })

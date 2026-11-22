@@ -126,7 +126,7 @@ export function install(rt) {
         if (instance.status === 'pending') {
           const content = instance.ruleSnapshot ?? rule
           if (content.action !== 'reminder') {
-            const task = await rt.mekTodoAction('mek-todo-plan', { target: rule.target, requestId: instance.id, title: content.title, instruction: content.instruction })
+            const task = await rt.mekTodoAction('mek-todo-plan', { target: rule.target, requestId: instance.id, title: content.title, instruction: content.instruction }, undefined, undefined, true)
             instance.taskId = task.id
           }
           instance.status = 'created'
@@ -263,6 +263,7 @@ export function install(rt) {
         const requestId = safeText(rt, body.requestId, 'Stable request id', 150)
         const previous = Object.values(data().rules).find(item => item.target === body.target && item.requestId === requestId)
         if (previous) { if (!allowed(previous, actor)) refuse('Only the coordinator may manage this rule.'); return clone(previous) }
+        if (!rt.roomOf(body.target) && rt.mekHasNativeTimeline?.()) refuse('Create new personal schedules in DSH Automation.')
         const title = safeText(rt, body.title, 'Schedule title', 120), instruction = safeText(rt, body.instruction ?? title, 'Scheduled instructions')
         if (!['reminder', 'todo', 'execute'].includes(body.action)) refuse('Choose reminder, todo or execute.')
         const rule = { id: randomUUID(), revision: 1, requestId, target: body.target, title, instruction, action: body.action, when: { ...body.when, timeZone: body.when?.timeZone ?? 'Asia/Shanghai' }, enabled: true, state: 'creating', acceptAfter: Date.now() }

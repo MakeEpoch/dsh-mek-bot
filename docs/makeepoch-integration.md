@@ -40,6 +40,12 @@ Uninstalling leaves team state and DSH history in place. Native visual scoping i
 
 ## Task coordination
 
+### Native personal plans
+
+When DSH's Timeline tab is registered, the private Bot To-dos tab opens the selected physical Session through DSH workspace navigation. The client waits for that Session to become the native main conversation before opening the registered Timeline tab. Earlier parts are selectable from the same Bot. When DSH has archived a part, the restore-and-open button explicitly restores it through the native workspace service before navigation. Timeline owns the task tree, persistence and controls. The DSH Automation page handles ordinary timed reminders and scheduled actions. No old individual plan is imported.
+
+The Host routes new personal plans to Timeline when its tool is available and refuses duplicate new private MEK plans and schedule rules. The group plan and team acceptance paths stay available, and saved schedules can still produce their due occurrences. Hosts with Timeline disabled keep the existing planning path. Model guidance directs personal progress to Timeline and group assignments to the existing team tools.
+
 Giving up an open handoff detaches that wait from its parent. Formal task records keep the abandoned branch and its late output. The same state write retains the notification for the original waiting conversation and cancels pending outbox entries for the detached branch. Existing workers retain their task association while they return late output.
 
 `src/host/mek-coordination.js` is installed only by the downstream entry. It reuses upstream handoffs and delivery, adding a persistent original task owner, suspended decisions, structured results, revisions, acceptance and cancellation. Small optional hooks in tools/turns/resume/approvals/secrets/channel preserve upstream behavior without the adapter. `mek/tasks.jsx` adds collapsible native progress and reuses the real approval and credential cards in the owner's chat.

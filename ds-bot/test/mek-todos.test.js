@@ -7,6 +7,21 @@ import { install as installPolicy } from '../src/host/mek-policy.js'
 
 const acceptance = { summary: 'Reviewed result', evidence: 'Verified the returned report.' }
 
+test('native Timeline takes new personal plans while existing scheduled and group work keep their team route', async t => {
+  const h = await todoHost(t)
+  const existing = await h.create({ target: 'a', title: 'An existing personal plan' }, 'a')
+  const previous = h.ctx.tools.get?.bind(h.ctx.tools)
+  h.ctx.tools.get = (name, ...args) => name === 'timeline_tree' ? {} : previous?.(name, ...args)
+  await assert.rejects(h.create({ target: 'a', title: 'A new personal plan' }, 'a'), /DSH Timeline/)
+  await assert.rejects(h.tool('a', 'plan_todo', { request_id: 'native-personal', title: 'Personal plan from the model' }), /DSH Timeline/)
+  const edited = await h.action('plan', existing, { title: 'Updated existing plan' }, 'a')
+  assert.equal(edited.title, 'Updated existing plan')
+  const group = await h.create({ target: 'r', title: 'A new group plan' }, 'a')
+  assert.equal(group.roomId, 'r')
+  const scheduled = await h.rt.mekTodoAction('mek-todo-plan', { target: 'a', title: 'An existing schedule occurrence', requestId: 'scheduled-fixture' }, undefined, undefined, true)
+  assert.equal(scheduled.botId, 'a')
+})
+
 test('a planned assignment returns nested repairs to its reviewer before the administrator', async t => {
   const h = await todoHost(t)
   const root = await h.create({ target: 'r', title: 'Review and repair', worker: 'c' }, 'a')

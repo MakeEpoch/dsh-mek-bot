@@ -40,6 +40,7 @@ import { SessionPermissions, PERMISSION_CSS } from './permissions.jsx'
 import { TODO_CSS, TASK_PROGRESS_CSS } from './todos.jsx'
 import { TODO_SCHEDULE_CSS } from './todo-schedules.jsx'
 import { ConversationTaskPanel, TASK_PANEL_CSS } from './task-panel.jsx'
+import { NativeTodoPanel, NATIVE_TASK_CSS } from './native-tasks.jsx'
 import { createTaskInbox } from './task-inbox.js'
 import { WechatLinks, WECHAT_LINKS_CSS } from './wechat-links.jsx'
 import { SessionQueue, SESSION_QUEUE_CSS } from './session-queue.jsx'
@@ -48,7 +49,7 @@ import { mountScene, sceneRoot, scopeCss } from './dom.js'
 
 const STYLES = TASK_PROGRESS_CSS + TURN_ERROR_CSS + SHELL_CSS + CONVERSATION_CSS + SIDEBAR_CSS + BOT_SETTINGS_CSS + GROUP_SETTINGS_CSS + MODEL_CSS + FOLDER_CSS + AVATAR_LIBRARY_CSS + PROVIDERS_CSS + SECRET_CSS + USAGE_CSS + FEEDBACK_CSS + ABOUT_CSS + MEMBER_CSS + USER_MESSAGE_CSS + BROWSER_CSS + WIDGET_CSS + HANDOFF_CSS + SIDE_CSS + appCss
 
-function TeamView({ ctx, requests, useSessionStatus, viewport }) {
+function TeamView({ ctx, requests, useSessionStatus, nativeTasks, viewport }) {
   const team = useMemo(() => { const value = createTeam(); value.taskInbox = createTaskInbox(); value.actions.schedules = undefined; value.actions.composeGoal = undefined; attachAgentActions(value, ctx); return value }, [ctx])
   useSyncExternalStore(team.taskInbox.subscribe, team.taskInbox.getSnapshot)
   useEffect(() => {
@@ -60,7 +61,13 @@ function TeamView({ ctx, requests, useSessionStatus, viewport }) {
   }, [team])
   const { hooks, actions } = team
   actions.sessionPermission = ctx.sessions.retain ? sessionId => <SessionPermissions key={sessionId} ctx={ctx} sessionId={sessionId} /> : undefined
-  actions.TaskPanel = useMemo(() => function TaskPanel({ sessionId, bucket }) { return <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} bucket={bucket} /> }, [team, ctx])
+  const timeline = useSyncExternalStore(nativeTasks.subscribe, nativeTasks.getSnapshot)
+  actions.TaskPanel = useMemo(() => function TaskPanel({ sessionId, bucket }) {
+    const roster = hooks.useRoster(value => value)
+    const bot = roster.byId[sessionId]
+    if (bucket === 'todos' && bot && !roster.roomsById[sessionId] && timeline) return <NativeTodoPanel bot={bot} timeline={timeline} ctx={ctx} />
+    return <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} bucket={bucket} />
+  }, [team, ctx, hooks, timeline])
   actions.WechatLinks = useMemo(() => function Links(props) { return <WechatLinks {...props} editable={!team.roster.getSnapshot().readOnly} /> }, [team])
   actions.Queue = useMemo(() => function Queue({ sessionId }) {
     const roster = useSyncExternalStore(team.roster.subscribe, team.roster.getSnapshot)
@@ -75,7 +82,7 @@ function TeamView({ ctx, requests, useSessionStatus, viewport }) {
   }
   const shown = hooks.useShown(value => value)
   const roster = hooks.useRoster(value => value)
-  useEffect(() => { team.taskInbox.update(roster) }, [team, roster])
+  useEffect(() => { team.taskInbox.update(roster, Boolean(timeline)) }, [team, roster, timeline])
   const prefs = roster.prefs
   useEffect(() => {
     const root = sceneRoot()
@@ -114,7 +121,7 @@ function TeamView({ ctx, requests, useSessionStatus, viewport }) {
   </>
 }
 
-export function NativeBot({ ctx, requests, useSessionStatus }) {
+export function NativeBot({ ctx, requests, useSessionStatus, nativeTasks }) {
   const root = useRef(null)
   const [ready, setReady] = useState(false)
   const [viewport, setViewport] = useState(0)
@@ -132,7 +139,7 @@ export function NativeBot({ ctx, requests, useSessionStatus }) {
     return () => { observer.disconnect(); dark.removeEventListener('change', paint); locale(); release() }
   }, [])
   return <div ref={root} className="mek-bot-scene" style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0, position: 'relative', contain: 'layout paint', isolation: 'isolate', overflow: 'hidden' }}>
-    <style>{scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + COMPACT_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + WECHAT_LINKS_CSS + SESSION_QUEUE_CSS)}</style>
-    {ready && <TeamView ctx={ctx} requests={requests} useSessionStatus={useSessionStatus} viewport={viewport} />}
+    <style>{scopeCss(STYLES + TASK_CSS + LEDGER_CSS + ARTIFACT_CSS + OVERVIEW_CSS + BROWSER_WORKSPACE_CSS + TEAM_HEADER_CSS + COMPACT_HEADER_CSS + PERMISSION_CSS + TODO_CSS + TODO_SCHEDULE_CSS + TASK_PANEL_CSS + NATIVE_TASK_CSS + WECHAT_LINKS_CSS + SESSION_QUEUE_CSS)}</style>
+    {ready && <TeamView ctx={ctx} requests={requests} useSessionStatus={useSessionStatus} nativeTasks={nativeTasks} viewport={viewport} />}
   </div>
 }
