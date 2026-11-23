@@ -2,7 +2,7 @@
 // the first Main Bot of a new team.
 import { mkdir } from 'node:fs/promises'
 import { MAX_AVATAR_IMAGE, ROOM_MAX_MEMBERS, ROOM_MODES, ROOM_NAME_MAX, ROOM_NOTICE_MAX } from './constants.js'
-import { currentColor, isColor, normalize, unquote } from './text.js'
+import { currentColor, isColor, normalize, splitRef, unquote } from './text.js'
 import { nameProblem } from '../shared/mentions.js'
 
 const BROWSER_GRANT_KINDS = new Set(['post', 'upload', 'download', 'delete', '*'])
@@ -499,6 +499,16 @@ export function install(rt) {
     // in the group's folder once the group has one (parts.js).
     const id = await createSession(title)
     try {
+      // The group's own Session only has to match a name before a relay. A miss here
+      // must not refuse the group: the next start repairs a route the catalog lost.
+      const ref = await rt.groupModel().catch(error => {
+        rt.warn('ds-bot: group model for %s not resolved: %s', title, error)
+        return undefined
+      })
+      if (ref !== undefined) {
+        await rt.selectSessionModel(id, splitRef(ref))
+          .catch(error => rt.warn('ds-bot: model for the group %s not applied: %s', title, error))
+      }
       // A member deleted while the Session was made stays out, and the group is checked
       // again as it is written.
       const live = members.filter(member => rt.botOf(member))

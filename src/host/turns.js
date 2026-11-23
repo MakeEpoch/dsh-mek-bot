@@ -736,7 +736,10 @@ export function install(rt) {
   ctx.on('session/event', (session, event) => {
     const id = session?.id
     if (id === undefined) return
-    if (!rt.isBotSession(id) && !rt.roomOf(id)) {
+    // A group that already moved to a fresh part is keyed by that Session, not by
+    // the room id. roomOf covers it; the owner map is named so a moved Session is
+    // not dropped before its failure can be returned.
+    if (!rt.isBotSession(id) && rt.roomOf(id) === undefined && rt.roomOwners.get(id) === undefined) {
       // A deleted Bot's Session can still be ending its turn; nothing of it stays.
       if (live.delete(id)) setActivity(id, undefined)
       return
@@ -1060,6 +1063,9 @@ export function install(rt) {
         const reason = event.data?.reason
         const failure = reason?.kind === 'error' && !switched ? turnFailure(reason.error) : undefined
         if (failure !== undefined) noteTurnFailure(id, failure)
+        // Failed before this turn read its input, so nothing in the branches below
+        // has a trigger to answer. The task must not stay queued.
+        if (failure !== undefined && info === undefined) rt.mekFailUnstarted?.(id, failure)
         // A route that is not a model endpoint refuses every generation; the failed
         // Session's own request names it, so it is refused everywhere from now on.
         if (failure?.code === 'HOSTED_ENGINE_ROUTE') {

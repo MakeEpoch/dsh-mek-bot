@@ -143,6 +143,32 @@ export function install(rt) {
     const preferred = state.prefs.defaultBotModel
     return entries.some(entry => entry.ref === preferred) ? preferred : pickDefault(entries)
   }
+  // The name a group's own Session must match before a relay. It does not choose who
+  // speaks, and it is not the model new Bots start on. A saved ref the catalog no
+  // longer serves falls back the same way the Bot default does.
+  const groupModel = async () => {
+    const entries = await catalog()
+    const preferred = state.prefs.groupModel
+    return entries.some(entry => entry.ref === preferred) ? preferred : pickDefault(entries)
+  }
+  // The route a group's own Session last requested. Open it first: at startup it is
+  // usually not in the live agent map yet, and a map lookup would skip a route the
+  // catalog no longer serves. A Session that will not open is left alone.
+  async function openedGroupRoute(sessionId) {
+    let agent
+    try {
+      agent = await rt.resolveAgent(sessionId)
+    } catch (error) {
+      rt.warn('ds-bot: group session %s not opened: %s', sessionId, error)
+      return undefined
+    }
+    try {
+      const config = agent?.session?.requestHeader?.()?.config
+      return config?.provider && config?.model ? config : undefined
+    } catch {
+      return undefined
+    }
+  }
 
   // A full `provider/model` ref, or a model id or name that only one provider serves.
   async function resolveModel(text) {
@@ -281,6 +307,36 @@ export function install(rt) {
     for (const bot of Object.values(state.bots)) {
       await applyModel(bot).catch(error => rt.warn('ds-bot: model for %s not applied: %s', bot.name, error))
     }
+    await repairGroupRoutes()
+  }
+  // A group's own Session whose provider no longer serves its model cannot relay.
+  // Only that Session is moved onto the group model: a route the catalog still
+  // serves is left as it is, and a member's group Session is not touched.
+  async function repairGroupRoutes() {
+    const rooms = Object.values(state.rooms ?? {})
+    if (rooms.length === 0) return
+    let entries
+    let ref
+    try {
+      entries = await catalog()
+      ref = await groupModel()
+    } catch (error) {
+      rt.warn('ds-bot: group model not resolved: %s', error)
+      return
+    }
+    if (ref === undefined) return
+    const wanted = splitRef(ref)
+    for (const room of rooms) {
+      const ids = [room.id]
+      if (room.sessionId !== undefined && room.sessionId !== room.id) ids.push(room.sessionId)
+      for (const sessionId of ids) {
+        const config = await openedGroupRoute(sessionId)
+        if (config === undefined) continue
+        if (entries.some(entry => entry.provider === config.provider && entry.id === config.model)) continue
+        await selectSessionModel(sessionId, { provider: wanted.provider, model: wanted.model })
+          .catch(error => rt.warn('ds-bot: model for group %s not applied: %s', room.name, error))
+      }
+    }
   }
 
   // A route that refused a request for not being a model endpoint: it stays out of
@@ -308,7 +364,7 @@ export function install(rt) {
 
   Object.assign(rt, {
     catalog, cachedCatalog: () => answerable(catalogCache.value), cachedDefault: () => pickDefault(catalogCache.value),
-    defaultRef, defaultModel, defaultBotModel, defaultEffort, isUsable, resolveModel, desiredModel, reasoningOf, resolveEffort, desiredEffort,
+    defaultRef, defaultModel, defaultBotModel, groupModel, defaultEffort, isUsable, resolveModel, desiredModel, reasoningOf, resolveEffort, desiredEffort,
     selectSessionModel, applyModel, waitForModel, syncModels, routeRefused, dropCatalog,
   })
 }

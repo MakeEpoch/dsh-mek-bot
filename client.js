@@ -251,6 +251,8 @@ var ZH = {
   "New Bot": "新 Bot",
   "New Bots": "新 Bot",
   "Default model": "默认模型",
+  "Group model": "群模型",
+  "The group's own chat does not reply. A relay checks this model's name first; if it does not match, the group sends nothing. Bots in the group keep their own models.": "群自己的会话不回复。转发前要用这个模型对上名字，对不上整群发不出。群里的 Bot 仍用各自的模型。",
   // Sidebar and account menu
   "Bot list": "Bot 列表",
   "Favorite {name}": "收藏 {name}",
@@ -16555,6 +16557,24 @@ function GeneralPage({ roster, actions, run: run2 }) {
           onPick: (ref) => run2(actions.setPrefs({ defaultBotModel: ref }))
         }),
         prefs.defaultBotModel ? (0, import_react49.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: () => run2(actions.setPrefs({ defaultBotModel: null })) }, t("Reset")) : null
+      ),
+      (0, import_react49.createElement)(
+        SetRow,
+        {
+          label: t("Group model"),
+          className: "bt-set-model",
+          hint: t("The group's own chat does not reply. A relay checks this model's name first; if it does not match, the group sends nothing. Bots in the group keep their own models.")
+        },
+        (0, import_react49.createElement)(ModelMenu, {
+          bot: { id: "group-model", name: t("Group model"), model: prefs.groupModel },
+          roster,
+          actions,
+          run: run2,
+          wide: true,
+          withEfforts: false,
+          onPick: (ref) => run2(actions.setPrefs({ groupModel: ref }))
+        }),
+        prefs.groupModel ? (0, import_react49.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm", onClick: () => run2(actions.setPrefs({ groupModel: null })) }, t("Reset")) : null
       )
     ),
     (0, import_react49.createElement)(

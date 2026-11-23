@@ -114,7 +114,17 @@ function GeneralPage({ roster, actions, run }) {
           roster, actions, run, wide: true, withEfforts: false,
           onPick: ref => run(actions.setPrefs({ defaultBotModel: ref })),
         }),
-        prefs.defaultBotModel ? h('button', { type: 'button', className: 'bt-soft bt-soft-sm', onClick: () => run(actions.setPrefs({ defaultBotModel: null })) }, t('Reset')) : null)),
+        prefs.defaultBotModel ? h('button', { type: 'button', className: 'bt-soft bt-soft-sm', onClick: () => run(actions.setPrefs({ defaultBotModel: null })) }, t('Reset')) : null),
+      h(SetRow, {
+        label: t('Group model'), className: 'bt-set-model',
+        hint: t("The group's own chat does not reply. A relay checks this model's name first; if it does not match, the group sends nothing. Bots in the group keep their own models."),
+      },
+        h(ModelMenu, {
+          bot: { id: 'group-model', name: t('Group model'), model: prefs.groupModel },
+          roster, actions, run, wide: true, withEfforts: false,
+          onPick: ref => run(actions.setPrefs({ groupModel: ref })),
+        }),
+        prefs.groupModel ? h('button', { type: 'button', className: 'bt-soft bt-soft-sm', onClick: () => run(actions.setPrefs({ groupModel: null })) }, t('Reset')) : null)),
     h(SetSection, { key: 'input', title: t('Input') },
       h(SetRow, { label: t('Enter sends message') },
         h(Switch, { label: t('Enter sends message'), on: prefs.enterToSend !== false, onChange: enterToSend => run(actions.setPrefs({ enterToSend })) }))),

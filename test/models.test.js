@@ -389,3 +389,87 @@ test('a Bot on the default model with its own thinking level leaves the default 
   await rt.applyModel({ id: 'b1', model: 'deepseek/v4-flash', effort: 'low' })
   assert.deepEqual(current(), fallback)
 })
+
+test('the group model and the default model do not read each other', async () => {
+  const { rt } = bench()
+  rt.state.prefs = { defaultBotModel: 'deepseek/v4-flash', groupModel: 'stepfun/step-5' }
+  assert.equal(await rt.defaultBotModel(), 'deepseek/v4-flash')
+  assert.equal(await rt.groupModel(), 'stepfun/step-5')
+  // A missing group ref falls back to the profile default, not to the Bot default.
+  rt.state.prefs.groupModel = 'gone/model'
+  assert.equal(await rt.groupModel(), 'stepfun/step-5')
+  assert.equal(await rt.defaultBotModel(), 'deepseek/v4-flash')
+  delete rt.state.prefs.groupModel
+  assert.equal(await rt.groupModel(), 'stepfun/step-5')
+  assert.equal(await rt.defaultBotModel(), 'deepseek/v4-flash')
+})
+
+test('startup repair selects the group model only when a group session\'s own route is not served', async () => {
+  const { rt, selected } = bench({
+    providers: { 'magpie-responses': ['grok/grok-4.7'], deepseek: ['v4-flash'] },
+    fallback: { provider: 'deepseek', model: 'v4-flash' },
+  })
+  rt.state.prefs = { groupModel: 'magpie-responses/grok/grok-4.7' }
+  rt.state.rooms = {
+    bad: { id: 'bad', name: 'Bad', sessionId: 'bad-now', sessions: { b: 'member' } },
+    ok: { id: 'ok', name: 'Ok', sessionId: 'ok-now' },
+    quiet: { id: 'quiet', name: 'Quiet' },
+  }
+  const headers = {
+    bad: { provider: 'magpie-responses', model: 'chatgpt-api/gpt-6.1-terra' },
+    'bad-now': { provider: 'magpie-responses', model: 'chatgpt-api/gpt-6.1-terra' },
+    ok: { provider: 'deepseek', model: 'v4-flash' },
+    'ok-now': { provider: 'deepseek', model: 'v4-flash' },
+    member: { provider: 'magpie-responses', model: 'chatgpt-api/gpt-6.1-terra' },
+  }
+  const agents = new Map(Object.entries(headers).map(([id, config]) => [id, { session: { requestHeader: () => ({ config }) } }]))
+  rt.resolveAgent = async sessionId => agents.get(sessionId)
+  await rt.catalog()
+  await rt.syncModels()
+  assert.deepEqual(selected, [
+    'bad:magpie-responses/grok/grok-4.7',
+    'bad-now:magpie-responses/grok/grok-4.7',
+  ])
+})
+
+test('startup repair opens a group session that is not loaded yet, and still leaves a served route and a member alone', async () => {
+  const { rt, selected } = bench({
+    providers: { 'magpie-responses': ['grok/grok-4.7'], deepseek: ['v4-flash'] },
+    fallback: { provider: 'deepseek', model: 'v4-flash' },
+  })
+  rt.state.prefs = { groupModel: 'magpie-responses/grok/grok-4.7' }
+  rt.state.rooms = {
+    bad: { id: 'bad', name: 'Bad', sessionId: 'bad-now', sessions: { b: 'member' } },
+    ok: { id: 'ok', name: 'Ok' },
+    closed: { id: 'closed', name: 'Closed' },
+  }
+  const headers = {
+    bad: { provider: 'magpie-responses', model: 'chatgpt-api/gpt-6.1-terra' },
+    'bad-now': { provider: 'magpie-responses', model: 'chatgpt-api/gpt-6.1-terra' },
+    ok: { provider: 'deepseek', model: 'v4-flash' },
+    member: { provider: 'magpie-responses', model: 'chatgpt-api/gpt-6.1-terra' },
+  }
+  const agents = new Map()
+  const opened = []
+  const warnings = []
+  rt.warn = (template, ...args) => warnings.push([template, ...args].join(' '))
+  rt.resolveAgent = async (sessionId) => {
+    opened.push(sessionId)
+    if (sessionId === 'closed') throw new Error('session file missing')
+    assert.equal(agents.has(sessionId), false)
+    const config = headers[sessionId]
+    const agent = { session: { requestHeader: () => ({ config }) } }
+    agents.set(sessionId, agent)
+    return agent
+  }
+  await rt.catalog()
+  await rt.syncModels()
+  assert.deepEqual(selected, [
+    'bad:magpie-responses/grok/grok-4.7',
+    'bad-now:magpie-responses/grok/grok-4.7',
+  ])
+  assert.deepEqual(opened, ['bad', 'bad-now', 'ok', 'closed'])
+  assert.equal(opened.includes('member'), false)
+  assert.equal(warnings.length, 1)
+  assert.match(warnings[0], /group session %s not opened: %s closed Error: session file missing/)
+})

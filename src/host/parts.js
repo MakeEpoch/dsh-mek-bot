@@ -177,6 +177,10 @@ export function install(rt) {
   const NOTE_MAX_TOKENS = 8_192
   const NOTE_TIMEOUT_MS = 600_000
   const NOTE_ATTEMPTS = 2
+  // A Responses stream can end without its terminal event. One note may try the
+  // stream this many times, including the first; that does not spend a content retry.
+  const STREAM_ATTEMPTS = 3
+  const STREAM_CUT = 'stream ended before a terminal response event'
   // After a note fails below the hard line the part stays as it is, and tries again
   // only after a wait that grows with each failure in a row.
   const NOTE_COOLDOWN_MS = [60_000, 300_000, 900_000]
@@ -439,6 +443,42 @@ export function install(rt) {
   const missingSections = note => NOTE_SECTIONS.map(([name]) => name)
     .filter(name => !new RegExp(`^#{1,4}\\s*${escapeRegExp(name)}\\s*:?\\s*$`, 'mi').test(note))
 
+  const streamCut = error => String(error?.message ?? error ?? '').includes(STREAM_CUT)
+  // One compaction request. A stream that is cut off is tried again in this same
+  // attempt; an abort, or any other error, fails at once.
+  async function compactionStream(request, signal) {
+    let last
+    for (let attempt = 1; attempt <= STREAM_ATTEMPTS; attempt += 1) {
+      if (signal?.aborted) throw signal.reason ?? new Error('aborted')
+      const assembler = new BlockAssembler()
+      try {
+        for await (const chunk of ctx.llm.stream({ ...request, signal })) assembler.push(chunk)
+      } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError') throw error
+        if (attempt < STREAM_ATTEMPTS && streamCut(error)) {
+          last = error
+          rt.warn('ds-bot: compaction stream cut off for %s; retry %d of %d', request.sessionId, attempt + 1, STREAM_ATTEMPTS)
+          continue
+        }
+        throw error
+      }
+      const finish = assembler.finish
+      if (finish.kind === 'error' || finish.kind === 'aborted') {
+        const message = finish.failure?.message ?? finish.kind
+        const error = new Error(message)
+        if (finish.kind === 'aborted' || signal?.aborted) throw error
+        if (attempt < STREAM_ATTEMPTS && streamCut(error)) {
+          last = error
+          rt.warn('ds-bot: compaction stream cut off for %s; retry %d of %d', request.sessionId, attempt + 1, STREAM_ATTEMPTS)
+          continue
+        }
+        throw error
+      }
+      return { assembler, finish }
+    }
+    throw last ?? new Error(STREAM_CUT)
+  }
+
   // The same system prompt, tools, and messages as the conversation's own requests,
   // plus the note prompt; nothing is written into the Session. A cut-off note, or one
   // without every section, is asked for again once; then the note fails.
@@ -453,8 +493,7 @@ export function install(rt) {
     let problem
     for (let attempt = 1; attempt <= NOTE_ATTEMPTS; attempt += 1) {
       const prompt = retry === undefined ? base : `${base}\n\n${retry}`
-      const assembler = new BlockAssembler()
-      for await (const chunk of ctx.llm.stream({
+      const { assembler, finish } = await compactionStream({
         provider: route.provider,
         model: route.model,
         ...(route.reasoningEffort ? { reasoningEffort: route.reasoningEffort } : {}),
@@ -464,10 +503,7 @@ export function install(rt) {
         maxTokens: Math.min(NOTE_MAX_TOKENS, route.maxTokens ?? NOTE_MAX_TOKENS),
         sessionId: session.id,
         purpose: 'compaction',
-        signal,
-      })) assembler.push(chunk)
-      const finish = assembler.finish
-      if (finish.kind === 'error' || finish.kind === 'aborted') throw new Error(finish.failure?.message ?? finish.kind)
+      }, signal)
       const text = assembler.blocks().filter(block => block.type === 'text').map(block => block.text).join('\n').trim()
       const note = missingSections(text).length > 0 ? canonicalHeadings(text, NOTE_SECTIONS.map(([name]) => name)) : text
       const missing = missingSections(note)
@@ -522,8 +558,7 @@ export function install(rt) {
     const head = input.messages
     const tail = checkpointTail(head, session.deriveMessages())
     const prompt = tail.length === 0 ? CHECKPOINT_PROMPT : `${CHECKPOINT_PROMPT}\n\n${checkpointTailNote(tail)}`
-    const assembler = new BlockAssembler()
-    for await (const chunk of ctx.llm.stream({
+    const { assembler, finish } = await compactionStream({
       provider: route.provider,
       model: route.model,
       ...(route.reasoningEffort ? { reasoningEffort: route.reasoningEffort } : {}),
@@ -533,10 +568,7 @@ export function install(rt) {
       ...(maxTokens !== undefined ? { maxTokens } : {}),
       sessionId: session.id,
       purpose: 'compaction',
-      signal,
-    })) assembler.push(chunk)
-    const finish = assembler.finish
-    if (finish.kind === 'error' || finish.kind === 'aborted') throw new Error(finish.failure?.message ?? finish.kind)
+    }, signal)
     if (finish.kind === 'max-tokens') throw new Error('the checkpoint was cut off at the output limit')
     const rawOutput = assembler.blocks()
     const summary = rawOutput.filter(block => block.type === 'text').map(block => block.text).join('\n').trim()
@@ -934,7 +966,16 @@ export function install(rt) {
   // misses a model the user picked since, so it counts only for a conversation
   // without a model of its own.
   async function freshRoute(bot, session) {
-    const ref = bot === undefined ? undefined : await rt.desiredModel(bot)
+    // The group's own Session has no Bot. It takes the group model, not whatever
+    // the earlier part last requested: that header is how a stale name gets copied.
+    if (bot === undefined) {
+      const ref = await rt.groupModel().catch(error => {
+        rt.warn('ds-bot: group model for a fresh part not resolved: %s', error)
+        return undefined
+      })
+      return ref === undefined ? undefined : { ref }
+    }
+    const ref = await rt.desiredModel(bot)
     if (ref !== undefined) return { ref, effort: await rt.desiredEffort(bot, ref) }
     const route = session.requestHeader()?.config
     return route?.provider && route?.model ? { ref: `${route.provider}/${route.model}`, effort: route.reasoningEffort } : undefined

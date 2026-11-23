@@ -168,6 +168,12 @@ export function install(rt) {
       if (body.defaultBotModel === null || body.defaultBotModel === '') delete state.prefs.defaultBotModel
       else state.prefs.defaultBotModel = await rt.resolveModel(body.defaultBotModel)
     }
+    if (body.groupModel !== undefined) {
+      // The name a group's own Session must match before a relay. It does not choose
+      // who speaks, and it is not the model new Bots start on.
+      if (body.groupModel === null || body.groupModel === '') delete state.prefs.groupModel
+      else state.prefs.groupModel = await rt.resolveModel(body.groupModel)
+    }
     if (body.thinking !== undefined) {
       // A value this version does not know is ignored, not refused: the toggle
       // may grow more states later.

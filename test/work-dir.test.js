@@ -1304,3 +1304,21 @@ test('a group Session that cannot be opened still saves the folder', async (t) =
   assert.equal(env.state().rooms.r1.id, 'r1')
   assert.equal((await env.call('state', {})).ok, true)
 })
+
+test('a fresh part of a group uses the group model, not the earlier part\'s route', async (t) => {
+  const llm = {
+    listProviders: () => [{ id: 'magpie-responses', name: 'Magpie' }, { id: 'deepseek', name: 'DeepSeek' }],
+    listModels: async id => (id === 'magpie-responses' ? [{ id: 'grok/grok-4.7' }] : [{ id: 'v4-flash' }]),
+    resolveModelInfo: async () => ({}),
+  }
+  const team = { ...TEAM, prefs: { groupModel: 'magpie-responses/grok/grok-4.7' } }
+  const env = await start({ llm, team })
+  t.after(env.stop)
+  env.agentOf('r1').session.requestHeader = () => ({ config: { provider: 'magpie-responses', model: 'chatgpt-api/gpt-6.1-terra' } })
+  const selected = []
+  env.ctx.sessionController.selectModel = async request => { selected.push([request.sessionId, request.provider, request.model]) }
+  assert.equal((await env.call('update-room', { id: 'r1', workDir: env.project })).ok, true)
+  await until(() => env.state().rooms.r1.sessionId === 's1')
+  await until(() => handoffOf(env.agentOf('s1')) !== undefined)
+  assert.deepEqual(selected.filter(([sessionId]) => sessionId === 's1'), [['s1', 'magpie-responses', 'grok/grok-4.7']])
+})

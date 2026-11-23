@@ -1524,3 +1524,69 @@ test('a recovery-closed handoff without a delivered report is still closable by 
   await h.tool('a', 'finish_bot_task', { task_id: root.id, summary: 'Closed the handoff and accepted the outcome.' })
   assert.equal(task(h).status, 'completed')
 })
+
+const reviewRoom = () => {
+  const team = seed()
+  team.rooms.r = { id: 'r', name: 'Review group', named: true, members: ['a', 'b'], admin: 'b', mode: 'admin', sessions: { b: 'gb' }, segments: {}, log: [], seq: 0, seen: {} }
+  return team
+}
+const modelError = (code, message) => ({ kind: 'error', error: { code, message } })
+
+test('a member that fails before it reads the request sends the error back, and the task does not stay running', async t => {
+  const h = await host(t, undefined, reviewRoom())
+  h.begin('a')
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the design', report_back: true })
+  h.end('a')
+  const child = task(h).work.find(work => work.to === 'b')
+  assert.equal(child.status, 'queued')
+  const before = h.agentOf('a').calls.length
+  h.end('gb', undefined, modelError('MODEL_SWITCH_COMPACTION_FAILED', 'context compaction failed: previous request model is preserved'))
+  await settled(() => h.agentOf('a').calls.length > before)
+  const failed = task(h).work.find(work => work.id === child.id)
+  assert.equal(failed.status, 'failed')
+  assert.equal(failed.unstartedFailure, true)
+  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /Writer could not answer your message: its model call failed \(MODEL_SWITCH_COMPACTION_FAILED: context compaction failed: previous request model is preserved\)/)
+  assert.equal(task(h).status, 'blocked')
+  assert.notEqual(task(h).work.find(work => work.to === 'b').status, 'queued')
+  assert.ok(!task(h).work.some(work => work.status === 'running' || work.status === 'queued'))
+})
+
+test('a group session that fails before any member is called returns a blocked report to the sender', async t => {
+  const h = await host(t, undefined, reviewRoom())
+  const prepare = h.rt.prepareGroupTask
+  h.rt.prepareGroupTask = async (...args) => {
+    h.end('r', undefined, modelError('UNKNOWN_MODEL', 'pi-ai provider magpie-responses has no configured model chatgpt-api/gpt-6.1-terra'))
+    return prepare(...args)
+  }
+  h.begin('a')
+  const before = h.agentOf('a').calls.length
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the design', report_back: true })
+  h.end('a')
+  await settled(() => h.agentOf('a').calls.length > before)
+  const group = task(h).work.find(work => work.id === work.groupRoot)
+  assert.equal(task(h).work.filter(work => work.to).length, 0)
+  assert.equal(group.status, 'failed')
+  assert.equal(group.report.status, 'blocked')
+  assert.match(group.result, /Group "Review group" could not answer your message: its model call failed \(UNKNOWN_MODEL: pi-ai provider magpie-responses has no configured model chatgpt-api\/gpt-6.1-terra\)/)
+  assert.match(contentOf(h.agentOf('a').calls.at(-1)), /UNKNOWN_MODEL/)
+  assert.equal(task(h).status, 'blocked')
+  assert.equal(h.agentOf('gb').calls.length, 0)
+})
+
+test('a member that already started is not failed when the group session later errors before reading input', async t => {
+  const h = await host(t, undefined, reviewRoom())
+  h.begin('a')
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Review the design', report_back: true })
+  h.end('a')
+  const child = task(h).work.find(work => work.to === 'b')
+  h.take('gb')
+  assert.equal(task(h).work.find(work => work.id === child.id).status, 'running')
+  const before = h.agentOf('a').calls.length
+  h.end('r', undefined, modelError('UNKNOWN_MODEL', 'pi-ai provider magpie-responses has no configured model chatgpt-api/gpt-6.1-terra'))
+  await delay(30)
+  const started = task(h).work.find(work => work.id === child.id)
+  assert.equal(started.status, 'running')
+  assert.equal(started.unstartedFailure, undefined)
+  assert.equal(h.agentOf('a').calls.length, before)
+  assert.equal(task(h).status, 'running')
+})

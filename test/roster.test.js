@@ -1380,3 +1380,31 @@ test('a model-less create-bot starts the Bot on the saved team default model', a
   const plain = (await call('create-bot', { name: 'Plain' })).value
   assert.equal(plain.model, 'deepseek/deepseek-v4-flash')
 })
+
+test('set-prefs stores a group model apart from the default model', async (t) => {
+  const { call, stop } = start(TEAM_MODEL, { models: ['deepseek-v4-flash', 'deepseek-v4-pro'] })
+  t.after(stop)
+  assert.equal((await call('set-prefs', { groupModel: 'deepseek/deepseek-v4-pro' })).value.groupModel, 'deepseek/deepseek-v4-pro')
+  assert.equal('defaultBotModel' in rt.state.prefs, false)
+  assert.equal((await call('set-prefs', { defaultBotModel: 'deepseek/deepseek-v4-flash' })).value.defaultBotModel, 'deepseek/deepseek-v4-flash')
+  assert.equal(rt.state.prefs.groupModel, 'deepseek/deepseek-v4-pro')
+  const refused = await call('set-prefs', { groupModel: 'gone/model' })
+  assert.equal(refused.ok, false)
+  assert.match(refused.error.message, /Model gone\/model is not available/)
+  assert.equal(rt.state.prefs.groupModel, 'deepseek/deepseek-v4-pro')
+  assert.equal('groupModel' in (await call('set-prefs', { groupModel: null })).value, false)
+  assert.equal('groupModel' in rt.state.prefs, false)
+  assert.equal(rt.state.prefs.defaultBotModel, 'deepseek/deepseek-v4-flash')
+})
+
+test('a new group session is selected on the group model', async (t) => {
+  const { call, stop, selected } = start(undefined, { models: ['deepseek-v4-flash', 'deepseek-v4-pro'] })
+  t.after(stop)
+  const chief = (await call('state', {})).value.mainBotId
+  const writer = (await call('create-bot', { name: 'Writer' })).value
+  await call('set-prefs', { groupModel: 'deepseek/deepseek-v4-pro' })
+  const before = selected.length
+  const room = (await call('create-room', { members: [chief, writer.id] })).value
+  assert.deepEqual(selected.slice(before).map(request => [request.sessionId, request.provider, request.model]), [[room.id, 'deepseek', 'deepseek-v4-pro']])
+  assert.equal(rt.state.bots[writer.id].model, 'deepseek/deepseek-v4-flash')
+})

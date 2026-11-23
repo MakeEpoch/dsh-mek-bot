@@ -5,6 +5,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { registerTeamTool } from './team-registration.js'
 import { output } from './tools.js'
 import { textOf } from './text.js'
+import { failureLine } from './turns.js'
 import { SOURCE_KIND, TEXT_KEPT } from './constants.js'
 
 const final = task => ['completed', 'cancelled', 'archived'].includes(task?.status)
@@ -401,6 +402,50 @@ export function install(rt) {
     const work = workOf(id)
     if (work && work.status !== 'abandoned') { work.outcome = status; work.failureReason = status; changed() }
   }
+  // A turn that failed before it read its input. The sender was already told the
+  // work was handed on; without this the task stays queued. Started work is left
+  // to finish. The notice reuses the same failure line a finished turn sends.
+  rt.mekFailUnstarted = (sessionId, failure) => {
+    if (sessionId === undefined || failure === undefined) return
+    const line = failureLine(failure)
+    const notice = who => `${who} could not answer your message: its model call failed (${line}). Tell the user if it matters; do not retry right away.`
+    const member = rt.groupOwners.get(sessionId)
+    if (member) {
+      const text = notice(rt.botOf(member.botId)?.name ?? 'The other Bot')
+      for (const work of Object.values(data().works)) {
+        if (work.sessionId !== sessionId || work.status !== 'queued' || work.resultAt || work.unstartedFailure) continue
+        work.unstartedFailure = true
+        rt.mekFailWork(work.id, 'failed')
+        const asker = rt.workAsker(work.id)
+        if (asker) rt.mekAnswerSender(sessionId, asker, text)
+      }
+      return
+    }
+    const room = rt.roomOf(sessionId)
+    if (room === undefined || rt.sessionOfRoom(room) !== sessionId) return
+    const text = notice(`Group "${room.name}"`)
+    for (const work of Object.values(data().works)) {
+      if (work.room !== room.id || work.id !== work.groupRoot) continue
+      if (work.resultExchangeId || work.resultAt || ['abandoned', 'cancelled', 'superseded'].includes(work.status)) continue
+      const children = Object.values(data().works).filter(child => child.parent === work.id && child.status !== 'superseded')
+      const started = children.some(child => child.status !== 'queued' || child.resultAt)
+      if (!work.dispatching && (children.length === 0 || started)) continue
+      work.unstartedFailure = true
+      work.dispatching = false
+      for (const child of children) {
+        if (child.status !== 'queued' || child.resultAt || child.unstartedFailure) continue
+        child.unstartedFailure = true
+        rt.mekFailWork(child.id, 'failed')
+        const asker = rt.workAsker(child.id)
+        if (asker) rt.mekAnswerSender(child.sessionId ?? sessionId, asker, text)
+      }
+      if (children.length === 0) {
+        work.outcome = 'failed'
+        work.result = text
+        void completeGroup(work).catch(error => rt.warn('mek-bot: group task result failed: %s', error))
+      }
+    }
+  }
   rt.mekAnswerSender = (sessionId, source, text, long) => {
     const work = workOf(source.exchangeId)
     if (!work) return false
@@ -595,6 +640,10 @@ export function install(rt) {
       if (!rt.botOf(member) || !room.members.includes(member)) { work.outcome = 'blocked'; work.result = 'A selected group member is no longer available.'; continue }
       try {
         const created = await groupMember(room, work.from, member, work.instruction, work.id, work.id)
+        // The group's own Session can fail while this member is being prepared.
+        // Stop handing out the rest, and do not send a member already marked failed.
+        if (!work.dispatching) break
+        if (workOf(created.id)?.unstartedFailure) continue
         items.push(created.item)
         await save()
       } catch (error) {
@@ -612,7 +661,7 @@ export function install(rt) {
     delete work.dispatchError
     if (!work.members?.length) { work.outcome = 'blocked'; work.result = 'No group member was selected. Name an available member explicitly.' }
     await save()
-    for (const item of items) await send(item)
+    for (const item of items) if (!workOf(item.id)?.unstartedFailure) await send(item)
     await completeGroup(work)
   }
   rt.mekDelegateGroup = async (sessionId, room, sender, target, instruction, { taskId, title } = {}) => {
@@ -664,7 +713,10 @@ export function install(rt) {
     if (bad) work.outcome = ['cancelled', 'abandoned'].includes(bad.status) ? 'blocked' : bad.status
     const result = children.map(child => `${rt.botOf(child.to)?.name ?? 'Bot'}:\n${child.result ?? 'No result retained.'}`).join('\n\n') || work.result || 'No group result.'
     const returned = children.filter(child => child.status !== 'abandoned')
-    work.report = { status: bad || work.outcome === 'blocked' ? 'blocked' : children.some(needsReport) ? 'needs_report' : 'completed', summary: result.slice(0, TEXT_KEPT),
+    // A relay that failed before any member was called has no child to carry the
+    // failure, so the group result itself is blocked rather than a success.
+    const relayFailed = children.length === 0 && work.outcome === 'failed'
+    work.report = { status: bad || work.outcome === 'blocked' || relayFailed ? 'blocked' : children.some(needsReport) ? 'needs_report' : 'completed', summary: result.slice(0, TEXT_KEPT),
       evidence: returned.map(child => child.report?.evidence ?? 'Structured verification was not returned.').join('\n'), artifacts: returned.flatMap(child => child.report?.artifacts ?? []) }
     const id = randomUUID()
     work.resultExchangeId = id
