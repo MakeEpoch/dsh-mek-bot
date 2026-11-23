@@ -36,8 +36,8 @@ export const failureLine = failure => `${failure.code}${failure.status ? ` ${fai
 // The reply a sender waits for, sent the way a finished turn sends it: the work it was
 // for closes, and the answer goes up to the Bot that asked. `id` is the Session the
 // answer comes from; `source` is the trigger the turn answered.
-export function answerSender(rt, id, source, text, long) {
-  if (rt.mekAnswerSender?.(id, source, text, long)) return
+export function answerSender(rt, id, source, text, long, notice) {
+  if (rt.mekAnswerSender?.(id, source, text, long, notice)) return
   const back = rt.roomOf(source.senderRoomId)?.sessions?.[source.senderSessionId]
   const name = rt.botOf(rt.selfOf(id))?.name ?? 'The other Bot'
   const work = rt.closeWork?.(source.exchangeId, name, text)
@@ -451,7 +451,7 @@ export function install(rt) {
   // reply in its Session there while it is still a member. A sender that asked for it
   // while working on another Bot's request goes on with that work when it reads it.
   // `long`: the text as attachLong sends it, when it went as a file.
-  const tellSender = (id, source, text, long) => answerSender(rt, id, source, text, long)
+  const tellSender = (id, source, text, long, notice) => answerSender(rt, id, source, text, long, notice)
 
   // Runs before a deleted Bot leaves the team. Its Sessions stop with it, and the
   // turn/end that follows is no longer the team's, so their activity and turn records go
@@ -733,6 +733,11 @@ export function install(rt) {
     if (rt.groupOwners.has(info?.id)) void rt.goalSettled?.(rt.roomOf(rt.groupOwners.get(info.id).roomId)).catch(error => rt.warn('ds-bot: goal settle failed: %s', error))
   })
 
+  ctx.on('agent/inbox/claimed', ({ agent, message, turn }) => {
+    const entry = live.get(agent?.id)
+    if (entry && entry.turn === turn && message?.source !== undefined) (entry.claimed ??= []).push(message.source)
+  })
+
   ctx.on('session/event', (session, event) => {
     const id = session?.id
     if (id === undefined) return
@@ -792,6 +797,7 @@ export function install(rt) {
         entry.answers = false
         entry.opened = false
         entry.joined = []
+        entry.claimed = undefined
         entry.later = []
         entry.steeredAt = undefined
         entry.carried = false
@@ -1026,6 +1032,7 @@ export function install(rt) {
         const { lastText, lastCalled } = entry
         const toolCount = entry.toolCount ?? 0
         const suppressedSubagent = entry.suppressedSubagent === true
+        const claimed = entry.claimed
         // A turn stopped for a switch goes on in the next part, which answers instead.
         const switched = entry.switched === true
         entry.turn = undefined
@@ -1038,6 +1045,7 @@ export function install(rt) {
         entry.suppressedSubagent = false
         entry.switched = false
         entry.joined = []
+        entry.claimed = undefined
         entry.since = undefined
         entry.steeredAt = undefined
         entry.tool = undefined
@@ -1063,9 +1071,10 @@ export function install(rt) {
         const reason = event.data?.reason
         const failure = reason?.kind === 'error' && !switched ? turnFailure(reason.error) : undefined
         if (failure !== undefined) noteTurnFailure(id, failure)
+        const notice = failure === undefined ? undefined : { failure, rooms: new Map() }
         // Failed before this turn read its input, so nothing in the branches below
         // has a trigger to answer. The task must not stay queued.
-        if (failure !== undefined && info === undefined) rt.mekFailUnstarted?.(id, failure)
+        const formalFailure = notice !== undefined && info === undefined && rt.mekFailUnstarted?.(id, notice, claimed)
         // A route that is not a model endpoint refuses every generation; the failed
         // Session's own request names it, so it is refused everywhere from now on.
         if (failure?.code === 'HOSTED_ENGINE_ROUTE') {
@@ -1125,7 +1134,7 @@ export function install(rt) {
           if (!expectsReply(source) || answersUser(source)) return
           if (failure !== undefined) {
             // The sender was told a reply comes later; without this it would wait forever.
-            tellSender(id, source, `${name} could not answer your message: its model call failed (${failureLine(failure)}). Tell the user if it matters; do not retry right away.`)
+            tellSender(id, source, `${name} could not answer your message: its model call failed (${failureLine(failure)}). Tell the user if it matters; do not retry right away.`, undefined, notice)
           } else if (reply !== '' || reason?.kind === 'aborted') {
             // A turn stopped before it could answer still owes the sender a line,
             // or it would wait forever for a reply that never comes.
@@ -1176,8 +1185,8 @@ export function install(rt) {
         } else if (!retry && speaksInGroup(id, info)) {
           // A turn that failed before it took any input (DSH can turn it down before its
           // first step) never names its call, so the call waiting on this Session fails.
-          const inRound = failure !== undefined && info === undefined && rt.failRoomTurn?.(id, failure) === true
-          if (failure !== undefined) { if (!inRound) void rt.lateRoomFailure?.(id, info ?? {}, failure) }
+          const inRound = !formalFailure && failure !== undefined && info === undefined && rt.failRoomTurn?.(id, failure) === true
+          if (failure !== undefined) { if (!inRound && !formalFailure) void rt.lateRoomFailure?.(id, info ?? {}, failure) }
           else if (reason?.kind !== 'aborted') void rt.lateRoomReply?.(id, info ?? {}, groupReply(), { shown })
         } else if (!retry && info !== undefined) {
           finish(info, replyText())

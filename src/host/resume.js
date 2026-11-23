@@ -277,8 +277,11 @@ export function install(rt) {
 
   // Where a queued note goes now: its Session if it still is one, else the
   // current Session of its Bot, or of its group when the message went to one.
-  const sessionFor = (sessionId, args) => (rt.isBotSession(sessionId) ? sessionId
-    : args?.roomId === undefined ? rt.chatOf(args?.toId) : rt.roomOf(args.roomId)?.sessions?.[args.toId])
+  const sessionFor = (sessionId, args) => {
+    if (rt.isBotSession(sessionId)) return sessionId
+    const roomId = rt.pastOwners.get(sessionId)?.roomId ?? args?.roomId
+    return roomId === undefined ? rt.chatOf(args?.toId) : rt.roomOf(roomId)?.sessions?.[args.toId]
+  }
 
   // A hard stop keeps the inbox, which the Session runs once it wakes; only what DSH
   // cancelled is sent again. The notes stay queued until a turn takes the messages
@@ -291,9 +294,13 @@ export function install(rt) {
     const target = sessionFor(sessionId, fresh[0].args)
     const agent = await rt.resolveAgent(target)
     const waiting = new Set([...(agent.inbox?.nextStep ?? []), ...(agent.inbox?.nextTurn ?? [])].map(message => message.source?.exchangeId))
+    // A part switch may have delivered and consumed a message before its old
+    // in-flight receipt could be cleared. Its original exchange is in the new log.
+    const history = target === sessionId ? undefined : await logOf(target)
+    const admitted = new Set(history?.filter(event => event.type === 'user/message').map(event => event.data?.source?.exchangeId))
     for (const { args } of fresh) {
       if (waiting.has(args.exchangeId)) continue
-      if (taken?.has(args.exchangeId) === true) {
+      if (admitted.has(args.exchangeId) || taken?.has(args.exchangeId) === true) {
         forgetQueued(args.exchangeId)
         continue
       }
@@ -376,7 +383,7 @@ export function install(rt) {
     if (reason.kind === 'error') {
       const failure = turnFailure(reason.error)
       rt.mekFailWork?.(workId, 'failed')
-      answerSender(rt, sessionId, asker, `${name} could not answer your message: its model call failed (${failureLine(failure)}). Tell the user if it matters; do not retry right away.`)
+      answerSender(rt, sessionId, asker, `${name} could not answer your message: its model call failed (${failureLine(failure)}). Tell the user if it matters; do not retry right away.`, undefined, { failure, rooms: new Map() })
       return
     }
     if (reason.kind === 'aborted') {

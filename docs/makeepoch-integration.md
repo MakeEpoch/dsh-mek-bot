@@ -101,6 +101,8 @@ Group administrator coordination is a scoped system section rebuilt from the cur
 
 Tracked group progress and results must pass through the group's durable Session as quiet posts; updating the bounded model log alone does not publish a native chat message. Already logged task posts carry their log sequence to avoid duplicate model-context entries, and the native pane recognizes them as visible member posts. Their text does not select speakers or dispatch another assignment.
 
+Model changes use the selected route from DSH's pre-step hook to price the old surface before DSH prepares the request. If the destination needs a fresh part, the old queue retains original messages until forwarding is durable. Task failures use the existing typed group failure event, shared across assignments settled by that turn. The sender's coordination receipt stays in the task record and its delivery to the original delegator.
+
 
 ## Conversation to-dos (2026-11-03)
 

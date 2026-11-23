@@ -73,7 +73,7 @@ async function host(t, home, team = seed()) {
   let closed = false
   const stop = async () => { if (closed) return; await delay(30); closed = true; await ctx.dispose() }
   t.after(async () => { await stop(); if (temporary) rmSync(home, { recursive: true, force: true }) })
-  return { ctx, rt, home, begin, take, end, tool, call, agentOf, snapshot, stop }
+  return { ctx, rt, home, begin, take, end, tool, call, agentOf, snapshot, stop, turns, emit }
 }
 const settled = async check => {
   for (let n = 0; n < 200; n++) { if (check()) return; await delay(5) }
@@ -1549,6 +1549,41 @@ test('a member that fails before it reads the request sends the error back, and 
   assert.equal(task(h).status, 'blocked')
   assert.notEqual(task(h).work.find(work => work.to === 'b').status, 'queued')
   assert.ok(!task(h).work.some(work => work.status === 'running' || work.status === 'queued'))
+})
+
+test('one failed group turn publishes one error, keeps its task receipt, and leaves the next queued assignment alone', async t => {
+  const team = reviewRoom()
+  team.rooms.r.admin = 'a'
+  team.rooms.r.sessions.a = 'ga'
+  const h = await host(t, undefined, team)
+  const publish = h.rt.appendGroupTaskFailure
+  const failures = []
+  h.rt.appendGroupTaskFailure = async (...args) => { failures.push(args); await publish(...args) }
+  h.begin('ga')
+  await h.tool('ga', 'message_bot', { to: 'Writer', message: 'Check the first fixture.' })
+  h.end('ga')
+  h.begin('ga')
+  await h.tool('ga', 'message_bot', { to: 'Writer', message: 'Check the separate second fixture.' })
+  h.end('ga')
+  const [first, second] = h.agentOf('gb').calls
+  assert.notEqual(first.source.exchangeId, second.source.exchangeId)
+  h.turns.set('gb', 1)
+  h.emit('gb', 'turn/start', { turn: 1 })
+  h.ctx.emit('agent/inbox/claimed', { agent: h.agentOf('gb'), message: first, turn: 1 })
+  h.end('gb', undefined, modelError('MODEL_SWITCH_CONTEXT_TOO_LARGE', 'fixture requires a larger window'))
+  const work = h.rt.state.mekTasks.works
+  await settled(() => work[first.source.exchangeId].groupFailureRoom === 'r')
+  assert.equal(work[first.source.exchangeId].status, 'failed')
+  assert.match(work[first.source.exchangeId].result, /MODEL_SWITCH_CONTEXT_TOO_LARGE/)
+  assert.equal(work[second.source.exchangeId].status, 'queued')
+  assert.equal(failures.length, 1)
+  const queuedPosts = () => h.agentOf('r').calls.filter(message => message.source.role === 'post')
+  assert.equal(queuedPosts().length, 1)
+  assert.equal(queuedPosts()[0].source.failed.code, 'MODEL_SWITCH_CONTEXT_TOO_LARGE')
+  assert.doesNotMatch(contentOf(queuedPosts()[0]), /Tell the user|do not retry/)
+  work[first.source.exchangeId].resultAt = Date.now() - 3 * 60_000
+  await h.rt.mekRecoverTasks()
+  assert.equal(queuedPosts().length, 1, 'the stall scan keeps the task open without repeating its error in the group')
 })
 
 test('a group session that fails before any member is called returns a blocked report to the sender', async t => {

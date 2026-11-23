@@ -405,24 +405,31 @@ export function install(rt) {
   // A turn that failed before it read its input. The sender was already told the
   // work was handed on; without this the task stays queued. Started work is left
   // to finish. The notice reuses the same failure line a finished turn sends.
-  rt.mekFailUnstarted = (sessionId, failure) => {
-    if (sessionId === undefined || failure === undefined) return
+  rt.mekFailUnstarted = (sessionId, report, claimed) => {
+    const { failure } = report
     const line = failureLine(failure)
     const notice = who => `${who} could not answer your message: its model call failed (${line}). Tell the user if it matters; do not retry right away.`
     const member = rt.groupOwners.get(sessionId)
     if (member) {
       const text = notice(rt.botOf(member.botId)?.name ?? 'The other Bot')
+      const exchanges = claimed === undefined ? undefined
+        : new Set(claimed.filter(source => source.kind === SOURCE_KIND && source.role === 'request').map(source => source.exchangeId))
+      let handled = false
       for (const work of Object.values(data().works)) {
-        if (work.sessionId !== sessionId || work.status !== 'queued' || work.resultAt || work.unstartedFailure) continue
+        if (work.status !== 'queued' || work.resultAt || work.unstartedFailure
+          || (exchanges === undefined ? work.sessionId !== sessionId : work.to !== member.botId || !exchanges.has(work.id))) continue
         work.unstartedFailure = true
+        rt.forgetDelivery?.(work.id)
         rt.mekFailWork(work.id, 'failed')
         const asker = rt.workAsker(work.id)
-        if (asker) rt.mekAnswerSender(sessionId, asker, text)
+        if (asker) handled = rt.mekAnswerSender(sessionId, asker, text, undefined, report) || handled
       }
-      return
+      return handled
     }
     const room = rt.roomOf(sessionId)
     if (room === undefined || rt.sessionOfRoom(room) !== sessionId) return
+    // The group's own failed turn already has a native DSH error row.
+    report.rooms.set(room.id, Promise.resolve())
     const text = notice(`Group "${room.name}"`)
     for (const work of Object.values(data().works)) {
       if (work.room !== room.id || work.id !== work.groupRoot) continue
@@ -431,13 +438,15 @@ export function install(rt) {
       const started = children.some(child => child.status !== 'queued' || child.resultAt)
       if (!work.dispatching && (children.length === 0 || started)) continue
       work.unstartedFailure = true
+      work.groupFailureRoom = room.id
       work.dispatching = false
       for (const child of children) {
         if (child.status !== 'queued' || child.resultAt || child.unstartedFailure) continue
         child.unstartedFailure = true
+        rt.forgetDelivery?.(child.id)
         rt.mekFailWork(child.id, 'failed')
         const asker = rt.workAsker(child.id)
-        if (asker) rt.mekAnswerSender(child.sessionId ?? sessionId, asker, text)
+        if (asker) rt.mekAnswerSender(child.sessionId ?? sessionId, asker, text, undefined, report)
       }
       if (children.length === 0) {
         work.outcome = 'failed'
@@ -446,7 +455,24 @@ export function install(rt) {
       }
     }
   }
-  rt.mekAnswerSender = (sessionId, source, text, long) => {
+  async function publishGroupResult(work, sessionId, text, notice) {
+    if (notice === undefined) {
+      if (work.room) await rt.appendGroupTaskResult?.(work.room, work.to, groupResult(text, work.report))
+      return
+    }
+    const room = work.room ?? rt.groupOwners.get(sessionId)?.roomId
+    if (room === undefined) return
+    if (!notice.rooms.has(room)) notice.rooms.set(room, rt.appendGroupTaskFailure(room, work.to, notice.failure))
+    try {
+      await notice.rooms.get(room)
+      work.groupFailureRoom = room
+      await save()
+    } catch (error) {
+      rt.warn('mek-bot: group task failure could not be shown: %s', error)
+    }
+  }
+
+  rt.mekAnswerSender = (sessionId, source, text, long, notice) => {
     const work = workOf(source.exchangeId)
     if (!work) return false
     if (work.status === 'abandoned') {
@@ -463,7 +489,7 @@ export function install(rt) {
     if (plannedReturn && !work.parent) source = { ...source, senderSessionId: plannedReturn.botId, senderRoomId: plannedReturn.roomId }
     if (final(rootOf(work.rootId)) || ['cancelled', 'superseded'].includes(work.status) || (work.resultExchangeId && !own(state.works, work.id))) return true
     if (work.groupRoot && work.parent === work.groupRoot) {
-      void completeGroupMember(work, sessionId, text).catch(error => rt.warn('mek-bot: group task result failed: %s', error))
+      void completeGroupMember(work, sessionId, text, notice).catch(error => rt.warn('mek-bot: group task result failed: %s', error))
       return true
     }
     void (async () => {
@@ -493,7 +519,7 @@ export function install(rt) {
       item.args.text = `${long?.text ?? text}${structured}${reviewAdvice(work)}`
       work.reviewNoticeId = id
       await save()
-      if (work.room) await rt.appendGroupTaskResult?.(work.room, work.to, groupResult(text, work.report))
+      await publishGroupResult(work, sessionId, text, notice)
       await send(item)
       announce('result', rootOf(work.rootId), work)
     })().catch(error => rt.warn('mek-bot: could not retain task result: %s', error))
@@ -502,6 +528,7 @@ export function install(rt) {
 
   rt.mekWorkDeliveryAllowed = args => workOf(args.work)?.status !== 'abandoned'
     && workOf(args.exchangeId)?.status !== 'abandoned'
+    && workOf(args.exchangeId)?.unstartedFailure !== true
     && (args.abandoned === true || workOf(args.replyTo)?.status !== 'abandoned')
   const deliver = rt.deliver
   rt.deliver = async args => {
@@ -692,7 +719,7 @@ export function install(rt) {
     announce('created', root, workOf(id))
     return `Delegated group work ${id}. Its result returns here before your own result returns to the task owner.`
   }
-  async function completeGroupMember(work, sessionId, text) {
+  async function completeGroupMember(work, sessionId, text, notice) {
     if (work.resultAt || ['cancelled', 'superseded'].includes(work.status) || final(rootOf(work.rootId))) return
     if (!work.report && /finished (without a reply|and wrote nothing more)\./.test(text)) work.outcome = 'blocked'
     const result = work.report ? `${text}\n\n[Structured result]\n${JSON.stringify(work.report)}` : text
@@ -700,7 +727,7 @@ export function install(rt) {
     rt.closeWork(work.id, rt.botOf(work.to)?.name ?? 'Bot', result)
     rt.takenWork(work.parent, work.id)
     await save()
-    await rt.appendGroupTaskResult?.(work.room, work.to, groupResult(text, work.report))
+    await publishGroupResult(work, sessionId, text, notice)
     announce('result', rootOf(work.rootId), work)
     await completeGroup(workOf(work.groupRoot))
   }
@@ -711,6 +738,10 @@ export function install(rt) {
     const root = rootOf(work.id)
     const bad = children.find(child => ['failed', 'blocked', 'unknown', 'cancelled', 'abandoned'].includes(child.status))
     if (bad) work.outcome = ['cancelled', 'abandoned'].includes(bad.status) ? 'blocked' : bad.status
+    if (bad?.groupFailureRoom !== undefined && bad.groupFailureRoom === work.room
+      && children.every(child => !['failed', 'blocked', 'unknown', 'cancelled', 'abandoned'].includes(child.status) || child.groupFailureRoom === work.room)) {
+      work.groupFailureRoom = work.room
+    }
     const result = children.map(child => `${rt.botOf(child.to)?.name ?? 'Bot'}:\n${child.result ?? 'No result retained.'}`).join('\n\n') || work.result || 'No group result.'
     const returned = children.filter(child => child.status !== 'abandoned')
     // A relay that failed before any member was called has no child to carry the
@@ -1379,7 +1410,10 @@ export function install(rt) {
       for (const roomId of rooms) {
         if (root.stallNotice.rooms.includes(roomId)) continue
         root.stallNotice.rooms.push(roomId)
-        await rt.appendGroupTaskResult?.(roomId, root.owner, `${summary}\nThe group administrator owns this task; this notice does not call any member or start new work.`)
+        const unseen = crossed.filter(item => item.kind !== 'failed' || workOf(item.id)?.groupFailureRoom !== roomId)
+        if (unseen.length === 0 && !leaseText) continue
+        const detail = unseen.length > 0 ? `: ${blockerText(unseen)}` : ''
+        await rt.appendGroupTaskResult?.(roomId, root.owner, `Task ${root.id} has had no closable state for ${Math.floor(age / 60000)} min${detail}.${leaseText}\nThe group administrator owns this task; this notice does not call any member or start new work.`)
       }
       try {
         await rt.mekRecordActivity?.({ botId: root.owner, taskId: root.id, status: 'blocked', type: 'stall', summary })

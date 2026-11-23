@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { createRuntime } from '../index.js'
+import { SOURCE_KIND } from '../src/host/constants.js'
 import { fakeContext } from './fake-ctx.js'
 
 let rt
@@ -156,8 +157,8 @@ async function start({ fail = {}, services = {}, home: reuse, state: seed = TEAM
     method: 'POST', body: JSON.stringify({ endpoint, payload }),
   }))).json()
   const tool = (name, args, sessionId) => rt.teamTools.find(d => d.name === name).execute(args, { agent: agentOf(sessionId), name, callId: 'c1' })
-  const preStep = (sessionId, messages = [], step = 1) => ctx.listeners.get('agent/pre-step').at(-1)(
-    { agent: agentOf(sessionId), messages, step, signal: AbortSignal.timeout(60_000) }, async () => 'next')
+  const preStep = (sessionId, messages = [], step = 1, modelSelection) => ctx.listeners.get('agent/pre-step').at(-1)(
+    { agent: agentOf(sessionId), messages, step, modelSelection, signal: AbortSignal.timeout(60_000) }, async () => 'next')
   // A Session event as DSH emits it, on the Session the test's Agent holds.
   let seq = 0
   const emit = (sessionId, type, data) => {
@@ -415,6 +416,94 @@ const GROUP_TEAM = {
   ...TEAM,
   rooms: { r1: { id: 'r1', name: 'Ops', members: ['a', 'b'], mode: 'admin', admin: 'a', named: true, sessions: { b: 'gb' }, log: [], seq: 0, seen: {} } },
 }
+
+const oldRoute = { provider: 'mock', model: 'large' }
+const newRoute = { provider: 'mock', model: 'small', reasoningEffort: 'low' }
+function changeRoute(host, sessionId, tokens) {
+  const session = host.agentOf(sessionId).session
+  session.requestHeader = () => ({ config: { ...oldRoute, maxTokens: 60_000 }, adapterDefaults: { maxTokens: true } })
+  session.eventAt = seq => ({ type: seq === 0 ? 'system/message' : 'user/message' })
+  host.ctx.llm.resolveModelInfo = async (_provider, model) => ({
+    context: { contextWindow: model === 'small' ? 50_000 : 300_000 }, defaultMaxTokens: 4_000,
+  })
+  host.ctx.get('tokenMeter').measure = (_session, header) => ({
+    totalTokens: tokens, nodes: [{ seq: 0, tokens: 3_000 }, { seq: 1, tokens: tokens - 3_000 }],
+    ...(header ? { pricedRoute: header.config } : {}),
+  })
+}
+
+test('a fitting model change stays in the current part and uses the new output reservation', async t => {
+  const host = await start({ services: { tokenMeter: {} } })
+  t.after(host.stop)
+  changeRoute(host, 'b', 20_000)
+  const meter = host.ctx.get('tokenMeter')
+  const measure = meter.measure
+  const priced = []
+  meter.measure = (session, header) => {
+    if (header) priced.push(header.config)
+    return measure(session, header)
+  }
+  assert.equal(await host.preStep('b', [said('m', 'Keep going')], 1, newRoute), 'next')
+  assert.deepEqual(priced, [newRoute])
+  assert.deepEqual(host.created, [])
+})
+
+test('a group member switches to a fresh part with its exact new model and the same assignment', async t => {
+  const host = await start({ state: GROUP_TEAM, services: { tokenMeter: { estimateMessage: message => text(message).length } } })
+  t.after(host.stop)
+  changeRoute(host, 'gb', 42_000)
+  const picked = []
+  host.ctx.sessionController.selectModel = async ({ sessionId, ...route }) => { picked.push([sessionId, route]) }
+  const pending = { ...said('work-message', 'x'.repeat(5_000), 'assignment-1'), source: { kind: SOURCE_KIND, role: 'request', exchangeId: 'assignment-1' } }
+  assert.deepEqual(await host.preStep('gb', [pending], 1, newRoute), { kind: 'reject' })
+  assert.deepEqual(host.agentOf('gb').inbox.nextTurn, [pending], 'claimed input is durable until the new part flushes')
+  await until(() => host.archived.some(([sessionId]) => sessionId === 'gb') && Object.keys(host.state().switching).length === 0)
+  assert.deepEqual(picked, [['s1', newRoute]])
+  const room = host.state().rooms.r1
+  assert.equal(room.sessions.b, 's1')
+  assert.equal(room.segments.b[0].sessionId, 'gb')
+  const sent = host.agentOf('s1').calls.filter(([kind]) => kind === 'followup').map(([, message]) => message)
+  assert.match(text(sent[0]), /Keep existing assignments/)
+  assert.deepEqual(sent.slice(1), [pending])
+  assert.deepEqual(host.agentOf('gb').inbox.nextTurn, [])
+})
+
+test('input that cannot fit a fresh part fails once without creating a session', async t => {
+  const host = await start({ services: { tokenMeter: { estimateMessage: message => text(message).length } } })
+  t.after(host.stop)
+  changeRoute(host, 'b', 42_000)
+  await assert.rejects(host.preStep('b', [said('m', 'x'.repeat(55_000))], 1, newRoute), {
+    code: 'MODEL_SWITCH_CONTEXT_TOO_LARGE',
+  })
+  assert.deepEqual(host.created, [])
+  assert.equal(host.state().bots.b.sessionId, 'b')
+})
+
+test('a failed model handoff lets the waiting input report the error without looping', async t => {
+  const host = await start({ fail: { create: new Error('fixture cannot open a new session') }, services: { tokenMeter: {} } })
+  t.after(host.stop)
+  changeRoute(host, 'b', 80_000)
+  const pending = said('m', 'Keep this input', 'work-id')
+  assert.deepEqual(await host.preStep('b', [pending], 1, newRoute), { kind: 'reject' })
+  await until(() => host.agentOf('b').calls.some(([kind]) => kind === 'send'))
+  assert.deepEqual(host.agentOf('b').inbox.nextTurn, [pending])
+  await assert.rejects(host.preStep('b', [pending], 1, newRoute), { code: 'MODEL_SWITCH_HANDOFF_FAILED' })
+  assert.equal(host.agentOf('b').calls.filter(([kind]) => kind === 'send').length, 1)
+})
+
+test('restart does not forward a saved assignment the fresh part has already admitted', async t => {
+  const host = await start({ state: { ...TEAM, switching: { old: { botId: 'b' } }, bots: {
+    ...TEAM.bots, b: { ...TEAM.bots.b, segments: [{ sessionId: 'old', endedAt: 100 }] },
+  } } })
+  t.after(host.stop)
+  const input = said('assignment-message', 'Already taken', 'assignment-id')
+  host.agentOf('old').inbox.nextTurn.push(input)
+  host.rt.eventsBackwards = async function* () { yield { type: 'user/message', data: input } }
+  await host.rt.heldBack()
+  assert.deepEqual(host.agentOf('b').calls, [])
+  assert.deepEqual(host.agentOf('old').inbox.nextTurn, [])
+  assert.deepEqual(host.archived, [['old', { stopActivity: true }]])
+})
 const cutOff = (host, sessionId, turn) => {
   host.emit(sessionId, 'turn/start', { turn })
   host.emit(sessionId, 'turn/end', { turn, reason: { kind: 'max-tokens' } })

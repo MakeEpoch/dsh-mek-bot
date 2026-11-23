@@ -1230,6 +1230,12 @@ export function install(rt) {
     await rt.save()
     await postToRoom(room, member, text, { quiet: true, taskPost: true, logged })
   }
+  rt.appendGroupTaskFailure = async (roomId, botId, failure) => {
+    const room = rt.roomOf(roomId)
+    const member = rt.botOf(botId)
+    if (!room || !member || !room.members.includes(botId)) throw new Error('Group task member is unavailable')
+    await postToRoom(room, member, '', { quiet: true, failed: failure })
+  }
 
   // A Bot's message into the group's own Session, which relays it as a new round.
   // While a round runs, the post goes into the group's log and that round's replies at
