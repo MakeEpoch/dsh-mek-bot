@@ -567,8 +567,8 @@ test('formal group dispatches deliver only new group history to the same member'
   const second = contentOf(h.agentOf('gc').calls[1])
   assert.ok(second.includes(next))
   assert.ok(!second.includes(previous))
-  assert.deepEqual(room.log.map(line => line.text), [previous, next])
-  assert.equal(room.seen.c, 2)
+  assert.deepEqual(room.log.map(line => line.text), [previous, '@Tester\nReview the original test evidence.', next, '@Tester\nReview the updated test evidence.'])
+  assert.equal(room.seen.c, 3, 'only the delivered context moves the read position')
 })
 
 test('a failed group dispatch keeps its context snapshot for recovery', async t => {
@@ -847,8 +847,8 @@ test('tracked group step mentions do not launch an unowned relay', async t => {
   h.end('a'); h.take('gb')
   await h.rt.roomStepText('gb', h.rt.live.get('gb').info, '@Tester will review later; I am still working.', true)
   assert.equal(h.agentOf('gc').calls.length, 0)
-  assert.equal(h.agentOf('r').calls.length, 1, 'the group Session retains a passive progress post')
-  assert.equal(h.agentOf('r').calls[0].source.quiet, true, 'publishing progress must not dispatch mentioned members')
+  assert.equal(h.agentOf('r').calls.length, 2, 'the group Session retains the assignment and passive progress')
+  assert.equal(h.agentOf('r').calls[1].source.quiet, true, 'publishing progress must not dispatch mentioned members')
   assert.equal(task(h).work.filter(work => work.to).length, 1)
 })
 
@@ -1419,7 +1419,7 @@ test('finish and accept refusals name the exact record that is still unsettled',
     new RegExp(`work ${child} \\(review\\)`))
 })
 
-test('a stalled task reports to its group and team activity without messaging the owner chat', async t => {
+test('a stalled task appears in team activity while the group and owner chats stay quiet', async t => {
   const team = seed()
   team.rooms.r = { id: 'r', name: 'Review group', named: true, members: ['a', 'b'], admin: 'a', mode: 'admin', sessions: { a: 'ga' }, segments: {}, log: [], seq: 0, seen: {} }
   const h = await host(t, undefined, team)
@@ -1438,12 +1438,11 @@ test('a stalled task reports to its group and team activity without messaging th
   // The owner's chat is the user's dialog: no durable stall text is delivered there.
   assert.equal(h.agentOf('a').calls.length, before, 'the owner conversation stays quiet')
   const groupLine = h.rt.state.rooms.r.log.find(line => /no closable state/.test(line.text))
-  assert.ok(groupLine, 'the group gets its own notice')
-  assert.match(groupLine.text, /close_browser_wait/)
-  assert.match(groupLine.text, /Stale resource leases/)
-  assert.match(groupLine.text, /never released/)
+  assert.equal(groupLine, undefined, 'maintenance stays outside the group transcript')
   assert.equal(activities.length, 1)
   assert.equal(activities[0].type, 'stall')
+  assert.match(activities[0].summary, /close_browser_wait/)
+  assert.match(activities[0].summary, /Stale resource leases/)
   assert.equal(h.rt.state.mekTasks.roots[root.id].stallNotice.level, 2)
   await h.rt.mekRecoverTasks()
   assert.equal(activities.length, 1, 'an unchanged stall is not reported again')
@@ -1572,18 +1571,80 @@ test('one failed group turn publishes one error, keeps its task receipt, and lea
   h.ctx.emit('agent/inbox/claimed', { agent: h.agentOf('gb'), message: first, turn: 1 })
   h.end('gb', undefined, modelError('MODEL_SWITCH_CONTEXT_TOO_LARGE', 'fixture requires a larger window'))
   const work = h.rt.state.mekTasks.works
-  await settled(() => work[first.source.exchangeId].groupFailureRoom === 'r')
+  const queuedPosts = () => h.agentOf('r').calls.filter(message => message.source.role === 'post' && message.source.failed)
+  await settled(() => queuedPosts().length === 1)
   assert.equal(work[first.source.exchangeId].status, 'failed')
   assert.match(work[first.source.exchangeId].result, /MODEL_SWITCH_CONTEXT_TOO_LARGE/)
   assert.equal(work[second.source.exchangeId].status, 'queued')
   assert.equal(failures.length, 1)
-  const queuedPosts = () => h.agentOf('r').calls.filter(message => message.source.role === 'post')
   assert.equal(queuedPosts().length, 1)
   assert.equal(queuedPosts()[0].source.failed.code, 'MODEL_SWITCH_CONTEXT_TOO_LARGE')
   assert.doesNotMatch(contentOf(queuedPosts()[0]), /Tell the user|do not retry/)
   work[first.source.exchangeId].resultAt = Date.now() - 3 * 60_000
   await h.rt.mekRecoverTasks()
   assert.equal(queuedPosts().length, 1, 'the stall scan keeps the task open without repeating its error in the group')
+})
+
+test('the owner hands a private request to the group and reviews its result in the original chat', async t => {
+  const h = await host(t, undefined, groupTeam())
+  h.begin('a', { content: text('Private conversation text that stays with the owner'), source: { kind: 'user' } })
+  await h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Check the public sample.', report_back: true })
+  h.end('a')
+  const posts = () => h.agentOf('r').calls.filter(message => message.source?.role === 'post')
+  assert.equal(posts().length, 1)
+  assert.match(contentOf(posts()[0]), /@Writer Check the public sample/)
+  assert.ok(posts()[0].source.quiet)
+  assert.deepEqual(h.agentOf('a').calls, [], 'dispatch does not wake the owner for review')
+
+  h.take('gb')
+  const step = (body, id) => h.emit('gb', 'assistant/message', { message: { content: [
+    ...text(body), { type: 'tool-call', toolCallId: id, toolName: 'read' },
+  ] } })
+  step('收到', 'c1')
+  step('The public sample reproduces the issue.', 'c2')
+  step('The public sample reproduces the issue.', 'c3')
+  await settled(() => posts().length >= 2)
+  assert.equal(posts().length, 2)
+  assert.match(contentOf(posts()[1]), /reproduces the issue/)
+  assert.equal(h.agentOf('a').calls.length, 0, 'progress does not wake the owner or return the result')
+  await h.tool('gb', 'report_bot_task', { status: 'completed', summary: 'The public sample is verified.', evidence: 'Detailed check for the owner.' })
+  h.end('gb', '[PASS]')
+  await settled(() => h.agentOf('a').calls.length === 1)
+  assert.equal(posts().length, 3)
+  assert.match(contentOf(posts()[2]), /public sample is verified/)
+  assert.doesNotMatch(posts().map(contentOf).join('\n'), /Private conversation|\[PASS\]|Detailed check/)
+  const receipt = contentOf(h.agentOf('a').calls[0])
+  assert.match(receipt, /Detailed check for the owner/)
+  assert.match(receipt, /reproduces the issue/)
+  assert.equal(task(h).status, 'review')
+  h.take('a')
+  await h.tool('a', 'finish_bot_task', { task_id: task(h).id, summary: 'Reviewed the sample and evidence.' })
+  assert.equal(task(h).status, 'completed')
+})
+
+test('initial group dispatch and recovery share one admitted worker assignment', async t => {
+  const h = await host(t, undefined, groupTeam())
+  const prepare = h.rt.prepareGroupMemberTask
+  let preparing = 0
+  let release
+  const barrier = new Promise(resolve => { release = resolve })
+  h.rt.prepareGroupMemberTask = async (...args) => {
+    preparing++
+    await barrier
+    return prepare(...args)
+  }
+  h.begin('a')
+  const dispatch = h.tool('a', 'post_to_group', { group: 'Review group', message: '@Writer Verify the sample.', report_back: true })
+  try {
+    await settled(() => preparing === 1)
+    await h.rt.mekRecoverTasks()
+  } finally {
+    release()
+    await dispatch
+  }
+  assert.equal(preparing, 1)
+  assert.equal(task(h).work.filter(work => work.to === 'b').length, 1)
+  assert.equal(h.agentOf('gb').calls.filter(message => message.source.role === 'request').length, 1)
 })
 
 test('a group session that fails before any member is called returns a blocked report to the sender', async t => {

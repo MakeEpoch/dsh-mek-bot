@@ -6,6 +6,7 @@ import { registerTeamTool } from './team-registration.js'
 import { output } from './tools.js'
 import { textOf } from './text.js'
 import { failureLine } from './turns.js'
+import { isGroupAcknowledgement } from '../shared/group-task-text.js'
 import { SOURCE_KIND, TEXT_KEPT } from './constants.js'
 
 const final = task => ['completed', 'cancelled', 'archived'].includes(task?.status)
@@ -47,16 +48,21 @@ const fallbackTitle = (...values) => values
   .map(value => typeof value === 'string' ? value.trim().split(/\r?\n|\s+Current runtime context\./i, 1)[0] : '')
   .find(line => line && !groupContext(line) && !/^Current runtime context\./i.test(line))
   ?.trim().replace(/\s+/g, ' ').slice(0, 120)
-const groupResult = (text, report) => [text, report?.summary && !text?.includes(report.summary) ? report.summary : ''].filter(Boolean).join('\n\n')
+function groupResult(text, report) {
+  const closing = isGroupAcknowledgement(text) ? '' : text.trim()
+  const summary = report?.summary?.trim() ?? ''
+  if (summary && (!closing || closing.length > TEXT_KEPT)) return summary
+  return !summary || closing.includes(summary) ? closing : `${closing}\n\n${summary}`
+}
 const rules = `## Task ownership (takes precedence over the ordinary team messaging rules)
-- The Bot the user contacted owns the task, even when it delegates. Keep the entire conversation, questions, decisions, and final delivery in that Bot's chat. Never tell the user to visit a worker's chat. Direct user conversations with other Bots remain independent.
+- The Bot the user contacted owns the task. Keep user questions, decisions and final delivery in that conversation. When the user wants the team to collaborate in a group, use post_to_group with report_back: true in the appropriate group. Send a brief the group can use on its own. Share only the information needed for the task.
 - message_bot always returns the work to its sender here. Give a self-contained goal, relevant context, constraints, and acceptance criteria. Delegate each task once. End your turn while workers run; results wake you up automatically. Use post_to_group with report_back: true for formal group assignments. Ordinary posts are announcements.
 - A worker needing information or a decision calls ask_user: for delegated work it asks the task owner, not the user. This suspends that work rather than completing it. Never send a new message_bot request to an ancestor to ask a question.
 - When a task decision arrives, inspect its task and evidence with list_tasks/read_task. Decide routine implementation details using the user's instructions, existing conventions and available evidence. Answer with answer_bot_question. Do not forward routine choices to the user. Ask the user in your own chat only for essential missing information, unresolved intent, or authorization that only the user can give. After their answer, answer_bot_question to resume the same worker task.
 - A worker's result is evidence to review, not automatic success. Check the goal and acceptance criteria; request concrete corrections or missing checks with revise_bot_task. This continues the same task. Do not thank a worker or echo status messages. You may send follow-up work when it is necessary to finish the goal.
 - Record a checked formal step with accept_bot_work before starting its successor; this accepts only that assignment, not the whole main task. For to-do children use control_todo accept instead. When the entire goal is satisfied, finish_bot_task records final acceptance. Saying "accepted" in chat alone does not change the task state. A user approval continues the intended task; do not create a task titled with their approval text.
 - A needs_report result has returned but lacks a structured completed report. Use read_task and supplement_bot_report with the exact returned work id to record a summary and verified evidence from the retained result without dispatching work. If the result lacks evidence, leave it pending until the evidence can be checked. Missing documentation alone is not a reason to cancel. A review task awaits your acceptance, not further worker execution. Cancel only work the user has abandoned or superseded.
-- Workers should call report_bot_task with a concrete outcome, verification evidence and artifacts before ending delegated work. Use blocked or failed when the task cannot be completed. Ask a question with ask_user when a decision could unblock it.
+- Workers should share new findings, deliverables or concrete blockers during group work. Write a short outcome for the group in report_bot_task and keep the full verification evidence and artifacts in that report. Ask a question with ask_user when a decision could unblock it. Assign work when its prerequisites are ready.
 - In a group, message_bot is a formal delegation, including the administrator's first dispatch. It keeps a persistent main task and returns to the delegator in this group. Use message_bot for nested implementation/review work; plain @mentions only display text in a tracked turn. Report back to an ancestor instead of delegating back to it. The ancestor reviews your returned result and can revise the same assignment for another pass.
 - Use list_tasks to recover pending work and decisions after another user message or a restart. Use read_task for a full result when its preview is cut. Do not copy unrelated private conversations into a task.
 - Give substantive work a concise outcome-based title in the user's language. For plan_todo use title; for message_bot use task_title. "Remember to delegate", approvals, progress questions and other follow-ups are not task titles. When continuing an existing task, read list_tasks/read_task and pass its exact task_id to message_bot; retain its title unless its actual goal changes. Never infer a task link solely because it is the only task in this group.
@@ -265,8 +271,9 @@ export function install(rt) {
   let stopped = false
   let recovering = false
   const sending = new Set()
+  const dispatchingGroups = new Set()
   async function send(item) {
-    if (stopped || sending.has(item.id) || final(rootOf(item.rootId)) || item.status === 'taken' || !item.args) return
+    if (stopped || sending.has(item.id) || final(rootOf(item.rootId)) || item.status !== 'pending' || !item.args) return
     sending.add(item.id)
     try {
       await rt.mekPrepareTodoDelivery?.(item.rootId, item.args)
@@ -428,6 +435,7 @@ export function install(rt) {
     }
     const room = rt.roomOf(sessionId)
     if (room === undefined || rt.sessionOfRoom(room) !== sessionId) return
+    if (claimed?.length && claimed.every(source => source.kind === SOURCE_KIND && source.role === 'post' && source.quiet === true)) return
     // The group's own failed turn already has a native DSH error row.
     report.rooms.set(room.id, Promise.resolve())
     const text = notice(`Group "${room.name}"`)
@@ -438,7 +446,6 @@ export function install(rt) {
       const started = children.some(child => child.status !== 'queued' || child.resultAt)
       if (!work.dispatching && (children.length === 0 || started)) continue
       work.unstartedFailure = true
-      work.groupFailureRoom = room.id
       work.dispatching = false
       for (const child of children) {
         if (child.status !== 'queued' || child.resultAt || child.unstartedFailure) continue
@@ -456,8 +463,12 @@ export function install(rt) {
     }
   }
   async function publishGroupResult(work, sessionId, text, notice) {
-    if (notice === undefined) {
-      if (work.room) await rt.appendGroupTaskResult?.(work.room, work.to, groupResult(text, work.report))
+    if (notice?.failure === undefined) {
+      const message = groupResult(notice?.groupText ?? text, work.report)
+      if (work.room && message && !isGroupAcknowledgement(message)) {
+        await rt.appendGroupTaskResult?.(work.room, work.to, message)
+          .catch(error => rt.warn('mek-bot: group task result could not be shown: %s', error))
+      }
       return
     }
     const room = work.room ?? rt.groupOwners.get(sessionId)?.roomId
@@ -465,8 +476,6 @@ export function install(rt) {
     if (!notice.rooms.has(room)) notice.rooms.set(room, rt.appendGroupTaskFailure(room, work.to, notice.failure))
     try {
       await notice.rooms.get(room)
-      work.groupFailureRoom = room
-      await save()
     } catch (error) {
       rt.warn('mek-bot: group task failure could not be shown: %s', error)
     }
@@ -613,6 +622,12 @@ export function install(rt) {
     return true
   }
   rt.mekHandlesGroupTurn = (sessionId, info) => Boolean(rt.groupOwners.has(sessionId) && workOf(rt.workOf(info)))
+  rt.mekShowsGroupProgress = (sessionId, info) => {
+    const owner = rt.groupOwners.get(sessionId)
+    const work = workOf(rt.workOf(info))
+    return owner !== undefined && work?.to === owner.botId && work.room === owner.roomId
+      && ['queued', 'running'].includes(work.status) && !final(rootOf(work.rootId))
+  }
   const groupInstruction = (instruction, context) => `${context}\n\n[Delegated group task]\n${instruction}\nThe original task owner receives your result and questions. Use message_bot to delegate to another member of this group; plain @mentions do not start work for this tracked task. Call report_bot_task with evidence when finished.`
   async function groupMember(room, from, memberId, instruction, parent, groupRoot, { rootId, prepared } = {}) {
     const member = rt.botOf(memberId)
@@ -649,6 +664,15 @@ export function install(rt) {
     await dispatchGroup(work)
   }
   async function dispatchGroup(work) {
+    if (dispatchingGroups.has(work.id)) return
+    dispatchingGroups.add(work.id)
+    try {
+      await dispatchGroupMembers(work)
+    } finally {
+      dispatchingGroups.delete(work.id)
+    }
+  }
+  async function dispatchGroupMembers(work) {
     if (final(rootOf(work.id)) || !work.dispatching || work.status === 'abandoned') return
     const room = rt.roomOf(work.room)
     if (!room || !rt.botOf(work.from)) { work.outcome = 'blocked'; work.result = 'The group or task owner is unavailable.'; work.dispatching = false; await completeGroup(work); return }
@@ -715,7 +739,10 @@ export function install(rt) {
     const duplicate = rt.mekDuplicateDispatch({ rootId: root.id, from: sender.id, to: target.id, room: room.id, parent: parent?.id, instruction })
     if (duplicate) return `Already assigned as ${duplicate} under task ${root.id}. Read its status or revise that assignment if more work is needed.`
     const { id, item } = await groupMember(room, sender.id, target.id, instruction, parent?.id, parent?.groupRoot, { rootId: root.id, prepared })
-    await save(); await send(item)
+    await save()
+    await rt.appendGroupTaskResult?.(room.id, sender.id, `@${target.name}\n${instruction}`)
+      .catch(error => rt.warn('mek-bot: group assignment could not be shown: %s', error))
+    await send(item)
     announce('created', root, workOf(id))
     return `Delegated group work ${id}. Its result returns here before your own result returns to the task owner.`
   }
@@ -738,10 +765,6 @@ export function install(rt) {
     const root = rootOf(work.id)
     const bad = children.find(child => ['failed', 'blocked', 'unknown', 'cancelled', 'abandoned'].includes(child.status))
     if (bad) work.outcome = ['cancelled', 'abandoned'].includes(bad.status) ? 'blocked' : bad.status
-    if (bad?.groupFailureRoom !== undefined && bad.groupFailureRoom === work.room
-      && children.every(child => !['failed', 'blocked', 'unknown', 'cancelled', 'abandoned'].includes(child.status) || child.groupFailureRoom === work.room)) {
-      work.groupFailureRoom = work.room
-    }
     const result = children.map(child => `${rt.botOf(child.to)?.name ?? 'Bot'}:\n${child.result ?? 'No result retained.'}`).join('\n\n') || work.result || 'No group result.'
     const returned = children.filter(child => child.status !== 'abandoned')
     // A relay that failed before any member was called has no child to carry the
@@ -1058,7 +1081,7 @@ export function install(rt) {
     const id = randomUUID()
     open(id, { from: work.from, ...(work.to ? { to: work.to } : { room: work.room }), ...(work.fromRoom ? { fromRoom: work.fromRoom } : {}), ...(own(state.works, work.parent) ? { parent: work.parent } : {}) })
     const next = { ...work, id, previous: work.id, status: 'queued', attempt: work.attempt + 1, instruction: `Original task: ${work.instruction}\nRevision required: ${feedback}`, createdAt: Date.now() }
-    for (const key of ['browserHold', 'restartResumeId', 'reviewNoticeId', 'dispatching', 'members', 'groupMentions', 'result', 'resultLength', 'resultAt', 'resultExchangeId', 'resultSessionId', 'outcome', 'report']) delete next[key]
+    for (const key of ['browserHold', 'restartResumeId', 'reviewNoticeId', 'dispatching', 'members', 'groupMentions', 'unstartedFailure', 'groupFailureRoom', 'result', 'resultLength', 'resultAt', 'resultExchangeId', 'resultSessionId', 'outcome', 'report']) delete next[key]
     work.status = 'superseded'
     const replaced = new Set([work.id])
     let grew = true
@@ -1076,7 +1099,14 @@ export function install(rt) {
       await rt.mekPostGroup(rt.roomOf(next.room), rt.botOf(next.from), next.instruction, next.id, [], { delegated: true })
       return `Group revision ${id} queued under task ${root.id}.`
     }
-    await enqueue(root.id, { fromId: next.from, toId: next.to, ...(next.sessionId ? { sessionId: next.sessionId } : {}), ...(next.fromRoom ? { fromRoomId: next.fromRoom } : {}), role: 'request', exchangeId: id, text: next.instruction })
+    const item = prepare(root.id, { fromId: next.from, toId: next.to, ...(next.sessionId ? { sessionId: next.sessionId } : {}), ...(next.fromRoom ? { fromRoomId: next.fromRoom } : {}), role: 'request', exchangeId: id, text: next.instruction })
+    await save()
+    if (next.room) {
+      await rt.appendGroupTaskResult?.(next.room, next.from, `@${rt.botOf(next.to)?.name ?? 'Bot'}\n${feedback.trim()}`)
+        .catch(error => rt.warn('mek-bot: group revision could not be shown: %s', error))
+    }
+    await send(item)
+    announce('updated', root)
     return `Revision ${id} queued under task ${root.id}. Review the new result before finishing.`
   })
   register('finish_bot_task', 'Accept a task after reviewing its results and verification. Refuses while any delegated work, decision, failure, or uncertain delivery remains unresolved.', {
@@ -1392,7 +1422,7 @@ export function install(rt) {
       const level = age >= STALL_ESCALATE_MS ? 2 : 1
       const prior = root.stallNotice
       if (prior && prior.key === key && prior.level >= level) continue
-      root.stallNotice = { key, level, at: now, rooms: prior?.key === key ? [...(prior.rooms ?? [])] : [] }
+      root.stallNotice = { key, level, at: now }
       if (!rt.botOf(root.owner)) continue
       // Resource leases are identified here and never released: a stale lease is a
       // fact to report, not a permission this adapter may act on.
@@ -1402,19 +1432,7 @@ export function install(rt) {
         ? `\nStale resource leases (identified only, never released here): ${leases.map(lease => `${lease.kind} ${lease.key} held by ${rt.botOf(lease.botId)?.name ?? lease.botId} (${lease.status})`).join('; ')}.`
         : ''
       const summary = `Task ${root.id} has had no closable state for ${Math.floor(age / 60000)} min: ${blockerText(crossed)}.${leaseText}`
-      // The owner's chat is the user's dialog: a stall is a conclusion, not a
-      // progress message, so it reaches the owner through the task panel attention
-      // and team activity, and the affected group gets one quiet post. No durable
-      // text is delivered into the owner's own conversation.
-      const rooms = [...new Set(currentWorks(root).map(work => work.room ?? work.fromRoom).filter(id => id && rt.roomOf(id)?.admin === root.owner))]
-      for (const roomId of rooms) {
-        if (root.stallNotice.rooms.includes(roomId)) continue
-        root.stallNotice.rooms.push(roomId)
-        const unseen = crossed.filter(item => item.kind !== 'failed' || workOf(item.id)?.groupFailureRoom !== roomId)
-        if (unseen.length === 0 && !leaseText) continue
-        const detail = unseen.length > 0 ? `: ${blockerText(unseen)}` : ''
-        await rt.appendGroupTaskResult?.(roomId, root.owner, `Task ${root.id} has had no closable state for ${Math.floor(age / 60000)} min${detail}.${leaseText}\nThe group administrator owns this task; this notice does not call any member or start new work.`)
-      }
+      // The task panel and team activity carry maintenance reminders.
       try {
         await rt.mekRecordActivity?.({ botId: root.owner, taskId: root.id, status: 'blocked', type: 'stall', summary })
       } catch (error) { rt.warn('mek-bot: could not record a stall summary: %s', error) }

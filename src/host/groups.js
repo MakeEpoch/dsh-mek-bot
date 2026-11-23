@@ -17,6 +17,7 @@
 // turn keeps running in its group Session, and what it ends with is posted to the group,
 // where the member that asked for it answers.
 import { randomUUID } from 'node:crypto'
+import { isGroupAcknowledgement } from '../shared/group-task-text.js'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -1192,10 +1193,17 @@ export function install(rt) {
   rt.prepareGroupTask = async (room, sender, text, files = [], { mentions } = {}) => {
     ensureRoomLog(room)
     await loadGroupLines(room)
-    appendRoom(room, { who: sender.name, botId: sender.id, text, ...(files.length ? { files } : {}) })
-    await rt.save()
     const member = !rt.isMain(sender.id) && !rt.isAdminOf(room, sender.id)
-    return openingSpeakers(room, { botId: sender.id, text, member, ...(mentions ? { mentions } : {}) }).map(bot => bot.id)
+    const speakers = openingSpeakers(room, { botId: sender.id, text, member, ...(mentions ? { mentions } : {}) })
+    const selected = postMentions({ botId: sender.id, text, member, mentions }, room.members.map(rt.botOf).filter(Boolean))
+    const message = speakers.length && !selected.all && selected.found.length === 0
+      ? `${speakers.map(bot => `@${bot.name}`).join(' ')}\n${text}` : text
+    appendRoom(room, { who: sender.name, botId: sender.id, text: message, ...(files.length ? { files } : {}) })
+    const logged = room.seq
+    await rt.save()
+    await postToRoom(room, sender, message, { quiet: true, taskPost: true, logged }, files)
+      .catch(error => rt.warn('mek-bot: group dispatch could not be shown: %s', error))
+    return speakers.map(bot => bot.id)
   }
   rt.prepareGroupMemberTask = async (room, member) => {
     ensureRoomLog(room)
@@ -1378,7 +1386,7 @@ export function install(rt) {
     const { room, member } = memberIn(sessionId, info) ?? {}
     if (room === undefined) return
     const text = stripOwnName(member.name, raw)
-    if (isPass(text)) return
+    if (isPass(text) || (rt.mekShowsGroupProgress?.(sessionId, info) && isGroupAcknowledgement(text))) return
     const entry = held.get(sessionId) ?? { last: 0, lines: [] }
     held.set(sessionId, entry)
     entry.info = info

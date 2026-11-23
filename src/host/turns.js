@@ -440,9 +440,11 @@ export function install(rt) {
   // turn's end, which shows the rest as the turn's reply.
   const showSteps = (id, entry, upTo) => {
     const info = entry.info
-    if (entry.suppressedSubagent || !speaksInGroup(id, info) || (info?.role === 'room' && stoppedRoomTurns.has(info.exchangeId))) return
+    const tracked = rt.mekShowsGroupProgress?.(id, info)
+    if (entry.suppressedSubagent || (!tracked && !speaksInGroup(id, info)) || (info?.role === 'room' && stoppedRoomTurns.has(info.exchangeId))) return
     for (; entry.shown < upTo; entry.shown += 1) {
       const text = stripWrittenCalls(entry.texts[entry.shown])
+      if (tracked && entry.texts.slice(0, entry.shown).includes(entry.texts[entry.shown])) continue
       if (text !== '') void rt.roomStepText?.(id, info, text, entry.shown === 0)?.catch(error => rt.warn('ds-bot: step text from %s not posted: %s', id, error))
     }
   }
@@ -1025,7 +1027,8 @@ export function install(rt) {
         const recovered = entry.recovered
         const joined = entry.joined ?? []
         // What the group already saw of the turn is not posted again.
-        const texts = entry.texts.slice(entry.shown)
+        const allTexts = entry.texts
+        const texts = allTexts.slice(entry.shown)
         const wroteText = entry.texts.some(text => stripWrittenCalls(text) !== '')
         const watched = entry.turn !== undefined
         const shown = entry.shown > 0 || (info?.retried === true && promisedOpenings.delete(info.exchangeId))
@@ -1121,8 +1124,8 @@ export function install(rt) {
             void retryWrittenCall(id, info).catch(error => rt.warn('ds-bot: asking %s to run its written tool call failed: %s', id, error))
           }
         }
-        const replyText = () => {
-          const reply = (wroteCall || cutOff ? texts.map(stripWrittenCalls) : texts).join('\n\n').trim()
+        const replyText = (chunks = texts) => {
+          const reply = (wroteCall || cutOff ? chunks.map(stripWrittenCalls) : chunks).join('\n\n').trim()
           if (cutOff) return reply === '' && wroteText ? CUT_OFF_NOTE : cutOffText(reply)
           return wroteCall && reply === '' ? 'Tried to run a tool but wrote the call as text, so it did not run.' : reply
         }
@@ -1144,7 +1147,7 @@ export function install(rt) {
         // Work a Bot asked for, also when what came back for it opens the turn: while
         // anything handed on for it is still out, the answer waits; then it goes up with
         // what came back. A failed or stopped turn answers at once.
-        const finish = (source, reply) => {
+        const finish = (source, reply, presentation) => {
           const work = rt.workOf?.(source)
           if (!rt.ownsWork?.(rt.selfOf(id), work)) return answer(source, reply)
           const asker = rt.workAsker(work)
@@ -1157,9 +1160,9 @@ export function install(rt) {
           if (cutOff) rt.mekFailWork?.(work, 'blocked')
           // With what came back, the answer may pass what one message carries.
           const text = rt.answerText(work, reply, name)
-          if (text.length <= MESSAGE_INLINE_MAX) return tellSender(id, asker, text)
+          if (text.length <= MESSAGE_INLINE_MAX) return tellSender(id, asker, text, undefined, presentation)
           void rt.attachLong(text, `Answer from ${name}.txt`)
-            .then(long => tellSender(id, asker, text, long))
+            .then(long => tellSender(id, asker, text, long, presentation))
             .catch(error => rt.warn('ds-bot: answer from %s not sent: %s', name, error))
         }
         // A retried turn answers the same waiter or sender, so this one passes nothing on.
@@ -1169,7 +1172,7 @@ export function install(rt) {
           void ctx.sessions.flush(session).then(() => rt.reconcileEnded(id, recovered, event.data))
             .catch(error => rt.warn('ds-bot: settling the reloaded work of %s failed: %s', id, error))
         } else if (!retry && rt.mekHandlesGroupTurn?.(id, info)) {
-          finish(info, groupReply())
+          finish(info, replyText(allTexts), { groupText: groupReply() })
         } else if (!retry && info?.role === 'room') {
           const waiter = roomWaiters.get(info.exchangeId)
           roomWaiters.delete(info.exchangeId)

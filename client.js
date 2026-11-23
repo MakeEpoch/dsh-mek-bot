@@ -8845,7 +8845,7 @@ function RelayEvent({ reply, bot, sessionId, actions }) {
   }
   return null;
 }
-function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi, useWork, showActivity = true }) {
+function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi, useWork, showActivity = true, filterReply }) {
   const [live, setLive] = (0, import_react22.useState)({ replies: [], speaking: [] });
   (0, import_react22.useEffect)(() => {
     if (done) return void 0;
@@ -8876,6 +8876,7 @@ function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi
     replies = parsed.replies.length ? parsed.replies : live.replies;
     broken = parsed.broken;
   }
+  if (filterReply) replies = replies.filter(filterReply);
   const pending = !showActivity || done ? [] : live.speaking;
   const doing = JSON.parse(useWork?.((work) => JSON.stringify(pending.map((id) => {
     const tool = work.bots?.[id]?.tool;
@@ -22683,8 +22684,19 @@ var TEAM_HEADER_CSS = `
 `;
 var COMPACT_HEADER_CSS = `.mek-team-header[data-compact]{grid-template-columns:minmax(0,1fr) 28px;gap:8px;padding:0 8px}.mek-team-header[data-compact] .mek-team-center{grid-column:1}.mek-team-header[data-compact] .mek-team-tools{grid-column:2}.mek-team-header[data-compact] .bt-list{margin:0}.mek-team-menu [role=menuitem]{position:relative}.mek-team-menu [role=menuitem] .mek-tab-dot{position:static;margin-left:auto}`;
 
+// src/shared/group-task-text.js
+function isGroupAcknowledgement(text5) {
+  return /^\s*(?:\[\s*pass\s*\]|pass|收到|明白|好的|了解|acknowledged|got it|understood)[.。!！]?\s*$/i.test(text5 ?? "");
+}
+function isLegacyTaskReminder(text5) {
+  const body = (text5 ?? "").replace(/^\[Group post from [^\]\n]+\][ \t]*\r?\n/, "").trim();
+  return /^Task [\da-f-]{36} has had no closable state for \d+ min[:.]/i.test(body) && body.endsWith("The group administrator owns this task; this notice does not call any member or start new work.");
+}
+
 // src/client/mek/group-chat.jsx
 var import_react63 = __toESM(require("react"), 1);
+var visibleText = (text5) => !isGroupAcknowledgement(text5) && !isLegacyTaskReminder(text5);
+var visibleReply = (reply) => reply.kind !== void 0 || visibleText(reply.text);
 function GroupChat({ sessionId, team }) {
   const { hooks, actions } = team;
   const roster = hooks.useRoster((value) => value);
@@ -22764,7 +22776,16 @@ function GroupChat({ sessionId, team }) {
   return /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-chat" }, /* @__PURE__ */ import_react63.default.createElement("div", { ref: scroll, className: "dsb-scroll", "data-conversation-scroll": "", onScroll: () => {
     const node = scroll.current;
     follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
-  } }, /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-column" }, /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-flow", role: "feed", "aria-label": room2?.name, "aria-busy": view.loading }, view.cursor !== null && /* @__PURE__ */ import_react63.default.createElement("button", { className: "bt-soft", onClick: () => refresh.current?.(view.cursor) }, t("Load earlier")), view.items.map((item) => item.kind === "group" ? /* @__PURE__ */ import_react63.default.createElement(GroupReplies, { key: item.key, sessionId, callId: item.callId, done: true, content: item.content, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork, showActivity: false }) : item.kind === "post" ? /* @__PURE__ */ import_react63.default.createElement(GroupMessage, { key: item.key, bot: roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: "gray" }, text: stripHeader(contentText(item.content)), room: room2, roster, actions, time: item.time }) : /* @__PURE__ */ import_react63.default.createElement(ChatRows, { key: item.key, items: [item], sessionId: item.sessionId, roster, actions, useUi: hooks.useUi, clock: true })), view.progress.filter((id) => !view.items.some((item) => item.callId === id)).map((id) => /* @__PURE__ */ import_react63.default.createElement(GroupReplies, { key: id, sessionId, callId: id, done: false, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork, showActivity: false })), error && /* @__PURE__ */ import_react63.default.createElement("button", { className: "bt-soft", role: "alert", onClick: () => refresh.current?.() }, error, " · ", t("Try again")), /* @__PURE__ */ import_react63.default.createElement("div", { "data-group-running": "", hidden: active.length === 0 }, active.map((entry) => {
+  } }, /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-column" }, /* @__PURE__ */ import_react63.default.createElement("div", { className: "dsb-flow", role: "feed", "aria-label": room2?.name, "aria-busy": view.loading }, view.cursor !== null && /* @__PURE__ */ import_react63.default.createElement("button", { className: "bt-soft", onClick: () => refresh.current?.(view.cursor) }, t("Load earlier")), view.items.map((item) => {
+    if (item.kind === "group") return /* @__PURE__ */ import_react63.default.createElement(GroupReplies, { key: item.key, sessionId, callId: item.callId, done: true, content: item.content, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork, showActivity: false, filterReply: visibleReply });
+    if (item.kind === "post") {
+      const text5 = stripHeader(contentText(item.content));
+      if (!visibleText(text5)) return null;
+      const bot = roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: "gray" };
+      return /* @__PURE__ */ import_react63.default.createElement(GroupMessage, { key: item.key, bot, text: text5, room: room2, roster, actions, time: item.time });
+    }
+    return /* @__PURE__ */ import_react63.default.createElement(ChatRows, { key: item.key, items: [item], sessionId: item.sessionId, roster, actions, useUi: hooks.useUi, clock: true });
+  }), view.progress.filter((id) => !view.items.some((item) => item.callId === id)).map((id) => /* @__PURE__ */ import_react63.default.createElement(GroupReplies, { key: id, sessionId, callId: id, done: false, roster, actions, useUi: hooks.useUi, useWork: hooks.useWork, showActivity: false, filterReply: visibleReply })), error && /* @__PURE__ */ import_react63.default.createElement("button", { className: "bt-soft", role: "alert", onClick: () => refresh.current?.() }, error, " · ", t("Try again")), /* @__PURE__ */ import_react63.default.createElement("div", { "data-group-running": "", hidden: active.length === 0 }, active.map((entry) => {
     const bot = roster.byId[entry.id];
     const label3 = entry.state === "ask" ? t("Waiting for your approval") : workPhrase(entry.doing);
     return /* @__PURE__ */ import_react63.default.createElement("div", { key: entry.id, className: "bt-typing", "data-running-bot": entry.id, "data-resource-wait": entry.doing.resourceWait ? "" : void 0, role: "status" }, /* @__PURE__ */ import_react63.default.createElement(BotMark, { bot, size: 22, state: entry.state === "ask" ? "alert" : workState(entry.doing) }), /* @__PURE__ */ import_react63.default.createElement("span", { className: "bt-typing-text" }, /* @__PURE__ */ import_react63.default.createElement("span", { className: "bt-typing-label", title: entry.doing.resourceWait ? label3 : void 0 }, /* @__PURE__ */ import_react63.default.createElement(Shimmer, null, bot.name, " · ", label3, entry.doing.resourceWait ? "" : "…")), /* @__PURE__ */ import_react63.default.createElement(Elapsed, { at: entry.doing.since, className: "bt-typing-time" })));

@@ -978,7 +978,7 @@ function RelayEvent({ reply, bot, sessionId, actions }) {
   return null
 }
 
-export function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi, useWork, showActivity = true }) {
+export function GroupReplies({ sessionId, callId, done, content, roster, actions, useUi, useWork, showActivity = true, filterReply }) {
   const [live, setLive] = useState({ replies: [], speaking: [] })
   useEffect(() => {
     if (done) return undefined
@@ -1003,6 +1003,7 @@ export function GroupReplies({ sessionId, callId, done, content, roster, actions
     replies = parsed.replies.length ? parsed.replies : live.replies
     broken = parsed.broken
   }
+  if (filterReply) replies = replies.filter(filterReply)
   // Every member answering in the round is typing; what each is doing comes as text,
   // so the cell redraws only when that changes.
   const pending = !showActivity || done ? [] : live.speaking

@@ -6,6 +6,10 @@ import { BotMark } from '../mark.js'
 import { useMemberWork, workState } from '../member-status.js'
 import { contentText, stripHeader } from '../text.js'
 import { t } from '../i18n.js'
+import { isGroupAcknowledgement, isLegacyTaskReminder } from '../../shared/group-task-text.js'
+
+const visibleText = text => !isGroupAcknowledgement(text) && !isLegacyTaskReminder(text)
+const visibleReply = reply => reply.kind !== undefined || visibleText(reply.text)
 
 export function GroupChat({ sessionId, team }) {
   const { hooks, actions } = team
@@ -72,11 +76,17 @@ export function GroupChat({ sessionId, team }) {
     <div ref={scroll} className="dsb-scroll" data-conversation-scroll="" onScroll={() => { const node = scroll.current; follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80 }}>
       <div className="dsb-column"><div className="dsb-flow" role="feed" aria-label={room?.name} aria-busy={view.loading}>
         {view.cursor !== null && <button className="bt-soft" onClick={() => refresh.current?.(view.cursor)}>{t('Load earlier')}</button>}
-        {view.items.map(item => item.kind === 'group'
-          ? <GroupReplies key={item.key} sessionId={sessionId} callId={item.callId} done content={item.content} roster={roster} actions={actions} useUi={hooks.useUi} useWork={hooks.useWork} showActivity={false} />
-          : item.kind === 'post' ? <GroupMessage key={item.key} bot={roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: 'gray' }} text={stripHeader(contentText(item.content))} room={room} roster={roster} actions={actions} time={item.time} />
-            : <ChatRows key={item.key} items={[item]} sessionId={item.sessionId} roster={roster} actions={actions} useUi={hooks.useUi} clock />)}
-        {view.progress.filter(id => !view.items.some(item => item.callId === id)).map(id => <GroupReplies key={id} sessionId={sessionId} callId={id} done={false} roster={roster} actions={actions} useUi={hooks.useUi} useWork={hooks.useWork} showActivity={false} />)}
+        {view.items.map(item => {
+          if (item.kind === 'group') return <GroupReplies key={item.key} sessionId={sessionId} callId={item.callId} done content={item.content} roster={roster} actions={actions} useUi={hooks.useUi} useWork={hooks.useWork} showActivity={false} filterReply={visibleReply} />
+          if (item.kind === 'post') {
+            const text = stripHeader(contentText(item.content))
+            if (!visibleText(text)) return null
+            const bot = roster.byId[item.botId] ?? { id: item.botId, name: item.name, color: 'gray' }
+            return <GroupMessage key={item.key} bot={bot} text={text} room={room} roster={roster} actions={actions} time={item.time} />
+          }
+          return <ChatRows key={item.key} items={[item]} sessionId={item.sessionId} roster={roster} actions={actions} useUi={hooks.useUi} clock />
+        })}
+        {view.progress.filter(id => !view.items.some(item => item.callId === id)).map(id => <GroupReplies key={id} sessionId={sessionId} callId={id} done={false} roster={roster} actions={actions} useUi={hooks.useUi} useWork={hooks.useWork} showActivity={false} filterReply={visibleReply} />)}
         {error && <button className="bt-soft" role="alert" onClick={() => refresh.current?.()}>{error} · {t('Try again')}</button>}
         <div data-group-running="" hidden={active.length === 0}>
           {active.map(entry => {
