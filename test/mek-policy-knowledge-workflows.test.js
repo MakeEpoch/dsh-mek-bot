@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -44,6 +45,31 @@ test('policy gates revisions, parallel work, deadlines and tool restrictions wit
   assert.match(guard(h.exec('b', 'exec_command')), /disabled by the Bot role policy/)
   assert.match(h.ctx.sections.get('mek-execution-policy').text({ agent: { id: 'b' } }), /Write technical documentation/)
   await assert.rejects(h.rt.mekPolicyAction('mek-policy-task', { taskId: root.id, limits: { maxCost: 1 } }), /Monetary caps/)
+})
+
+test('a held checkout allows service queries and another worktree while overlapping writes remain exclusive', async t => {
+  const h = host(t); policy(h.rt)
+  const base = mkdtempSync(join(tmpdir(), 'mek-concurrent-'))
+  t.after(() => rmSync(base, { recursive: true, force: true }))
+  const repo = join(base, 'first')
+  execFileSync('git', ['init', '-q', repo])
+  execFileSync('git', ['-C', repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.org', 'commit', '-q', '--allow-empty', '-m', 'base'])
+  execFileSync('git', ['-C', repo, 'worktree', 'add', '--quiet', '--detach', join(base, 'second')])
+  symlinkSync(join(base, 'first'), join(base, 'alias'))
+  h.rt.sessionFolder = () => base
+  h.ctx.get = name => name === 'webApp' ? { getAdvertisedUrl: () => 'https://bot.example/app/?token=private' } : undefined
+  await h.tool('a', 'acquire_task_resource', { kind: 'workspace', key: join(base, 'first') })
+  const run = (name, args, next) => h.ctx.listeners.get('tools/execute').at(-1)(h.exec('b', name, args), next)
+  const info = await run('get_dsh_service_info', {}, () => h.tool('b', 'get_dsh_service_info'))
+  assert.equal(JSON.parse(info).webUrl, 'https://bot.example/app/')
+  await run('bash', { workdir: 'second' }, async () => {
+    assert.ok(h.rt.mekPolicyView().resources.some(item => item.key === join(base, 'second')))
+  })
+  for (const [tool, args] of [['bash', { workdir: 'alias/subdir' }], ['edit', { file_path: 'first/a.js' }]]) {
+    await assert.rejects(run(tool, args, () => assert.fail('conflicting write ran')), /Resource is in use/)
+  }
+  await h.tool('a', 'acquire_task_resource', { kind: 'service', key: 'release-target' })
+  await assert.rejects(h.tool('b', 'acquire_task_resource', { kind: 'service', key: 'release-target' }), /Resource is in use/)
 })
 
 test('actual tool dispatch waits for durable exclusive workspace leases and symlink aliases conflict', async t => {

@@ -1,9 +1,10 @@
 // Execution limits and exclusive resource leases use public DSH tool/LLM hooks.
 // Leases coordinate known tools; they are not a filesystem or account sandbox.
 import { randomUUID } from 'node:crypto'
-import { realpathSync } from 'node:fs'
+import { existsSync, realpathSync, statSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { clone, optionalText, own, refuse, safeText, teamTool, writable } from './mek-safe.js'
+import { serviceInfo } from './mek-service-info.js'
 
 const DONE = new Set(['completed', 'cancelled', 'archived'])
 const SAFE_TOOLS = new Set(['ask_user', 'show_view', 'list_tasks', 'read_task', 'name_bot_task', 'list_todos', 'control_todo', 'report_bot_task', 'accept_bot_work', 'finish_bot_task', 'cancel_bot_task', 'release_task_resource', 'list_task_resources'])
@@ -23,6 +24,16 @@ function canonicalPath(path) {
     if (dirname(at) === at) return resolve(path)
     rest.unshift(at.slice(dirname(at).length + (dirname(at).endsWith(sep) ? 0 : 1)))
     at = dirname(at)
+  }
+}
+// Git worktrees each have their own .git entry. Commands in two subdirectories
+// of one checkout still share its index and generated files.
+function checkoutDirectory(path) {
+  const directory = canonicalPath(path)
+  for (let at = directory; ; at = dirname(at)) {
+    const git = join(at, '.git')
+    if (existsSync(join(git, 'HEAD')) || statSync(git, { throwIfNoEntry: false })?.isFile()) return at
+    if (at === dirname(at)) return directory
   }
 }
 const overlaps = (a, b) => a === b || a.startsWith(b.endsWith(sep) ? b : b + sep) || b.startsWith(a.endsWith(sep) ? a : a + sep)
@@ -133,7 +144,7 @@ export function install(rt) {
     const sessionId = input.sessionId ?? rt.chatOf?.(botId) ?? botId
     if (typeof rootId !== 'string' || !rootId) refuse('Resource task id is required.')
     if (!rt.botOf(botId)) refuse('Resource owner Bot is unavailable.')
-    if (!['workspace', 'browser', 'account'].includes(input.kind)) refuse('Resource kind must be workspace, browser, or account.')
+    if (!['workspace', 'browser', 'account', 'service'].includes(input.kind)) refuse('Resource kind must be workspace, browser, account, or service.')
     let key = safeText(rt, input.key, 'Resource key', 1000)
     if (input.kind === 'workspace') {
       if (!isAbsolute(key)) refuse('Workspace resources require an absolute path.')
@@ -172,11 +183,24 @@ export function install(rt) {
     const root = rootForSession(exec.agent?.id)
     return { botId, root, sessionId: exec.agent.id, rootId: root?.id ?? `direct:${botId}` }
   }
-  function neededResources(exec, context) {
+  async function neededResources(exec, context) {
     const needed = []
     if (WRITES.has(exec.name) || (exec.name === 'str_replace_editor' && exec.arguments?.command !== 'view')) {
       const cwd = rt.sessionFolder?.(exec.agent?.session) ?? rt.workDirOf?.({ botId: context.botId }) ?? rt.teamFolder?.()
-      if (cwd) needed.push({ kind: 'workspace', key: cwd })
+      let path = cwd
+      const args = exec.arguments ?? {}
+      if (['bash', 'pwsh'].includes(exec.name) && typeof args.workdir === 'string' && args.workdir) {
+        if (isAbsolute(args.workdir)) path = args.workdir
+        else if (cwd) path = resolve(cwd, args.workdir)
+      }
+      const file = exec.name === 'str_replace_editor' ? args.path : ['write', 'edit'].includes(exec.name) ? args.file_path : undefined
+      if (typeof file === 'string' && file.trim()) {
+        const fs = ctx.get?.('fs')
+        if (fs) path = fs.processPath(await fs.resolve(file, { cwd, signal: exec.signal }))
+        else if (isAbsolute(file)) path = file
+        else if (cwd) path = resolve(cwd, file)
+      }
+      if (path) needed.push({ kind: 'workspace', key: checkoutDirectory(path) })
     }
     if (exec.name.startsWith('browser_') && !['browser_handoff', 'browser_resume'].includes(exec.name)) needed.push({ kind: 'browser', key: context.botId })
     for (const binding of data().bindings) if (binding.tools.includes(exec.name) && (!binding.botIds?.length || binding.botIds.includes(context.botId))) needed.push({ kind: binding.kind, key: binding.key })
@@ -226,7 +250,7 @@ export function install(rt) {
     const context = contextOf(exec)
     if (!context) return next()
     const signal = AbortSignal.any([stopped.signal, ...(exec.signal ? [exec.signal] : [])])
-    const resources = neededResources(exec, context).map(resource => ({ ...resource, key: resource.kind === 'workspace' ? canonicalPath(resource.key) : resource.key }))
+    const resources = (await neededResources(exec, context)).map(resource => ({ ...resource, key: resource.kind === 'workspace' ? canonicalPath(resource.key) : resource.key }))
     const owner = leaseOwner(context)
     const waitKey = Symbol()
     let waiting
@@ -375,7 +399,7 @@ export function install(rt) {
     if (endpoint === 'mek-resource-acquire') result = acquire(body)
     else if (endpoint === 'mek-resource-release') result = release(body.id)
     else if (endpoint === 'mek-resource-bind') {
-      if (!['workspace', 'browser', 'account'].includes(body.kind)) refuse('Unsupported resource kind.')
+      if (!['workspace', 'browser', 'account', 'service'].includes(body.kind)) refuse('Unsupported resource kind.')
       const tools = [...new Set((body.tools ?? []).map(toolName))]
       if (!tools.length || tools.length > 100) refuse('Bind at least one exact tool name, at most 100.')
       const key = safeText(rt, body.key, 'Resource key', 1000)
@@ -396,15 +420,16 @@ export function install(rt) {
       resources: Object.values(data().leases).filter(item => ['held', 'stale'].includes(item.status)), bindings: data().bindings })
   }
   rt.mekPolicyResources = sessionId => { reconcile(); const botId = rt.selfOf(sessionId); return clone(Object.values(data().leases).filter(item => ['held', 'stale'].includes(item.status) && item.botId === botId)) }
+  teamTool(rt, 'get_dsh_service_info', 'Read the current DSH process, advertised Web address and available user service status. Use this for service status and entry points while other Bots work.', {}, () => serviceInfo(ctx))
   teamTool(rt, 'list_task_resources', 'List this Bot resource leases. A lease coordinates known tools; it does not grant tool approval or sandbox access.', {}, (_args, _exec, self) => { reconcile(); return Object.values(data().leases).filter(item => item.botId === self && ['held', 'stale'].includes(item.status)) })
   teamTool(rt, 'acquire_task_resource', 'Claim an exclusive resource before using it. A busy resource refuses execution; wait or use a separate workspace/account. Account keys are labels, never credentials.', {
-    kind: { type: 'string', enum: ['workspace', 'browser', 'account'], required: true }, key: { type: 'string', required: true },
+    kind: { type: 'string', enum: ['workspace', 'browser', 'account', 'service'], required: true }, key: { type: 'string', required: true },
   }, async (args, exec, self) => { const root = rootForSession(exec.agent.id); const result = acquire({ ...args, rootId: root?.id ?? `direct:${self}`, botId: self, sessionId: exec.agent.id }); await save(); return result })
   teamTool(rt, 'release_task_resource', 'Release a resource after its operations have finished. Do not release while a command or browser action is still running.', { id: { type: 'string', required: true } }, async ({ id }, _exec, self) => { const result = release(id, self); await save(); return result })
   ctx.effect(() => ctx.systemPrompt.section({ name: 'mek-execution-policy', order: 655, interpolate: false, text: context => {
     const self = rt.selfOf(context?.agent?.id)
     if (!self) return ''
     const role = profile(self)
-    return `## Role and execution policy\n${ROLES[role.mode]}\n${role.instructions}\nDelegation defaults: at most ${defaults.maxParallel} open assignments and ${defaults.maxRevisions} revisions. Respect task-specific limits. For read-only file queries, use the available DSH read, grep or glob tools. Use an independent resource when needed; never bypass a write lease with another tool. Resource leases do not replace approvals. Task token accounting covers tracked Bot model calls, not external service prices; unavailable usage stays unknown.`
+    return `## Role and execution policy\n${ROLES[role.mode]}\n${role.instructions}\nDelegation defaults: at most ${defaults.maxParallel} open assignments and ${defaults.maxRevisions} revisions. Respect task-specific limits. For read-only file queries, use the available DSH read, grep or glob tools. For DSH status or its Web address call get_dsh_service_info. Set bash/pwsh workdir to the project being modified. For independent edits to one Git repository use separate worktrees (create_worktree when available). Keep operations inside the assigned checkout. Before changing a shared deployment, claim a service lease with its agreed service name and release it after the operation. Claim all other affected workspaces explicitly for cross-directory operations; never bypass a write lease with another tool. Resource leases do not replace approvals. Task token accounting covers tracked Bot model calls, not external service prices; unavailable usage stays unknown.`
   } }), 'mek-bot: execution policy')
 }
