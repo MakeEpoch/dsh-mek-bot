@@ -10670,6 +10670,10 @@ body:not([data-bt-layout=flat]) .dsb-flow .bt-astack[data-lead]>.bt-msg{max-widt
 .dsb-composer-tools{order:1;display:flex;flex:none;align-self:flex-end}
 .dsb-composer-input{display:flex;flex:1 1 0;min-width:0;padding:0 8px}
 .dsb-composer-input textarea{flex:1;width:100%;max-height:168px;margin:0;border:0;outline:0;resize:none;background:none;color:var(--bt-ink);font:inherit;font-size:14px;line-height:24px;overflow-y:auto}
+/* Keep the editable text at iOS's focus-zoom threshold before the keyboard opens. */
+@media (any-pointer:coarse){
+  .dsb-composer-input textarea{font-size:max(16px,1em)}
+}
 .dsb-composer-input textarea::placeholder{color:color-mix(in srgb,var(--bt-ink) 36%,transparent)}
 .dsb-composer-trailing{order:3;display:flex;flex:none;align-self:flex-end;align-items:center;gap:8px}
 .dsb-send{flex:none;width:28px;height:28px;padding:0;border:0;border-radius:50%;display:inline-grid;place-items:center;background:var(--bt-accent);color:var(--bt-accent-ink,#fff);cursor:pointer;transition:opacity .15s ease}
