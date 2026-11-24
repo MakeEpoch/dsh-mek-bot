@@ -285,6 +285,7 @@ export function AssistantCell({ node, groupPart, sessionId, openFile, fileMentio
   return h(Fragment, null,
     relays.map(relay => {
       const source = relay.source
+      if (isGroupReturn(source.role, source.roomId, source.senderSessionId)) return h(GroupEvent, { key: relay.seq, prefix: t('Replies from'), room: roster.roomsById[source.roomId], name: t('a group chat'), roster, actions })
       const sender = roster.byId[source.senderSessionId] ?? { id: source.senderSessionId, name: source.senderName ?? t('a Bot'), color: 'gray' }
       return h(EventLine, {
         key: relay.seq,
@@ -382,6 +383,8 @@ export function GroupMessage({ bot, text, texts = [text], room, roster, actions,
       took ? h('span', { className: 'bt-group-took', title: t('Ran for {duration}', { duration: took }) }, took) : null),
     h(Bubbles, { texts, roster, selfId: bot.id, actions, sessionId: room?.id, msgKey, useUi, lead: flat ? null : lead, whole }))
 }
+
+const isGroupReturn = (role, roomId, sender) => role === 'report' || (role === 'reply' && roomId && !sender)
 
 // A centered event line that names a group chat and opens it.
 function GroupEvent({ prefix, room, name, roster, actions }) {
@@ -640,7 +643,7 @@ function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDel
       return h(RelayEvent, { key, reply, bot: speaker, sessionId, actions })
     }
     case 'event': {
-      if (row.role === 'report') return h(GroupEvent, { key, prefix: t('Replies from'), room: roster.roomsById[row.roomId], name: t('a group chat'), roster, actions })
+      if (isGroupReturn(row.role, row.roomId, row.botId)) return h(GroupEvent, { key, prefix: t('Replies from'), room: roster.roomsById[row.roomId], name: t('a group chat'), roster, actions })
       const other = roster.byId[row.botId] ?? { id: row.botId, name: row.name ?? t('a Bot'), color: 'gray' }
       const prefix = { stopped: t('Stopped by'), reply: t('Reply from') }[row.role] ?? t('Message from')
       return h(EventLine, { key, prefix, bots: [other], onOpen: () => { if (selfId && other.id) actions.openExchange(selfId, other.id) }, whole: true })
@@ -715,7 +718,7 @@ export function TriggerCell({ node, sessionId, useRoster, useSessions, useTurnCl
           whole: file ? { length: source.length, load: () => actions.fileText(file) } : undefined,
         })
       }
-      if (source.role === 'report') {
+      if (isGroupReturn(source.role, source.roomId, source.senderSessionId)) {
         return h(GroupEvent, { prefix: t('Replies from'), room: roster.roomsById[source.roomId], name: t('a group chat'), roster, actions })
       }
       // A request carried on keeps its role, but its message line was shown already.
@@ -934,8 +937,9 @@ function useLiveNote(actions, sessionId, id, entry) {
 // resolved member the reply names.
 function RelayEvent({ reply, bot, sessionId, actions }) {
   if (reply.kind === 'failed') {
-    return h('div', { className: 'bt-event bt-event-error', role: 'status', title: [reply.code, reply.status, reply.text].filter(Boolean).join(' · ') },
-      t('{name} could not answer: {reason}', { name: bot.name, reason: failureLabel(reply.code, reply.text) }))
+    return h('div', { className: 'bt-event-error', role: 'status' },
+      h('div', { className: 'bt-event' }, t('{name} could not answer: {reason}', { name: bot.name, reason: failureLabel(reply.code, reply.text) })),
+      h('details', null, h('summary', null, t('Technical details')), [reply.code, reply.status, reply.text].filter(Boolean).join(' · ')))
   }
   if (reply.kind === 'lookup') {
     return h('div', { className: 'bt-event' },

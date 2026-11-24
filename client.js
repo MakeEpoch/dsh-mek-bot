@@ -1311,6 +1311,7 @@ var ZH = {
   "Too many requests to the model": "模型请求太频繁",
   "The conversation is too long for the model": "对话太长，超出模型上限",
   "The model service refused the request": "模型服务拒绝了请求",
+  "The model response was interrupted": "模型回复中途断开",
   "The model service failed": "模型服务出错",
   "The model took too long to answer": "模型响应超时",
   "Could not reach the model service": "连不上模型服务",
@@ -1624,6 +1625,7 @@ var FAILURES = {
 };
 var knownFailure = (code) => Object.hasOwn(FAILURES, code ?? "") ? t(FAILURES[code]) : void 0;
 function failureLabel(code, message) {
+  if (/the reply ended before it was complete/i.test(message ?? "")) return t("The model response was interrupted");
   return knownFailure(code) ?? (message || code || t("Unknown error"));
 }
 var URL_LIMIT = 7e3;
@@ -8155,6 +8157,7 @@ function AssistantCell({ node, groupPart, sessionId, openFile, fileMentions, use
     null,
     relays.map((relay) => {
       const source = relay.source;
+      if (isGroupReturn(source.role, source.roomId, source.senderSessionId)) return (0, import_react22.createElement)(GroupEvent, { key: relay.seq, prefix: t("Replies from"), room: roster.roomsById[source.roomId], name: t("a group chat"), roster, actions });
       const sender = roster.byId[source.senderSessionId] ?? { id: source.senderSessionId, name: source.senderName ?? t("a Bot"), color: "gray" };
       return (0, import_react22.createElement)(EventLine, {
         key: relay.seq,
@@ -8279,6 +8282,7 @@ function GroupMessage({ bot, text: text5, texts: texts2 = [text5], room: room2, 
     (0, import_react22.createElement)(Bubbles, { texts: texts2, roster, selfId: bot.id, actions, sessionId: room2?.id, msgKey, useUi, lead: flat ? null : lead, whole })
   );
 }
+var isGroupReturn = (role, roomId, sender) => role === "report" || role === "reply" && roomId && !sender;
 function GroupEvent({ prefix, room: room2, name, roster, actions }) {
   return (0, import_react22.createElement)(
     "div",
@@ -8529,7 +8533,7 @@ function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDel
       return (0, import_react22.createElement)(RelayEvent, { key, reply, bot: speaker, sessionId, actions });
     }
     case "event": {
-      if (row.role === "report") return (0, import_react22.createElement)(GroupEvent, { key, prefix: t("Replies from"), room: roster.roomsById[row.roomId], name: t("a group chat"), roster, actions });
+      if (isGroupReturn(row.role, row.roomId, row.botId)) return (0, import_react22.createElement)(GroupEvent, { key, prefix: t("Replies from"), room: roster.roomsById[row.roomId], name: t("a group chat"), roster, actions });
       const other = roster.byId[row.botId] ?? { id: row.botId, name: row.name ?? t("a Bot"), color: "gray" };
       const prefix = { stopped: t("Stopped by"), reply: t("Reply from") }[row.role] ?? t("Message from");
       return (0, import_react22.createElement)(EventLine, { key, prefix, bots: [other], onOpen: () => {
@@ -8593,7 +8597,7 @@ function TriggerCell({ node, sessionId, useRoster, useSessions, useTurnClock, us
           whole: file ? { length: source.length, load: () => actions.fileText(file) } : void 0
         });
       }
-      if (source.role === "report") {
+      if (isGroupReturn(source.role, source.roomId, source.senderSessionId)) {
         return (0, import_react22.createElement)(GroupEvent, { prefix: t("Replies from"), room: roster.roomsById[source.roomId], name: t("a group chat"), roster, actions });
       }
       if (source.role === "resume" || source.resumed === true) return (0, import_react22.createElement)("div", { className: "bt-event" }, t("Picked up its work after a restart"));
@@ -8792,8 +8796,9 @@ function RelayEvent({ reply, bot, sessionId, actions }) {
   if (reply.kind === "failed") {
     return (0, import_react22.createElement)(
       "div",
-      { className: "bt-event bt-event-error", role: "status", title: [reply.code, reply.status, reply.text].filter(Boolean).join(" · ") },
-      t("{name} could not answer: {reason}", { name: bot.name, reason: failureLabel(reply.code, reply.text) })
+      { className: "bt-event-error", role: "status" },
+      (0, import_react22.createElement)("div", { className: "bt-event" }, t("{name} could not answer: {reason}", { name: bot.name, reason: failureLabel(reply.code, reply.text) })),
+      (0, import_react22.createElement)("details", null, (0, import_react22.createElement)("summary", null, t("Technical details")), [reply.code, reply.status, reply.text].filter(Boolean).join(" · "))
     );
   }
   if (reply.kind === "lookup") {
@@ -22695,7 +22700,7 @@ function isLegacyTaskReminder(text5) {
 
 // src/client/mek/group-chat.jsx
 var import_react63 = __toESM(require("react"), 1);
-var visibleText = (text5) => !isGroupAcknowledgement(text5) && !isLegacyTaskReminder(text5);
+var visibleText = (text5) => Boolean(text5?.trim()) && !isGroupAcknowledgement(text5) && !isLegacyTaskReminder(text5);
 var visibleReply = (reply) => reply.kind !== void 0 || visibleText(reply.text);
 function GroupChat({ sessionId, team }) {
   const { hooks, actions } = team;

@@ -73,6 +73,7 @@ test('one group main task, two stable children, accepted dependencies drive the 
   assert.equal(h.agent('gb').calls.length, 1, JSON.stringify(h.tasks()))
   assert.equal(h.agent('gc').calls.length, 0)
   assert.equal(h.get(verify.id).status, 'waiting')
+  assert.deepEqual(h.rt.roomOf('r').log.filter(line => line.botId === 'a').map(line => line.text), ['@Coder\nFix login'])
   const personal = await h.rt.mekTodoAction('mek-todo-list', { target: 'b' }, 'b')
   assert.equal(personal.tasks[0].id, repair.id)
   assert.equal(Object.keys(h.rt.state.mekTasks.roots).length, 1)

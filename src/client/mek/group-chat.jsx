@@ -8,7 +8,7 @@ import { contentText, stripHeader } from '../text.js'
 import { t } from '../i18n.js'
 import { isGroupAcknowledgement, isLegacyTaskReminder } from '../../shared/group-task-text.js'
 
-const visibleText = text => !isGroupAcknowledgement(text) && !isLegacyTaskReminder(text)
+const visibleText = text => Boolean(text?.trim()) && !isGroupAcknowledgement(text) && !isLegacyTaskReminder(text)
 const visibleReply = reply => reply.kind !== undefined || visibleText(reply.text)
 
 export function GroupChat({ sessionId, team }) {

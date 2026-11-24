@@ -18,6 +18,7 @@ test('credential and account failures have short words, in both languages', () =
 })
 
 test('an unknown code has no short words, and its label falls back to the message', () => {
+  assert.equal(failureLabel('server_error', 'Grok: the reply ended before it was complete'), 'The model response was interrupted')
   assert.equal(knownFailure('SOMETHING_NEW'), undefined)
   assert.equal(knownFailure(undefined), undefined)
   assert.equal(knownFailure('toString'), undefined)

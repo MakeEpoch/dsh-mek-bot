@@ -74,6 +74,7 @@ const FAILURES = {
 export const knownFailure = code => (Object.hasOwn(FAILURES, code ?? '') ? t(FAILURES[code]) : undefined)
 
 export function failureLabel(code, message) {
+  if (/the reply ended before it was complete/i.test(message ?? '')) return t('The model response was interrupted')
   return knownFailure(code) ?? (message || code || t('Unknown error'))
 }
 

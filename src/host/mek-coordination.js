@@ -380,7 +380,7 @@ export function install(rt) {
     prepared(root.id)
     await save(); await send(item)
   }
-  rt.mekDispatchTodo = async ({ rootId, owner, goal, criteria, roomId, worker, instruction, validate, prepared }) => {
+  rt.mekDispatchTodo = async ({ rootId, owner, goal, criteria, roomId, worker, instruction, brief, validate, prepared }) => {
     let target
     if (roomId) {
       const room = rt.roomOf(roomId)
@@ -395,11 +395,15 @@ export function install(rt) {
     if (!root || final(root) || root.owner !== owner) refuse('The task is no longer available to its coordinator.')
     prepared({ rootId: root.id })
     const id = randomUUID()
-    rt.openWork(id, { from: owner, to: worker, rootId: root.id, instruction, ...(target ? { sessionId: target.sessionId, fromRoom: roomId } : {}) })
+    rt.openWork(id, { from: owner, to: worker, rootId: root.id, instruction, ...(target ? { sessionId: target.sessionId, room: roomId, fromRoom: roomId } : {}) })
     const item = prepare(root.id, { fromId: owner, toId: worker, role: 'request', exchangeId: id, text: instruction, files: target?.files ?? [],
       ...(target ? { sessionId: target.sessionId, fromRoomId: roomId, groupRead: target.groupRead } : {}) })
     prepared({ rootId: root.id, workId: id })
     await save()
+    if (roomId && brief) {
+      await rt.appendGroupTaskResult?.(roomId, owner, `@${rt.botOf(worker).name}\n${brief}`)
+        .catch(error => rt.warn('mek-bot: group to-do assignment could not be shown: %s', error))
+    }
     await send(item)
     return { rootId: root.id, workId: id }
   }
@@ -777,7 +781,7 @@ export function install(rt) {
     const parent = own(state.works, work.id)?.parent
     rt.closeWork(work.id, `Group "${rt.roomOf(work.room)?.name ?? 'Unavailable'}"`, result)
     const returnSession = rt.roomOf(work.fromRoom)?.sessions?.[work.from]
-    const item = prepare(root.id, { toId: work.from, ...(returnSession ? { sessionId: returnSession } : {}), role: 'reply', roomId: work.room, replyTo: work.id, exchangeId: id,
+    const item = prepare(root.id, { toId: work.from, ...(returnSession ? { sessionId: returnSession } : {}), role: 'reply', roomId: work.room, fromName: rt.roomOf(work.room)?.name, replyTo: work.id, exchangeId: id,
       ...(parent && own(state.works, parent) ? { work: parent } : {}), text: `Group task result for ${root.id}:\n${result}${reviewAdvice(work)}` })
     work.reviewNoticeId = id
     await save(); await send(item)

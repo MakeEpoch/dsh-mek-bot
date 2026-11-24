@@ -1158,6 +1158,7 @@ const ZH = {
   'Too many requests to the model': '模型请求太频繁',
   'The conversation is too long for the model': '对话太长，超出模型上限',
   'The model service refused the request': '模型服务拒绝了请求',
+  'The model response was interrupted': '模型回复中途断开',
   'The model service failed': '模型服务出错',
   'The model took too long to answer': '模型响应超时',
   'Could not reach the model service': '连不上模型服务',

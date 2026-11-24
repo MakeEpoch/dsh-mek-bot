@@ -141,7 +141,7 @@ export function install(rt) {
       const versions = inputVersions(task)
       const instruction = `To-do ${task.id} under main task ${root.id}: ${task.instruction}\nCompletion checks: ${task.criteria.join('; ')}\nAccepted prerequisites:\n${predecessors(task).map(item => `${item.title}: ${item.acceptance?.summary ?? ''}\nEvidence: ${item.acceptance?.evidence ?? ''}`).join('\n')}\nReport with report_bot_task; the coordinator checks the result. This dispatch does not authorize unrelated work.`
       try {
-        await rt.mekDispatchTodo({ rootId: root.executionId, owner: coordinator, goal: root.title, criteria: root.criteria, roomId: task.roomId, worker, instruction, validate,
+        await rt.mekDispatchTodo({ rootId: root.executionId, owner: coordinator, goal: root.title, criteria: root.criteria, roomId: task.roomId, worker, instruction, brief: task.instruction, validate,
           prepared: ids => {
             if (ended(root) || paused(task) || !ready(task) || owner(task) !== coordinator) refuse('The plan changed before dispatch.')
             root.executionId = ids.rootId; root.coordinator = coordinator
