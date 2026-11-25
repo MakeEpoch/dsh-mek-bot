@@ -1,6 +1,6 @@
 {
   "name": "dsh-mek-bot-timeline",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "description": "Task trees and progress reports for MEK Bot chats and groups.",
   "type": "module",
   "license": "MIT",
