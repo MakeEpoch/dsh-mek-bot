@@ -142,7 +142,7 @@ export function historyEntry(event, group) {
     return text === '' ? undefined : { answer: true, text }
   }
   const source = event.data?.source
-  if (event.type === 'user/message' && source?.kind === REPLY_KIND) {
+  if (event.type === 'user/message' && (source?.kind === REPLY_KIND || wechatQuestionReply(event))) {
     return { answer: false, who: 'user', text: replyText(textOf(event.data.content)), keepAnswers: true }
   }
   if (event.type !== 'user/message' || (source?.kind !== 'user' && source?.kind !== SOURCE_KIND)) return undefined
@@ -151,6 +151,15 @@ export function historyEntry(event, group) {
   const skipped = (ours && (source.handoff === true || source.role === 'kickoff' || source.role === 'goal')) || (!group && text.startsWith('[Group chat'))
   // A turn that went on after a handoff did real work, so its answers stay.
   return { answer: false, who: ours ? 'bot' : 'user', text: skipped ? '' : text, keepAnswers: !skipped || (ours && source.resume === true) }
+}
+
+function wechatQuestionReply(event) {
+  const source = event.data?.source
+  if (source?.kind !== 'user' || typeof source.rpcId !== 'string' || !source.rpcId.startsWith('wechatpad:')) return undefined
+  const text = textOf(event.data.content)
+  if (!text.startsWith('{"kind":"answer_to_pending_question","tool":"ask_user",')) return undefined
+  const reply = readReply(text)
+  return reply?.questions ? reply : undefined
 }
 
 // A note with every heading in order but some translated (e.g. "## 目标" for "## Goals")
@@ -1596,7 +1605,9 @@ export function install(rt) {
         const content = Array.isArray(event.data.content) ? event.data.content : []
         const images = content.filter(block => block?.type === 'image').length
         const imageAttachments = content.filter(block => block?.type === 'image' && block.attachment).map(block => block.attachment)
-        stamp(event, { kind: 'user', text: textOf(content), ...(images > 0 ? { images } : {}), ...(imageAttachments.length ? { imageAttachments, imageSessionId: partId } : {}), time: event.time })
+        const reply = wechatQuestionReply(event)
+        if (reply && images === 0) stamp(event, { kind: 'answer', ...reply, time: event.time })
+        else stamp(event, { kind: 'user', text: reply ? replyText(textOf(content)) : textOf(content), ...(images > 0 ? { images } : {}), ...(imageAttachments.length ? { imageAttachments, imageSessionId: partId } : {}), time: event.time })
       } else if (source?.kind === REPLY_KIND) {
         const text = textOf(event.data.content)
         const reply = readReply(text)

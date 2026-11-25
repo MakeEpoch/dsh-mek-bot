@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { questionReply } from './parts.js'
 
 const invalid = message => Object.assign(new Error(message), { code: 'bot/invalid' })
 
@@ -56,15 +57,31 @@ export function install(rt) {
       const content = [...(text?.trim() ? [{ type: 'text', text }] : []), ...images.map(image => ({ type: 'image', mediaType: image.mediaType, data: image.data, ...(image.name ? { name: image.name } : {}) }))]
       if (!content.length) throw invalid('Nothing to send')
       if (!['queue', 'interrupt'].includes(mode) || (mode === 'interrupt' && current.kind !== 'bot')) throw invalid('Only private Main Bot chats support interruption.')
-      if (mode === 'interrupt') await bridge.stop(target)
+      const pending = current.kind === 'bot' && text?.trim() ? rt.own(rt.state.questions, current.sessionId) : undefined
+      if (!pending && mode === 'interrupt') await bridge.stop(target)
       await rt.ensureCapabilities(current.sessionId)
       // Recheck after asynchronous capability preparation: deletion or demotion
       // cannot silently redirect an external user's message to another identity.
       const latest = assertTarget(target)
+      const question = pending && rt.own(rt.state.questions, latest.sessionId)
+      if (pending && question?.id !== pending.id) throw invalid('这条确认已处理或已更新，请查看最新消息后再回复。')
+      const label = question?.options.find(option => option.label === text.trim())?.label
+      const reply = question && questionReply(question, label ? { selected: [label] } : { custom: text })
       const cancelDelivery = latest.kind === 'bot' ? beforePrompt?.(latest.sessionId, requestId) : undefined
+      // Match the Web answer path's claim before admitting a prompt. Keep the
+      // WeChat request id on the native prompt so attachment delivery still works.
+      if (reply) {
+        content[0] = { type: 'text', text: reply.text }
+        delete rt.state.questions[latest.sessionId]
+      }
       try {
         await rt.ctx.sessionController.prompt({ sessionId: latest.sessionId, requestId, mode: 'queue', content }, AbortSignal.timeout(30_000))
-      } catch (error) { cancelDelivery?.(); throw error }
+      } catch (error) {
+        if (reply && rt.chatOf(latest.id) === latest.sessionId) rt.state.questions[latest.sessionId] ??= question
+        cancelDelivery?.()
+        throw error
+      }
+      if (reply) await rt.save()
       return true
     },
     async stop(target) {
@@ -79,6 +96,13 @@ export function install(rt) {
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
   }
   rt.wechatBridge = bridge
+  rt.mekWechatQuestion = (sessionId, question) => {
+    const botId = rt.chatOwners.get(sessionId)
+    if (!botId || !rt.isMain(botId) || rt.chatOf(botId) !== sessionId || rt.state.questions[sessionId] !== question) return
+    const options = question.options.map(({ label, description }) => `• ${label}${description ? `（${description}）` : ''}`)
+    const text = [question.question, question.detail, ...options, '直接用一句话回复你的选择，也可以补充条件。'].filter(Boolean).join('\n')
+    publish({ id: `question:${question.id}`, target: { kind: 'bot', id: botId }, text })
+  }
   rt.mekWechatAction = async (endpoint, body = {}) => {
     await rt.load()
     const target = { kind: body.target?.kind, id: body.target?.id }

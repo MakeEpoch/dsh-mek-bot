@@ -747,7 +747,7 @@ export function install(rt) {
 
   rt.teamTools.push(defineTool({
     name: 'ask_user',
-    description: 'Show the user a short multiple-choice question card in the chat (the user can also type their own answer). Calling it ends your turn; the chosen answer arrives later as the user\'s next message.',
+    description: 'Ask a short question with choices. Calling it ends your turn. The user may reply in their own words. Follow their actual meaning and conditions, and ask for clarification when their answer is ambiguous.',
     parameters: {
       question: { type: 'string', required: true, description: 'One short question' },
       options: {
@@ -788,7 +788,7 @@ export function install(rt) {
       // composer dock, which takes questions without a call.
       const turn = rt.live.get(id)?.turn
       const hidden = turn !== undefined && (state.exchangeTurns[id] ?? []).includes(turn)
-      state.questions[id] = {
+      const question = state.questions[id] = {
         id: randomUUID(),
         ...(exec.callId && !hidden ? { callId: exec.callId } : {}),
         question: String(args.question ?? '').trim(),
@@ -799,8 +799,9 @@ export function install(rt) {
         askedAt: Date.now(),
       }
       await rt.save()
+      rt.mekWechatQuestion?.(id, question)
       exec.concludeTurn?.()
-      return 'The card is on screen; the user\'s answer arrives as their next message.'
+      return 'The question is waiting for the user\'s reply.'
     },
   }))
 

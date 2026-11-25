@@ -55,6 +55,54 @@ test('visible Main Bot and group messages are published without hidden turns or 
   assert.equal(messages.length, 2)
 })
 
+test('a saved Main Bot question is sent as text and a natural WeChat reply closes the same card', async t => {
+  const { rt, bridge, prompts } = await fixture(t)
+  const messages = [], target = { kind: 'bot', id: 'chief' }
+  bridge.subscribe(event => messages.push(event))
+  const ask = rt.teamTools.find(tool => tool.name === 'ask_user')
+  const args = { question: '现在可以继续吗？', detail: '只涉及桌面核对。', options: [{ label: '可以继续' }] }
+  await ask.execute(args, { agent: { id: 'worker-current' }, callId: 'worker-call' })
+  assert.equal(messages.length, 0)
+  await ask.execute(args, { agent: { id: 'chief-current' }, callId: 'desktop-check' })
+  const question = rt.state.questions['chief-current']
+  assert.deepEqual(messages, [{
+    id: `question:${question.id}`, target,
+    text: '现在可以继续吗？\n只涉及桌面核对。\n• 可以继续\n直接用一句话回复你的选择，也可以补充条件。',
+  }])
+  rt.resolveAgent = async () => { assert.fail('an answer does not interrupt the pending decision') }
+  const text = '可以继续，但先只核对桌面，别发布。'
+  const requestId = 'wechatpad:weixin:fixture-reply'
+  await bridge.send(target, { text, requestId, mode: 'interrupt' })
+  const [prompt] = prompts
+  const answer = JSON.parse(prompt.content[0].text)
+  assert.equal(prompt.requestId, requestId)
+  assert.equal(answer.callId, 'desktop-check')
+  assert.deepEqual(answer.answers, [{ id: question.id, selected: [], custom: text }])
+  assert.equal(rt.state.questions['chief-current'], undefined)
+  const [display] = rt.displayItems('chief-current', [{ type: 'user/message', data: { content: prompt.content, source: { kind: 'user', rpcId: requestId } } }])
+  assert.equal(display.kind, 'answer')
+  assert.equal(display.answers[0].custom, text)
+})
+
+test('linked answers restore a failed admission and do not close a replacement question', async t => {
+  const { rt, ctx, bridge, prompts } = await fixture(t)
+  const target = { kind: 'bot', id: 'chief' }
+  const pending = { id: 'q1', question: '继续吗？', options: [{ label: '继续' }] }
+  rt.state.questions['chief-current'] = pending
+  const admit = ctx.sessionController.prompt
+  ctx.sessionController.prompt = async () => { throw new Error('admission failed') }
+  await assert.rejects(bridge.send(target, { text: '继续' }), /admission failed/)
+  assert.equal(rt.state.questions['chief-current'], pending)
+  ctx.sessionController.prompt = admit
+  const replacement = { ...pending, id: 'q2' }
+  rt.ensureCapabilities = async () => { rt.state.questions['chief-current'] = replacement }
+  await assert.rejects(bridge.send(target, { text: '继续' }), /确认已处理或已更新/)
+  assert.equal(rt.state.questions['chief-current'], replacement)
+  assert.equal(prompts.length, 0)
+  await bridge.send(target, { text: '继续' })
+  assert.deepEqual(JSON.parse(prompts[0].content[0].text).answers, [{ id: 'q2', selected: ['继续'] }])
+})
+
 test('task progress counts acceptance rather than reports and preserves blockers and cancellation', () => {
   const children = [{ status: 'completed' }, { status: 'review' }, { status: 'waiting' }]
   assert.deepEqual(taskProgress({}, children), { accepted: 1, total: 3, phase: 'review' })

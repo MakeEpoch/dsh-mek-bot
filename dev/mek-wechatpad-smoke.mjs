@@ -11,7 +11,8 @@ const post = async (path, body) => (await fetch(`${base}/api/${path}`, { method:
 const api = async (endpoint, payload = {}) => { const result = await post('bot', { endpoint, payload }); assert.ok(result.ok, result.error?.message); return result.value }
 const probe = async (action, payload) => { const result = await post('mek-wechat-probe', { action, payload }); assert.ok(result.ok, result.error); return result.value }
 const until = async condition => { for (let n = 0; n < 120; n++) { const sent = await probe('sent'); if (condition(sent)) return sent; await delay(250) } throw Error('WechatPad fixture replies did not arrive') }
-const initial = await api('state'), chief = initial.bots.find(bot => bot.id === initial.mainBotId), worker = initial.bots.find(bot => bot.id !== chief.id)
+const initial = await api('state'), chief = initial.bots.find(bot => bot.id === initial.mainBotId)
+const worker = initial.bots.find(bot => bot.id !== chief.id) ?? await api('create-bot', { name: 'Tester', model: initial.defaultModel })
 assert.ok(chief && worker)
 const group = await api('create-room', { name: `WechatPad bridge ${Date.now()}`, members: [chief.id, worker.id], admin: chief.id, greet: false })
 let view = await probe('view')
@@ -24,7 +25,22 @@ view = await probe('bind', { provider: 'pad', chatId: 'fixture@chatroom', isGrou
 const message = (chatId, text, isGroup) => ({ messageId: `fixture-${Date.now()}`, chatId, senderId: 'fixture-owner', senderName: 'Fixture owner', isGroup, mentioned: true, text, createdAt: Date.now(), msgType: 1 })
 await probe('receive', message('fixture-person', 'WeChat private fixture hello', false))
 await until(sent => sent.some(row => row.chatId === 'fixture-person'))
-await probe('receive', message('fixture@chatroom', '讨论', true))
+await probe('receive', message('fixture-person', '多选', false))
+const withQuestion = await until(sent => sent.some(row => row.chatId === 'fixture-person' && row.text.includes('这周先盯哪些？') && row.text.includes('收集资料')))
+assert.equal(withQuestion.filter(row => row.text.includes('这周先盯哪些？')).length, 1)
+const question = (await api('state')).questions[chief.sessionId ?? chief.id]
+assert.ok(question, 'the native card is still answerable')
+const naturalReply = '先把已有材料过一遍，初稿晚点再写。'
+await probe('receive', message('fixture-person', naturalReply, false))
+let reply
+for (let n = 0; n < 120 && !reply; n++) {
+  const chat = await api('chat', { botId: chief.id })
+  reply = chat.items.find(item => item.kind === 'answer' && item.answers?.some(answer => answer.id === question.id))
+  if (!reply) await delay(250)
+}
+assert.equal(reply?.answers[0].custom, naturalReply, 'the linked reply answers the native card verbatim')
+assert.equal((await api('state')).questions[chief.sessionId ?? chief.id], undefined)
+await probe('receive', message('fixture@chatroom', `@${worker.name} 讨论`, true))
 await until(sent => sent.some(row => row.chatId === 'fixture@chatroom' && row.text.startsWith(`${worker.name}:`)))
 let records
 for (let n = 0; n < 120; n++) { records = await api('room-chat', { roomId: group.id }); if (records.items.some(item => item.kind === 'group')) break; await delay(250) }
