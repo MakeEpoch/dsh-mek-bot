@@ -1,9 +1,10 @@
 // Team tools: the roster, bot-to-bot messages, group chat settings and posts, and the
 // question and view cards. Group rounds and reading chats are in groups.js.
 import { randomUUID } from 'node:crypto'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { readAvatar } from './avatar.js'
-import { COLORS, EXTRA_COLORS, MESSAGE_INLINE_MAX, ROOM_MODES, SOURCE_KIND } from './constants.js'
+import { COLORS, EXTRA_COLORS, MESSAGE_INLINE_MAX, ROOM_MODES, SOURCE_KIND, STEER_CUT } from './constants.js'
 import { within } from './folders.js'
 import { absoluteLinks } from './links.js'
 import { NAME_MAX } from './requests.js'
@@ -611,14 +612,57 @@ export function install(rt) {
     },
   }))
 
+  // Control the exact live group turn. Resolving an Agent can yield while the
+  // worker finishes one assignment and starts another in the same Session.
+  async function updateGroupTurn(room, sender, targetId, text, mode, taskId) {
+    const sessionId = room.sessions?.[targetId]
+    const entry = rt.live.get(sessionId)
+    const turn = entry?.turn
+    const info = entry?.info
+    if (turn === undefined || !info?.exchangeId) refuse('No active assignment in that group session. Read its state before choosing whether to queue new work.')
+    const agent = await rt.resolveAgent(sessionId)
+    if (rt.readOnly()) refuse(rt.readOnly())
+    const current = rt.roomOf(room.id)
+    if (!current?.members.includes(targetId) || current.sessions?.[targetId] !== sessionId
+      || (!rt.isMain(sender.id) && !rt.isAdminOf(current, sender.id))) refuse('Only the current group administrator or a Main Bot may redirect a member here.')
+    if (rt.live.get(sessionId) !== entry || entry.turn !== turn || entry.info !== info || entry.cut || agent.status !== 'running') refuse('The target turn changed. Read its current state before sending another instruction.')
+    if (taskId && rt.mekTaskForSession(sessionId)?.id !== taskId) refuse('That task is not the current work in this group session.')
+    const interrupt = mode === 'interrupt'
+    const message = createUserMessage({
+      content: [{ type: 'text', text: `[Updated instructions from ${sender.name} in ${room.name}]\n${text}` }],
+      source: interrupt ? info : { kind: SOURCE_KIND, form: 'relay', role: 'notice', senderName: sender.name, senderSessionId: sender.id, exchangeId: randomUUID() },
+    })
+    if (interrupt) {
+      rt.markSteerCut(sessionId)
+      agent.cancel({ kind: 'hook', reason: STEER_CUT }, { keepInbox: true })
+      agent.followup(message)
+      if (agent.inbox.nextTurn[0]?.id !== message.id) {
+        agent.inbox.remove(message.id)
+        agent.inbox.prepend('next-turn', message)
+      }
+    } else {
+      agent.steer(message)
+    }
+    const receipt = interrupt ? 'Requested cancellation of the active turn and placed the correction first for its continuation. Check any external actions already submitted.' : 'Guidance delivered for the next step of the active turn.'
+    try {
+      await ctx.sessions.flush(agent.session)
+      await rt.appendGroupTaskResult(room.id, sender.id, text)
+    } catch (error) {
+      rt.warn('mek-bot: could not confirm group control history: %s', error)
+      return receipt + ' Could not confirm saved history. Inspect the existing work before any retry.'
+    }
+    return receipt
+  }
+
   rt.teamTools.push(defineTool({
     name: 'post_to_group',
-    description: rt.config.coordinateTasks ? 'Post an announcement in a group. Set report_back: true only to explicitly assign work and collect its report. A Main Bot may post into any group, and other Bots may post into groups they belong to.' : 'Post a message into a group chat as yourself. A Main Bot may post into any group, any other Bot into a group it is in. A Main Bot\'s or the group admin\'s post starts a round: members reply in the group, where the user reads them. Another member\'s post calls only the members it names with "@Name"; without one it is only written into the group.',
+    description: rt.config.coordinateTasks ? 'Choose delivery from the user intent: interrupt an active member turn if continuing would contradict a stop or withdrawal; steer current work for compatible corrections or priority updates; queue a separate assignment; announce information only. A Main Bot may post into any group, and other Bots may post into groups they belong to.' : 'Post a message into a group chat as yourself. A Main Bot may post into any group, any other Bot into a group it is in. A Main Bot\'s or the group admin\'s post starts a round: members reply in the group, where the user reads them. Another member\'s post calls only the members it names with "@Name"; without one it is only written into the group.',
     parameters: {
       group: GROUP_REF,
       message: { type: 'string', required: true, description: rt.config.coordinateTasks ? 'Announcement or assignment text. With report_back: true, use "@Name" to choose who should receive the assignment.' : 'What to say; write "@Name" to choose who answers, and a name without "@" to only mention a member'  },
       report_back: { type: 'boolean', description: rt.config.coordinateTasks ? 'True to assign work and return reports. Omit or set false for a group announcement.' : 'Also send the members\' replies back to you as a new message when the round ends' },
       ...(rt.config.coordinateTasks ? {
+        delivery: { type: 'string', enum: ['interrupt', 'steer', 'queue', 'announce'], description: 'For interrupt or steer name exactly one active @member. Queue starts a tracked assignment after existing work. Announce only writes group history.' },
         task_id: { type: 'string', description: 'Exact existing task id when continuing work' },
         task_title: { type: 'string', description: 'Concise outcome title for a new task' },
       } : {}),
@@ -634,7 +678,7 @@ export function install(rt) {
       // An ordinary member's post calls only the members it names (openingSpeakers).
       const member = !rt.isMain(self) && !rt.isAdminOf(room, self)
       const info = rt.live.get(exec.agent?.id)?.info
-      if (info?.role === 'room' && info.roomId === room.id) return `You are speaking in "${room.name}" right now. Write your message as your reply instead.`
+      if (!args.delivery && info?.role === 'room' && info.roomId === room.id) return `You are speaking in "${room.name}" right now. Write your message as your reply instead.`
       const text = absoluteLinks(String(args.message ?? '').trim(), rt.sessionFolder?.(exec.agent?.session ?? exec.agent))
       if (text === '') return 'Write a message to post.'
       // Counted on the whole message. A post past MESSAGE_INLINE_MAX keeps only its
@@ -645,7 +689,16 @@ export function install(rt) {
         if (span.bot && span.bot.id !== self && !named.includes(span.bot.id)) named.push(span.bot.id)
       }
       const mentions = { ids: named, all: spans.some(span => span.all === true) }
-      const reportBack = args.report_back === true
+      const mode = rt.config.coordinateTasks ? args.delivery : undefined
+      if (mode === 'steer' || mode === 'interrupt') {
+        if (mentions.all || named.length !== 1 || member) refuse('A Main Bot or group administrator must name one active @member for a correction.')
+        return updateGroupTurn(room, sender, named[0], text, mode, args.task_id)
+      }
+      if (mode === 'announce' && args.report_back) refuse('Choose announce for information or queue for an assignment.')
+      const reportBack = mode === 'queue' || args.report_back === true
+      if (rt.config.coordinateTasks && !reportBack && !mode && !member && named.some(id => rt.live.get(room.sessions?.[id])?.turn !== undefined)) {
+        refuse('A named member is working. Choose interrupt, steer, queue, or announce according to the user’s intent.')
+      }
       if (member && reportBack && named.length === 0) {
         return 'Nobody would answer: your post only calls the members you name. Write "@Name" for each member who should answer, or post without report_back.'
       }

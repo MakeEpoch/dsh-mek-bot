@@ -551,6 +551,63 @@ const groupTeam = () => {
   return team
 }
 
+test('a coordinator can steer, queue or interrupt only the live member in the selected group', async t => {
+  const h = await host(t, undefined, groupTeam())
+  const post = (delivery, message, other = {}) => h.tool('a', 'post_to_group', { group: 'Review group', ...(delivery ? { delivery } : {}), message: '@Tester ' + message, ...other })
+  await post('queue', 'Verify the sample.')
+  const worker = h.agentOf('gc')
+  h.take('gc')
+  worker.status = 'running'
+  const original = worker.calls[0].source
+  const root = task(h)
+  const previous = { id: 'unrelated' }
+  worker.inbox.nextTurn = [previous]
+  worker.followup = message => worker.inbox.nextTurn.push(message)
+  worker.inbox.remove = id => { worker.inbox.nextTurn = worker.inbox.nextTurn.filter(message => message.id !== id) }
+  worker.inbox.prepend = (_where, message) => worker.inbox.nextTurn.unshift(message)
+  let options
+  worker.cancel = (reason, opts) => { worker.cancelled = reason; options = opts }
+  await assert.rejects(post(undefined, 'Please stop publishing.'), /Choose interrupt/)
+  await assert.rejects(post('interrupt', 'Wait.', { task_id: 'different' }), /not the current work/)
+  await post('steer', 'Check the screenshot first.')
+  assert.equal(worker.calls.at(-1).source.role, 'notice')
+  assert.equal(worker.cancelled, undefined)
+  assert.match(await post('queue', 'A separate assignment.'), /Delegated/)
+  const queued = [...worker.inbox.nextTurn]
+  assert.ok(queued.length > 1)
+  assert.match(await post('interrupt', 'Stop publishing; retain existing evidence.'), /Requested cancellation/)
+  assert.equal(options.keepInbox, true)
+  assert.equal(h.agentOf('c').cancelled, undefined)
+  const [correction, ...stillQueued] = worker.inbox.nextTurn
+  assert.equal(correction.source.exchangeId, original.exchangeId)
+  assert.deepEqual(stillQueued, queued)
+  h.end('gc', '', { kind: 'aborted', reason: worker.cancelled })
+  h.begin('gc', correction)
+  const report = await h.tool('gc', 'report_bot_task', { status: 'completed', summary: 'Stopped the old action.', evidence: 'Verified the retained evidence.' })
+  assert.ok(report)
+  h.end('gc', 'Checked and redirected.')
+  await settled(() => h.rt.mekTaskRoot(root.id) && h.agentOf('a').calls.length > 0)
+  assert.ok(h.rt.roomOf('r').log.some(line => line.text.includes('Stop publishing')))
+})
+
+test('group control refuses a different turn that started during agent resolution', async t => {
+  const h = await host(t, undefined, groupTeam())
+  const send = (who, args) => h.tool(who, 'post_to_group', { group: 'Review group', message: '@Tester Check the original sample.', ...args })
+  await send('a', { delivery: 'queue' })
+  h.take('gc')
+  const worker = h.agentOf('gc')
+  worker.status = 'running'
+  const resolve = h.rt.resolveAgent
+  h.rt.resolveAgent = async id => {
+    const agent = await resolve(id)
+    if (id === 'gc') h.rt.live.get(id).turn++
+    return agent
+  }
+  await assert.rejects(send('a', { delivery: 'interrupt' }), /turn changed/)
+  assert.equal(worker.cancelled, undefined)
+  await assert.rejects(send('a', { delivery: 'steer', message: '@all Change priority.' }), /one active/)
+})
+
 test('formal group dispatches deliver only new group history to the same member', async t => {
   const h = await host(t, undefined, groupTeam())
   const room = h.rt.roomOf('r')
