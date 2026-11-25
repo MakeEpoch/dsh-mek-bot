@@ -1,6 +1,6 @@
 {
   "name": "dsh-mek-bot",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "workspaces": ["timeline"],
   "description": "A native DeepSeek Harness plugin for long-lived Bot teams, group chat, task delegation, and review. Built on DS-Bot.",
   "keywords": [
@@ -93,7 +93,7 @@
   },
   "dependencies": {
     "deep-view": "0.1.0",
-    "dsh-mek-bot-timeline": "0.2.17"
+    "dsh-mek-bot-timeline": "0.2.18"
   },
   "bundledDependencies": ["dsh-mek-bot-timeline"]
 }
