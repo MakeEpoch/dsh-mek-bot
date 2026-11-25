@@ -626,7 +626,8 @@ export function install(rt) {
     if (!current?.members.includes(targetId) || current.sessions?.[targetId] !== sessionId
       || (!rt.isMain(sender.id) && !rt.isAdminOf(current, sender.id))) refuse('Only the current group administrator or a Main Bot may redirect a member here.')
     if (rt.live.get(sessionId) !== entry || entry.turn !== turn || entry.info !== info || entry.cut || agent.status !== 'running') refuse('The target turn changed. Read its current state before sending another instruction.')
-    if (taskId && rt.mekTaskForSession(sessionId)?.id !== taskId) refuse('That task is not the current work in this group session.')
+    const root = rt.mekTaskForSession(sessionId)
+    if (taskId && root?.id !== taskId) refuse('That task is not the current work in this group session.')
     const interrupt = mode === 'interrupt'
     const message = createUserMessage({
       content: [{ type: 'text', text: `[Updated instructions from ${sender.name} in ${room.name}]\n${text}` }],
@@ -646,6 +647,7 @@ export function install(rt) {
     const receipt = interrupt ? 'Requested cancellation of the active turn and placed the correction first for its continuation. Check any external actions already submitted.' : 'Guidance delivered for the next step of the active turn.'
     try {
       await ctx.sessions.flush(agent.session)
+      await rt.mekGroupTimelineControl?.(root, room, mode, text)
       await rt.appendGroupTaskResult(room.id, sender.id, text)
     } catch (error) {
       rt.warn('mek-bot: could not confirm group control history: %s', error)

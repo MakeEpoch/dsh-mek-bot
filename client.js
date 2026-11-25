@@ -23080,7 +23080,7 @@ function createNativeTasks(ctx) {
   });
   return availability;
 }
-function EmbeddedTodoPanel({ owner, group, timeline, ctx }) {
+function EmbeddedTodoPanel({ owner, group, timeline, nativeTimeline, ctx }) {
   const current = currentPart(owner);
   const earlier = (group ? owner.ownParts : owner.parts) ?? [];
   const [selected, select] = (0, import_react69.useState)("");
@@ -23102,7 +23102,7 @@ function EmbeddedTodoPanel({ owner, group, timeline, ctx }) {
   return /* @__PURE__ */ import_react69.default.createElement("section", { className: "mek-task-panel", "aria-label": text4("Timeline", "时间线") }, earlier.length > 0 && /* @__PURE__ */ import_react69.default.createElement("label", { className: "mek-native-task-session" }, text4("Conversation part", "会话段"), /* @__PURE__ */ import_react69.default.createElement("select", { value: selected, disabled: restoring, onChange: (event) => {
     select(event.target.value);
     setError("");
-  } }, /* @__PURE__ */ import_react69.default.createElement("option", { value: "" }, text4("Current part", "当前会话段")), earlier.map((id, index) => /* @__PURE__ */ import_react69.default.createElement("option", { key: id, value: id }, text4("Part", "会话段"), " ", index + 1)))), archived ? /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft", disabled: restoring, onClick: () => void restore() }, text4("Restore conversation part", "恢复会话段")) : /* @__PURE__ */ import_react69.default.createElement(timeline.Panel, { key: target, sessionId: target }), error && /* @__PURE__ */ import_react69.default.createElement("p", { role: "alert" }, error));
+  } }, /* @__PURE__ */ import_react69.default.createElement("option", { value: "" }, text4("Current part", "当前会话段")), earlier.map((id, index) => /* @__PURE__ */ import_react69.default.createElement("option", { key: id, value: id }, text4("Part", "会话段"), " ", index + 1)))), archived ? /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft", disabled: restoring, onClick: () => void restore() }, text4("Restore conversation part", "恢复会话段")) : /* @__PURE__ */ import_react69.default.createElement(import_react69.default.Fragment, null, group && nativeTimeline && /* @__PURE__ */ import_react69.default.createElement("div", { className: "mek-native-task-actions" }, /* @__PURE__ */ import_react69.default.createElement("button", { type: "button", className: "bt-soft", onClick: () => nativeTimeline.openTimeline(target) }, text4("Open Timeline in DSH", "在 DSH 中打开任务树"), " ↗")), /* @__PURE__ */ import_react69.default.createElement(timeline.Panel, { key: target, sessionId: target })), error && /* @__PURE__ */ import_react69.default.createElement("p", { role: "alert" }, error));
 }
 function NativeTodoPanel({ bot, timeline, ctx }) {
   const current = currentPart(bot);
@@ -23463,7 +23463,7 @@ function TeamView({ ctx, requests, useSessionStatus, nativeTasks, viewport }) {
     const roster2 = hooks.useRoster((value) => value);
     const bot = roster2.byId[sessionId];
     const room2 = roster2.roomsById[sessionId];
-    if (bucket === "todos" && embeddedTimeline && (room2 || bot)) return /* @__PURE__ */ import_react72.default.createElement(EmbeddedTodoPanel, { owner: room2 ?? bot, group: Boolean(room2), timeline: embeddedTimeline, ctx });
+    if (bucket === "todos" && embeddedTimeline && (room2 || bot)) return /* @__PURE__ */ import_react72.default.createElement(EmbeddedTodoPanel, { owner: room2 ?? bot, group: Boolean(room2), timeline: embeddedTimeline, nativeTimeline: timeline, ctx });
     const panel = bucket === "todos" && bot && !room2 && timeline ? /* @__PURE__ */ import_react72.default.createElement(NativeTodoPanel, { bot, timeline, ctx }) : /* @__PURE__ */ import_react72.default.createElement(ConversationTaskPanel, { team, ctx, sessionId, bucket, includeGroupPlans: Boolean(room2 && embeddedTimeline) });
     return bucket === "todos" && TimelineConflict ? /* @__PURE__ */ import_react72.default.createElement(import_react72.default.Fragment, null, /* @__PURE__ */ import_react72.default.createElement(TimelineConflict, null), panel) : panel;
   }, [team, ctx, hooks, timeline, embeddedTimeline, TimelineConflict]);

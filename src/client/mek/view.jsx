@@ -69,7 +69,7 @@ function TeamView({ ctx, requests, useSessionStatus, nativeTasks, viewport }) {
     const roster = hooks.useRoster(value => value)
     const bot = roster.byId[sessionId]
     const room = roster.roomsById[sessionId]
-    if (bucket === 'todos' && embeddedTimeline && (room || bot)) return <EmbeddedTodoPanel owner={room ?? bot} group={Boolean(room)} timeline={embeddedTimeline} ctx={ctx} />
+    if (bucket === 'todos' && embeddedTimeline && (room || bot)) return <EmbeddedTodoPanel owner={room ?? bot} group={Boolean(room)} timeline={embeddedTimeline} nativeTimeline={timeline} ctx={ctx} />
     const panel = bucket === 'todos' && bot && !room && timeline
       ? <NativeTodoPanel bot={bot} timeline={timeline} ctx={ctx} />
       : <ConversationTaskPanel team={team} ctx={ctx} sessionId={sessionId} bucket={bucket} includeGroupPlans={Boolean(room && embeddedTimeline)} />

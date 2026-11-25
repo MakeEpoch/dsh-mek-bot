@@ -3224,6 +3224,35 @@ var TIMELINE_CONFLICTS = {
   standalone: "@magolor/dsh-timeline"
 };
 
+// timeline/src/group-plan.ts
+function publishGroupPlan(storage, session, plan) {
+  const id2 = treeId.parse(`mek-group-${plan.id}`);
+  const itemId = taskId.parse("assignment");
+  return storage.append(session, "plugin:timeline/tree", (state) => {
+    const tree = state.view.trees.find((item) => item.id === id2);
+    const previous = tree?.tasks.find((item) => item.id === itemId);
+    const { title, description, status, note, details } = plan;
+    if (previous?.title === title && previous.description === description && previous.status === status && previous.note === note && previous.details === details) return;
+    const at = Date.now();
+    const tasks = patchTasks(tree?.tasks ?? [], [{
+      id: itemId,
+      title,
+      description,
+      status,
+      note,
+      details,
+      done: [status === "done" ? 1 : 0, 1],
+      remaining: status === "done" ? 0 : null
+    }], at, Math.max(1, tree?.tasks.length ?? 0) + (tree && !previous ? 1 : 0));
+    return {
+      version: 1,
+      sessionId: session.id,
+      callId: id2,
+      tree: { id: id2, title, description, tasks, createdAt: tree?.createdAt ?? at, lastTaskUpdate: at }
+    };
+  });
+}
+
 // timeline/src/index.ts
 var name = "timeline";
 var inject = [
@@ -3259,6 +3288,7 @@ async function apply(ctx, input) {
     browserLanguage = language;
   });
   installTools(ctx, config, storage);
+  ctx.provide("mekTimelineGroupPlan", (session, plan) => publishGroupPlan(storage, session, plan));
   ctx.provide("mekTimelineShared", true);
   const owns = planningOwner(ctx);
   installDelegation(ctx, owns);

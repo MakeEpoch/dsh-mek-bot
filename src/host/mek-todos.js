@@ -340,7 +340,7 @@ export function install(rt) {
       if (member && hasNativeTimeline(agent)) {
         if (ctx.get?.('mekTimelineShared')) {
           return rt.roomOf(member.roomId)?.admin === member.botId
-            ? rules + '\nUse Timeline for shared checklists and progress. Timeline tools read and update the group Session. Use the existing MEK tools for formal delegation, dependencies and acceptance.'
+            ? rules + '\nUse Timeline for independent shared checklists. Formal group dispatch already publishes one shared Timeline task. Use MEK tools for its corrections, delegation, reports and acceptance. Do not make a second Timeline plan for the same formal task.'
             : rules + '\nThe group administrator owns the shared Timeline. Report progress through the existing group assignment.'
         }
         return rules + '\nKeep this group plan in the MEK team tools.'

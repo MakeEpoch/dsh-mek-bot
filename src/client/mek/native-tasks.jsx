@@ -60,7 +60,7 @@ export function createNativeTasks(ctx) {
   return availability
 }
 
-export function EmbeddedTodoPanel({ owner, group, timeline, ctx }) {
+export function EmbeddedTodoPanel({ owner, group, timeline, nativeTimeline, ctx }) {
   const current = currentPart(owner)
   const earlier = (group ? owner.ownParts : owner.parts) ?? []
   const [selected, select] = useState('')
@@ -83,7 +83,12 @@ export function EmbeddedTodoPanel({ owner, group, timeline, ctx }) {
       </select>
     </label>}
     {archived ? <button type="button" className="bt-soft" disabled={restoring} onClick={() => void restore()}>{text('Restore conversation part', '恢复会话段')}</button>
-      : <timeline.Panel key={target} sessionId={target} />}
+      : <>
+        {group && nativeTimeline && <div className="mek-native-task-actions">
+          <button type="button" className="bt-soft" onClick={() => nativeTimeline.openTimeline(target)}>{text('Open Timeline in DSH', '在 DSH 中打开任务树')} ↗</button>
+        </div>}
+        <timeline.Panel key={target} sessionId={target} />
+      </>}
     {error && <p role="alert">{error}</p>}
   </section>
 }

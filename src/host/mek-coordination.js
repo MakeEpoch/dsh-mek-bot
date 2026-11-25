@@ -56,6 +56,7 @@ function groupResult(text, report) {
 }
 const rules = `## Task ownership (takes precedence over the ordinary team messaging rules)
 - The Bot the user contacted owns the task. Keep user questions, decisions and final delivery in that conversation. When the user wants the team to collaborate in a group, use post_to_group with report_back: true in the appropriate group. Send a brief the group can use on its own. Share only the information needed for the task.
+- Formal group dispatch automatically maintains its shared Timeline entry when MEK Timeline is active. Use the formal task tools to update it and keep any private checklist in your own conversation.
 - message_bot always returns the work to its sender here. Give a self-contained goal, relevant context, constraints, and acceptance criteria. Delegate each task once. End your turn while workers run; results wake you up automatically. Use post_to_group with report_back: true for formal group assignments. Choose post_to_group delivery from the meaning of a follow-up. Use interrupt for an immediate stop or revoked action; include what to stop, what may continue and how to check already-submitted actions. Use steer for compatible corrections to the active work and queue for a separate assignment. Address the specific member. An announcement is only a visible post. A cancellation request is not proof an external action was undone.
 - A worker needing information or a decision calls ask_user: for delegated work it asks the task owner, not the user. This suspends that work rather than completing it. Never send a new message_bot request to an ancestor to ask a question.
 - When a task decision arrives, inspect its task and evidence with list_tasks/read_task. Decide routine implementation details using the user's instructions, existing conventions and available evidence. Answer with answer_bot_question. Do not forward routine choices to the user. Ask the user in your own chat only for essential missing information, unresolved intent, or authorization that only the user can give. After their answer, answer_bot_question to resume the same worker task.
@@ -81,6 +82,7 @@ export function install(rt) {
   const subscribers = new Set()
   const announce = (type, root, work) => {
     if (!root) return
+    if (root.groupTimelines) void rt.mekSyncGroupTimelines?.(root)
     const event = { type, taskId: root.id, owner: root.owner, status: root.status, at: Date.now(), ...(work ? { workId: work.id } : {}) }
     for (const listener of subscribers) { try { Promise.resolve(listener(event)).catch(error => rt.warn('mek-bot: task observer failed: %s', error)) } catch (error) { rt.warn('mek-bot: task observer failed: %s', error) } }
   }
@@ -396,10 +398,12 @@ export function install(rt) {
     prepared({ rootId: root.id })
     const id = randomUUID()
     rt.openWork(id, { from: owner, to: worker, rootId: root.id, instruction, ...(target ? { sessionId: target.sessionId, room: roomId, fromRoom: roomId } : {}) })
+    if (roomId) rt.mekLinkGroupTimeline?.(root, rt.roomOf(roomId), brief ?? goal)
     const item = prepare(root.id, { fromId: owner, toId: worker, role: 'request', exchangeId: id, text: instruction, files: target?.files ?? [],
       ...(target ? { sessionId: target.sessionId, fromRoomId: roomId, groupRead: target.groupRead } : {}) })
     prepared({ rootId: root.id, workId: id })
     await save()
+    if (roomId) await rt.mekSyncGroupTimelines?.(root)
     if (roomId && brief) {
       await rt.appendGroupTaskResult?.(roomId, owner, `@${rt.botOf(worker).name}\n${brief}`)
         .catch(error => rt.warn('mek-bot: group to-do assignment could not be shown: %s', error))
@@ -654,7 +658,8 @@ export function install(rt) {
   // resumed dispatch picks the same targets.
   rt.mekPostGroup = async (room, sender, instruction, id, files = [], { delegated = false, mentions } = {}) => {
     const work = workOf(id)
-    if (!work || final(rootOf(id))) refuse('The group task is no longer active.')
+    const root = rootOf(id)
+    if (!work || final(root)) refuse('The group task is no longer active.')
     work.instruction = instruction
     work.groupRoot = id
     work.delegated = delegated
@@ -664,6 +669,7 @@ export function install(rt) {
     // Keep the group dispatch intent with the task before preparing sessions. A
     // restart can continue a partial dispatch, and never repeat admitted members.
     work.groupFiles = files
+    rt.mekLinkGroupTimeline?.(root, room, instruction)
     await save()
     await dispatchGroup(work)
   }
@@ -716,6 +722,7 @@ export function install(rt) {
     delete work.dispatchError
     if (!work.members?.length) { work.outcome = 'blocked'; work.result = 'No group member was selected. Name an available member explicitly.' }
     await save()
+    await rt.mekSyncGroupTimelines?.(rootOf(work.id))
     for (const item of items) if (!workOf(item.id)?.unstartedFailure) await send(item)
     await completeGroup(work)
   }
@@ -743,7 +750,9 @@ export function install(rt) {
     const duplicate = rt.mekDuplicateDispatch({ rootId: root.id, from: sender.id, to: target.id, room: room.id, parent: parent?.id, instruction })
     if (duplicate) return `Already assigned as ${duplicate} under task ${root.id}. Read its status or revise that assignment if more work is needed.`
     const { id, item } = await groupMember(room, sender.id, target.id, instruction, parent?.id, parent?.groupRoot, { rootId: root.id, prepared })
+    rt.mekLinkGroupTimeline?.(root, room, instruction)
     await save()
+    await rt.mekSyncGroupTimelines?.(root)
     await rt.appendGroupTaskResult?.(room.id, sender.id, `@${target.name}\n${instruction}`)
       .catch(error => rt.warn('mek-bot: group assignment could not be shown: %s', error))
     await send(item)
@@ -1348,7 +1357,8 @@ export function install(rt) {
     }
     const title = fallbackTitle(root.title, root.goal, root.summary, ...visible.map(work => work.instruction)) ?? 'Task'
     const archivable = root.owner === self && canArchive(root, active, decisions, deliveries)
-    return { ...root, title, status, ...(archivable ? { canArchive: true } : {}),
+    const { groupTimelines: _timelineLinks, ...task } = root
+    return { ...task, title, status, ...(archivable ? { canArchive: true } : {}),
       blockers: items.map(item => ({ kind: item.kind, id: item.id, detail: item.detail, ...(item.waitedMinutes === undefined ? {} : { waitedMinutes: item.waitedMinutes }), ...(item.stale ? { stale: true } : {}), ...(item.stalled ? { stalled: true } : {}), ...(item.sessionUnconfirmed ? { sessionUnconfirmed: true } : {}) })),
       work: visible.map(({ resultExchangeId, resultSessionId, reviewNoticeId, dispatchKeys, ...item }) => ({ ...item, ...(!final(root) && needsReport(item) ? { status: 'needs_report' } : {}), name: rt.botOf(item.to)?.name ?? rt.roomOf(item.room)?.name ?? 'Unavailable Bot' })),
       decisions: decisions.filter(item => root.owner === self || item.worker === self),
@@ -1450,6 +1460,7 @@ export function install(rt) {
     if (recovering || stopped || rt.readOnly() !== undefined) return
     recovering = true
     try {
+      void rt.mekSyncGroupTimelines?.()
       // Browser sessions and human-control handles are process-local. A saved
       // waiting state must not silently hang after those capabilities disappear.
       // Browser plugins install before this adapter, so an absent view means the

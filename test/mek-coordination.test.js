@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { test } from 'node:test'
 import { createRuntime } from '../index.js'
 import { install } from '../src/host/mek-coordination.js'
+import { install as installTimeline } from '../src/host/mek-timeline.js'
 import { fakeContext } from './fake-ctx.js'
 
 const seed = () => ({ version: 1, mainBotIds: ['a', 'd'], bots: Object.fromEntries([
@@ -550,6 +551,35 @@ const groupTeam = () => {
   team.rooms.r = { id: 'r', name: 'Review group', named: true, members: ['a', 'b', 'c'], admin: 'b', mode: 'admin', sessions: { b: 'gb', c: 'gc' }, segments: {}, log: [], seq: 0, seen: {} }
   return team
 }
+
+test('a shared Timeline retries its write on the original group session without replaying the assignment', async t => {
+  const h = await host(t, undefined, groupTeam())
+  const writes = []
+  let available = false
+  const get = h.ctx.get
+  h.ctx.get = name => name !== 'mekTimelineGroupPlan' ? get(name) : async (session, plan) => {
+    if (!available) throw new Error('temporary Timeline storage failure')
+    writes.push({ session: session.id, ...plan })
+  }
+  installTimeline(h.rt)
+  h.begin('a', { content: text('Private checklist context'), source: { kind: 'user' } })
+  const args = { group: 'Review group', message: '@Tester Verify the group sample.', delivery: 'queue', task_title: 'Verify the sample' }
+  assert.match(await h.tool('a', 'post_to_group', args), /Delegated/)
+  assert.equal(writes.length, 0)
+  const rootId = task(h).id
+  assert.equal(h.agentOf('gc').calls.length, 1)
+  h.rt.roomOf('r').sessionId = 'fresh-group-part'
+  available = true
+  await h.rt.mekSyncGroupTimelines()
+  await h.rt.mekSyncGroupTimelines()
+  assert.equal(writes.length, 1)
+  assert.equal(writes[0].id, rootId)
+  assert.equal(writes[0].session, 'r')
+  assert.equal(writes[0].description, args.message)
+  assert.doesNotMatch(JSON.stringify(writes), /Private checklist context/)
+  assert.equal(h.agentOf('gc').calls.length, 1)
+  assert.match(await h.tool('a', 'post_to_group', { ...args, task_id: rootId }), /Already assigned/)
+})
 
 test('a coordinator can steer, queue or interrupt only the live member in the selected group', async t => {
   const h = await host(t, undefined, groupTeam())

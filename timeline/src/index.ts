@@ -14,10 +14,14 @@ import { installCommand } from './command.ts'
 import { installDelegation, planningOwner } from './delegation.ts'
 import { TIMELINE_ACTIVATION_CHANNEL, TIMELINE_ACTIVATION_METHOD, TIMELINE_CONFLICTS } from './activation.ts'
 import type { TimelineActivation } from './activation.ts'
+import { publishGroupPlan } from './group-plan.ts'
+import type { GroupPlan } from './group-plan.ts'
+import type { Session } from '@deepseek-ai/dsh-session/types'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     mekTimelineShared: true
+    mekTimelineGroupPlan: (session: Session, plan: GroupPlan) => Promise<void>
   }
 }
 
@@ -64,6 +68,7 @@ export async function apply(ctx: Context, input: PluginConfig): Promise<void> {
   const projection = await registerProjection(ctx)
   const storage = new TimelineStorage(ctx, projection, config, (language) => { browserLanguage = language })
   installTools(ctx, config, storage)
+  ctx.provide('mekTimelineGroupPlan', (session, plan) => publishGroupPlan(storage, session, plan))
   ctx.provide('mekTimelineShared', true)
   const owns = planningOwner(ctx)
   installDelegation(ctx, owns)
